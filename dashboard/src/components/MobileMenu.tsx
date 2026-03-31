@@ -1,8 +1,4 @@
-import { useState } from 'preact/hooks';
-
 export default function MobileMenu({ currentPath }: { currentPath: string }) {
-  const [isOpen, setIsOpen] = useState(false);
-
   const navItems = [
     { name: "Vue d'ensemble", path: "/apps", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" },
     { name: "Essaim d'Agents", path: "/swarm", icon: "M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" },
@@ -12,65 +8,51 @@ export default function MobileMenu({ currentPath }: { currentPath: string }) {
   ];
 
   return (
-    <>
-      <button 
-        onClick={() => setIsOpen(!isOpen)}
-        class="md:hidden p-2 text-slate-400 hover:text-white transition focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-        aria-label="Toggle Menu"
-      >
-        {isOpen ? (
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        )}
-      </button>
+    <div className="drawer-side z-50">
+      <label htmlFor="mobile-drawer" aria-label="close sidebar" className="drawer-overlay"></label>
+      <div className="min-h-full w-80 bg-base-200 text-base-content p-0 flex flex-col">
+        <div className="flex h-16 shrink-0 items-center justify-between px-6 border-b border-base-300">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20 text-white">F</div>
+            <span className="text-xl font-bold tracking-tight">DevForge</span>
+          </div>
+          <label htmlFor="mobile-drawer" className="btn btn-ghost btn-square btn-sm">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </label>
+        </div>
 
-      {isOpen && (
-        <div class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm md:hidden" onClick={() => setIsOpen(false)}>
-          <div 
-            class="fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-white/5 shadow-2xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div class="flex h-16 shrink-0 items-center justify-between px-6 border-b border-white/5">
-              <div class="flex items-center gap-2">
-                <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20">F</div>
-                <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
-              </div>
-              <button onClick={() => setIsOpen(false)} class="text-slate-400 hover:text-white">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <nav class="flex-1 px-4 py-6 overflow-y-auto space-y-1">
-              {navItems.map(item => (
-                <a 
-                  href={item.path} 
-                  class={`group flex items-center rounded-md px-3 py-3 text-sm font-medium transition ${currentPath === item.path ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+        <nav className="flex-1 overflow-y-auto py-4">
+          <ul className="menu w-full px-3 gap-1">
+            {navItems.map(item => (
+              <li key={item.path}>
+                <a
+                  href={item.path}
+                  className={`flex items-center gap-3 ${currentPath === item.path ? 'active' : ''}`}
                 >
-                  <svg class={`mr-3 h-5 w-5 flex-shrink-0 ${currentPath === item.path ? 'text-blue-400' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d={item.icon} />
+                  <svg className="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                   </svg>
                   {item.name}
                 </a>
-              ))}
-            </nav>
-            
-            <div class="border-t border-white/5 p-4 flex items-center gap-3">
-              <div class="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-slate-300">M</div>
-              <div class="flex flex-col">
-                <span class="text-sm font-semibold text-white">Mathieu</span>
-                <span class="text-xs text-slate-500">Admin</span>
-              </div>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="border-t border-base-300 p-4 flex items-center gap-3">
+          <div className="avatar placeholder">
+            <div className="bg-neutral text-neutral-content w-9 rounded-full">
+              <span className="text-sm font-bold">M</span>
             </div>
           </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold">Mathieu</span>
+            <span className="text-xs opacity-70">Admin</span>
+          </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }

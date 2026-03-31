@@ -1,6 +1,5 @@
 ---
 import '../styles/global.css';
-import LandingMobileMenu from "../components/LandingMobileMenu";
 ---
 
 <html lang="fr" class="scroll-smooth">
@@ -11,30 +10,37 @@ import LandingMobileMenu from "../components/LandingMobileMenu";
     <meta name="description" content="Déployez vos applications avec 14 agents IA spécialisés." />
   </head>
   <body class="bg-slate-950 text-white selection:bg-blue-500/30 font-sans antialiased">
-    <!-- Navbar -->
-    <nav class="sticky top-0 z-50 w-full border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
-      <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <div class="flex items-center gap-2">
-          <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg">F</div>
-          <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
-        </div>
-        <div class="hidden md:flex gap-8 text-sm font-medium text-slate-300">
-          <a href="#features" class="hover:text-white transition">Fonctionnalités</a>
-          <a href="#agents" class="hover:text-white transition">L'Équipe</a>
-          <a href="#pricing" class="hover:text-white transition">Tarifs</a>
-        </div>
-        <div class="hidden md:flex items-center gap-4">
-          <a href="/login" class="text-sm font-medium text-slate-300 hover:text-white transition">Connexion</a>
-          <a href="/apps" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition shadow-[0_0_15px_rgba(37,99,235,0.4)]">
-            Accéder au Dashboard
-          </a>
-        </div>
-      </div>
-        <LandingMobileMenu client:load />
-    </nav>
+    <div class="drawer drawer-end">
+      <input id="landing-drawer" type="checkbox" class="drawer-toggle" />
+      <div class="drawer-content flex flex-col">
+        <!-- Navbar -->
+        <nav class="sticky top-0 z-50 w-full border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
+          <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+            <div class="flex items-center gap-2">
+              <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg">F</div>
+              <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
+            </div>
+            <div class="hidden md:flex gap-8 text-sm font-medium text-slate-300">
+              <a href="#features" class="hover:text-white transition">Fonctionnalités</a>
+              <a href="#agents" class="hover:text-white transition">L'Équipe</a>
+              <a href="#pricing" class="hover:text-white transition">Tarifs</a>
+            </div>
+            <div class="hidden md:flex items-center gap-4">
+              <a href="/login" class="text-sm font-medium text-slate-300 hover:text-white transition">Connexion</a>
+              <a href="/apps" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                Accéder au Dashboard
+              </a>
+            </div>
+            <label for="landing-drawer" class="btn btn-ghost btn-square btn-sm md:hidden">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </label>
+          </div>
+        </nav>
 
-    <!-- Hero Section -->
-    <main>
+        <!-- Hero Section -->
+        <main>
       <section class="relative overflow-hidden pt-32 pb-20 lg:pt-48 lg:pb-32">
         <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none"></div>
         <div class="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-blue-600/20 blur-[120px] pointer-events-none"></div>
@@ -181,5 +187,28 @@ import LandingMobileMenu from "../components/LandingMobileMenu";
         </div>
       </div>
     </footer>
+
+    <div class="drawer-side z-[60]">
+      <label for="landing-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+      <ul class="menu p-6 w-80 min-h-full bg-slate-900 text-white flex flex-col gap-4">
+        <li class="mb-4">
+           <div class="flex items-center gap-2">
+             <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg">F</div>
+             <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
+           </div>
+        </li>
+        <li><a href="#features" class="text-lg">Fonctionnalités</a></li>
+        <li><a href="#agents" class="text-lg">L'Équipe</a></li>
+        <li><a href="#pricing" class="text-lg">Tarifs</a></li>
+        <div class="divider"></div>
+        <li><a href="/login" class="text-lg">Connexion</a></li>
+        <li>
+          <a href="/apps" class="btn btn-primary text-white mt-4 no-underline">
+            Accéder au Dashboard
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
   </body>
 </html>
