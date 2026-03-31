@@ -6,19 +6,9 @@ import path from 'path';
 
 const githubPath = '/media/Github';
 
-const agents = [
-  'CHEF_TECHNIQUE',
-  'ARCHITECTE_LOGICIEL',
-  'DEV_BACKEND',
-  'DEV_FRONTEND',
-  'TESTEUR_QA',
-  'INFRA_TECH',
-  'SECURITE_CODE'
-];
-
 type AppItem = {
   name: string;
-  status: 'Online' | 'Offline';
+  status: string;
   lastSync: string;
   url: string;
   updatedAt: Date;
@@ -53,70 +43,12 @@ function loadApps(): AppItem[] {
       const stats = fs.statSync(path.join(githubPath, entry.name));
       return {
         name: entry.name,
-        status: 'Online',
+        status: 'Inconnu',
         lastSync: stats.mtime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
         url: `${entry.name.toLowerCase()}.forge.local`,
         updatedAt: stats.mtime
       };
     });
-}
-
-function seededValue(seed: string): number {
-  return [...seed].reduce((acc, char) => acc + char.charCodeAt(0), 0);
-}
-
-function buildChanges(appName: string): ChangeItem[] {
-  const seed = seededValue(appName);
-  return [
-    {
-      title: 'Mise a jour du workflow CI',
-      detail: 'Optimisation des etapes de validation avant deploiement.',
-      date: `Il y a ${1 + (seed % 3)} jour(s)`,
-      by: agents[seed % agents.length]
-    },
-    {
-      title: 'Synchronisation des variables de configuration',
-      detail: 'Verification des variables critiques entre dev/staging/prod.',
-      date: `Il y a ${2 + (seed % 4)} jour(s)`,
-      by: agents[(seed + 2) % agents.length]
-    },
-    {
-      title: 'Audit automatique des dependances',
-      detail: 'Detection de versions a corriger sur les modules exposes.',
-      date: `Il y a ${3 + (seed % 5)} jour(s)`,
-      by: agents[(seed + 4) % agents.length]
-    }
-  ];
-}
-
-function buildRequests(appName: string): RequestItem[] {
-  const seed = seededValue(appName);
-  return [
-    {
-      id: `${appName.slice(0, 3).toUpperCase()}-${100 + (seed % 900)}`,
-      type: 'Fonctionnalite',
-      title: 'Ajouter une vue de pilotage des releases',
-      status: 'En cours',
-      agent: 'DEV_FRONTEND',
-      updatedAt: 'Mise a jour il y a 2h'
-    },
-    {
-      id: `${appName.slice(0, 3).toUpperCase()}-${200 + (seed % 700)}`,
-      type: 'Correction',
-      title: 'Corriger la validation des formulaires en edge-case',
-      status: 'En attente',
-      agent: 'DEV_BACKEND',
-      updatedAt: 'Mise a jour il y a 8h'
-    },
-    {
-      id: `${appName.slice(0, 3).toUpperCase()}-${300 + (seed % 500)}`,
-      type: 'Correction',
-      title: 'Stabiliser les notifications de deploiement',
-      status: 'Traite',
-      agent: 'TESTEUR_QA',
-      updatedAt: 'Mise a jour hier'
-    }
-  ];
 }
 
 export async function getStaticPaths() {
@@ -134,8 +66,8 @@ if (!app) {
 }
 
 const appName = app.name;
-const changes = buildChanges(appName);
-const requests = buildRequests(appName);
+const changes: ChangeItem[] = [];
+const requests: RequestItem[] = [];
 ---
 
 <DashboardLayout title={`Application: ${appName}`} currentPath="/apps">
@@ -160,18 +92,24 @@ const requests = buildRequests(appName);
           <h3 class="text-lg font-semibold text-white">Derniers changements</h3>
           <a href={`http://${app.url}`} target="_blank" class="text-xs text-blue-400 hover:text-blue-300 transition">{app.url}</a>
         </div>
-        <div class="space-y-4">
-          {changes.map((change) => (
-            <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
-              <div class="flex items-start justify-between gap-4">
-                <h4 class="font-medium text-white">{change.title}</h4>
-                <span class="text-xs text-slate-500">{change.date}</span>
-              </div>
-              <p class="text-sm text-slate-400 mt-2">{change.detail}</p>
-              <p class="text-xs text-slate-500 mt-3">Traite par: <span class="text-blue-400 font-mono">{change.by}</span></p>
-            </article>
-          ))}
-        </div>
+        {changes.length > 0 ? (
+          <div class="space-y-4">
+            {changes.map((change) => (
+              <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
+                <div class="flex items-start justify-between gap-4">
+                  <h4 class="font-medium text-white">{change.title}</h4>
+                  <span class="text-xs text-slate-500">{change.date}</span>
+                </div>
+                <p class="text-sm text-slate-400 mt-2">{change.detail}</p>
+                <p class="text-xs text-slate-500 mt-3">Traite par: <span class="text-blue-400 font-mono">{change.by}</span></p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
+            Aucun changement disponible pour cette application.
+          </div>
+        )}
       </section>
 
       <aside class="space-y-6">
@@ -185,30 +123,36 @@ const requests = buildRequests(appName);
 
         <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">Traitement en cours</h3>
-          <div class="space-y-4">
-            {requests.map((request) => (
-              <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
-                <div class="flex items-center justify-between gap-3">
-                  <p class="text-xs text-slate-500 font-mono">{request.id}</p>
-                  <span class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
-                    request.status === 'Traite'
-                      ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
-                      : request.status === 'En cours'
-                      ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                      : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
-                  }`}>{request.status}</span>
-                </div>
-                <p class="mt-2 text-sm text-white">{request.title}</p>
-                <p class="mt-2 text-xs text-slate-400">
-                  Type: <span class="text-slate-300">{request.type}</span>
-                </p>
-                <p class="text-xs text-slate-400">
-                  Agent: <span class="text-blue-400 font-mono">{request.agent}</span>
-                </p>
-                <p class="text-xs text-slate-500 mt-2">{request.updatedAt}</p>
-              </article>
-            ))}
-          </div>
+          {requests.length > 0 ? (
+            <div class="space-y-4">
+              {requests.map((request) => (
+                <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
+                  <div class="flex items-center justify-between gap-3">
+                    <p class="text-xs text-slate-500 font-mono">{request.id}</p>
+                    <span class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
+                      request.status === 'Traite'
+                        ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
+                        : request.status === 'En cours'
+                        ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                        : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
+                    }`}>{request.status}</span>
+                  </div>
+                  <p class="mt-2 text-sm text-white">{request.title}</p>
+                  <p class="mt-2 text-xs text-slate-400">
+                    Type: <span class="text-slate-300">{request.type}</span>
+                  </p>
+                  <p class="text-xs text-slate-400">
+                    Agent: <span class="text-blue-400 font-mono">{request.agent}</span>
+                  </p>
+                  <p class="text-xs text-slate-500 mt-2">{request.updatedAt}</p>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
+              Aucune demande de fonctionnalite ou correction pour le moment.
+            </div>
+          )}
         </section>
       </aside>
     </div>

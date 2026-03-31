@@ -1,18 +1,39 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
+import { getOpenClawToken, isValidAppName } from '../../lib/auth';
 
 export const POST: APIRoute = async ({ request }) => {
   const data = await request.json();
   const name = String(data?.name ?? '').trim();
 
-  if (!name) {
+  if (!isValidAppName(name)) {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
 
+  const openclawToken = getOpenClawToken();
+  if (!openclawToken) {
+    return new Response(JSON.stringify({ error: 'Token OpenClaw manquant dans les parametres' }), { status: 400 });
+  }
+
   const result = await new Promise<{ error?: string }>((resolve) => {
-    exec(`openclaw task "CREATE_NEW_APP ${name}"`, (err) => {
-      if (err) {
-        resolve({ error: err.message });
+    const child = spawn('openclaw', ['task', `CREATE_NEW_APP ${name}`], {
+      env: {
+        ...process.env,
+        OPENCLAW_GATEWAY_TOKEN: openclawToken
+      },
+      shell: false
+    });
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on('error', (err) => {
+      resolve({ error: err.message });
+    });
+    child.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ error: stderr || `openclaw exited with code ${code}` });
         return;
       }
       resolve({});

@@ -1,16 +1,10 @@
 import type { APIRoute } from 'astro';
-import fs from 'fs';
-import path from 'path';
-
-const CONFIG_PATH = '/media/Github/Forge/instructions/config.json';
+import { readAppSettings, writeAppSettings } from '../../lib/auth';
 
 export const GET: APIRoute = async () => {
   try {
-    if (!fs.existsSync(CONFIG_PATH)) {
-      return new Response(JSON.stringify({}), { status: 200 });
-    }
-    const data = fs.readFileSync(CONFIG_PATH, 'utf-8');
-    return new Response(data, { 
+    const settings = readAppSettings();
+    return new Response(JSON.stringify(settings), {
       status: 200, 
       headers: { 'Content-Type': 'application/json' } 
     });
@@ -22,14 +16,12 @@ export const GET: APIRoute = async () => {
 export const POST: APIRoute = async ({ request }) => {
   try {
     const data = await request.json();
-    
-    // Ensure dir exists
-    const dir = path.dirname(CONFIG_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+    const payload = {
+      githubToken: String(data?.githubToken ?? ''),
+      vercelToken: String(data?.vercelToken ?? ''),
+      openclawToken: String(data?.openclawToken ?? '')
+    };
+    writeAppSettings(payload);
     
     return new Response(JSON.stringify({ status: 'success' }), { status: 200 });
   } catch (error) {
