@@ -1,9 +1,7 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
-import fs from 'fs';
-import path from 'path';
 
-// Simulation de lecture des rapports markdown générés par les agents
+// Contenu statique pour Vercel (évite fs.readFileSync qui peut échouer en serverless)
 const reportV1 = `# Rapport de Qualification (TESTEUR_QA) - v1.0.0
 **Date :** 31 Mars 2026
 **Cible :** Forge SaaS Dashboard
