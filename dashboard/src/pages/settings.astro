@@ -1,40 +1,49 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
+import SettingsForm from '../components/SettingsForm';
 ---
-<DashboardLayout title="Paramètres ZimaOS" currentPath="/settings">
-  <div class="max-w-4xl mx-auto">
-    <h2 class="text-2xl font-bold text-white mb-2">Paramètres de l'Infrastructure</h2>
-    <p class="text-slate-400 mb-8">Configuration des ponts entre la Forge et l'hôte CasaOS/ZimaOS.</p>
+<DashboardLayout title="Paramètres" currentPath="/settings">
+  <div class="max-w-4xl mx-auto space-y-12">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-2">Configuration de la Forge</h2>
+      <p class="text-slate-400">Gérez vos accès API et personnalisez votre environnement de travail autonome.</p>
+    </div>
     
-    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-      <div class="p-6 border-b border-slate-800">
-        <h3 class="font-semibold text-white mb-1">Chemins des Volumes (NAS)</h3>
-        <p class="text-xs text-slate-400 mb-4">Emplacements physiques des sources de vérité sur le disque NAS.</p>
-        
-        <div class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Dépôts GitHub</label>
-            <input type="text" disabled value="/media/Github" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Docker Compose (YAML)</label>
-            <input type="text" disabled value="/media/Docker/yaml" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">AppData ZimaOS</label>
-            <input type="text" disabled value="/media/Docker/AppData" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
+    <SettingsForm client:load />
+
+    <div class="pt-8 border-t border-white/5">
+      <h3 class="text-xl font-bold text-white mb-6">Infrastructure ZimaOS</h3>
+      
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div class="p-6 border-b border-slate-800">
+          <h3 class="font-semibold text-white mb-1">Chemins des Volumes (NAS)</h3>
+          <p class="text-xs text-slate-400 mb-4">Emplacements physiques des sources de vérité sur le disque NAS.</p>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Dépôts GitHub</label>
+              <input type="text" disabled value="/media/Github" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Docker Compose (YAML)</label>
+              <input type="text" disabled value="/media/Docker/yaml" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">AppData ZimaOS</label>
+              <input type="text" disabled value="/media/Docker/AppData" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
+            </div>
           </div>
         </div>
-      </div>
-      
-      <div class="p-6 bg-slate-800/20">
-        <h3 class="font-semibold text-white mb-1">Serveur Daemon ZimaOS</h3>
-        <div class="flex items-center justify-between mt-4">
-          <div class="flex items-center gap-3">
-            <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
-            <span class="text-sm font-medium text-slate-200">Connecté (localhost:socket)</span>
+        
+        <div class="p-6 bg-slate-800/20">
+          <h3 class="font-semibold text-white mb-1 text-sm uppercase tracking-wider">État du Daemon</h3>
+          <div class="flex items-center justify-between mt-4">
+            <div class="flex items-center gap-3">
+              <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></div>
+              <span class="text-sm font-medium text-slate-200 uppercase tracking-widest font-mono">Connecté</span>
+            </div>
+            <button class="btn btn-sm btn-ghost border-slate-700 text-slate-400">Redémarrer le lien</button>
           </div>
-          <button class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-sm font-medium rounded-md transition text-slate-200 border border-slate-700">Redémarrer le lien</button>
         </div>
       </div>
     </div>

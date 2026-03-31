@@ -1,56 +1,57 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 const orders = [
-  { id: "#CMD-005", date: "À l'instant", agent: "CHEF_TECHNIQUE", target: "DEV_FRONTEND", task: "Intégration du Menu Hamburger Preact Mobile (Responsive)", status: "Terminé" },
-  { id: "#CMD-009", date: "À l'instant", agent: "CHEF_TECHNIQUE", target: "EXPERT_GITHUB", task: "Création de l'Issue #1 sur GitHub : Audit de Production Vercel", status: "Terminé" },
-  { id: "#CMD-008", date: "Il y a 5 minutes", agent: "CHEF_TECHNIQUE", target: "SYSTEM", task: "Liaison du token GitHub ghp_* à la CLI gh", status: "Terminé" },
-  { id: "#CMD-007", date: "Il y a 10 minutes", agent: "CHEF_TECHNIQUE", target: "DEV_FRONTEND", task: "Correction globale des bugs (CORS, 404, Mobile Menu)", status: "Terminé" },
-  { id: "#CMD-005", date: "Il y a 20 minutes", agent: "CHEF_TECHNIQUE", target: "DEV_FRONTEND", task: "Intégration du Menu Hamburger Preact Mobile (Responsive)", status: "Terminé" },
-  { id: "#CMD-004", date: "Il y a 2 minutes", agent: "CHEF_TECHNIQUE", target: "DEV_FRONTEND", task: "Rendre le site responsive (flex-col md:flex-row)", status: "Terminé" },
-  { id: "#CMD-003", date: "Il y a 5 minutes", agent: "CHEF_TECHNIQUE", target: "DEV_BACKEND", task: "Créer l'API /api/agents pour les statistiques temps réel", status: "Terminé" },
-  { id: "#CMD-002", date: "Il y a 10 minutes", agent: "CHEF_TECHNIQUE", target: "EXPERT_GITHUB", task: "Créer le dépôt Forge et pousser la branche main", status: "Terminé" },
-  { id: "#CMD-001", date: "Il y a 45 minutes", agent: "Mathieu (Humain)", target: "CHEF_TECHNIQUE", task: "CREATE_NEW_APP saas-billing", status: "Terminé" },
+  { id: "#CMD-010", date: "À l'instant", agent: "CHEF_TECHNIQUE", target: "SYSTEM", task: "Mise à jour du layout global et unification du menu mobile", status: "Terminé" },
+  { id: "#CMD-009", date: "Il y a 2 minutes", agent: "CHEF_TECHNIQUE", target: "DEV_FRONTEND", task: "Implémentation de l'API /api/settings et du formulaire de config", status: "Terminé" },
+  { id: "#CMD-008", date: "Il y a 5 minutes", agent: "CHEF_TECHNIQUE", target: "EXPERT_GITHUB", task: "Identification du chemin source /media/Github pour la forge", status: "Terminé" },
+  { id: "#CMD-007", date: "Il y a 10 minutes", agent: "CHEF_TECHNIQUE", target: "DEV_FRONTEND", task: "Unification du DashboardLayout avec DaisyUI Drawer", status: "Terminé" },
+  { id: "#CMD-006", date: "Il y a 20 minutes", agent: "Mathieu", target: "CHEF_TECHNIQUE", task: "Lancement de la Phase 3 : Développement des fonctionnalités", status: "Terminé" },
+  { id: "#CMD-005", date: "Il y a 1 heure", agent: "CHEF_TECHNIQUE", target: "SYSTEM", task: "Récupération de l'accès aux volumes NAS via /media/zimaos", status: "Terminé" },
 ];
 ---
 <DashboardLayout title="Orchestration" currentPath="/orchestration">
-  <div class="max-w-7xl mx-auto">
-    <h2 class="text-2xl font-bold text-white mb-2">Historique des Commandes</h2>
-    <p class="text-slate-400 mb-8">Journal des ordres émis par le Chef Technique et exécutés par l'essaim.</p>
+  <div class="max-w-7xl mx-auto space-y-8">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-2 tracking-tight">Journal d'Orchestration</h2>
+      <p class="text-slate-400">Suivi des ordres émis entre les agents et le système.</p>
+    </div>
     
-    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <table class="w-full text-left text-sm text-slate-300">
-        <thead class="bg-slate-800/50 text-xs uppercase text-slate-500 border-b border-slate-800">
-          <tr>
-            <th class="px-6 py-4 font-medium">Ordre</th>
-            <th class="px-6 py-4 font-medium">Émetteur -> Cible</th>
-            <th class="px-6 py-4 font-medium">Tâche</th>
-            <th class="px-6 py-4 font-medium">Statut</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-800/50">
-          {orders.map(order => (
-            <tr class="hover:bg-slate-800/20 transition">
-              <td class="px-6 py-4">
-                <span class="font-mono text-xs text-blue-400">{order.id}</span>
-                <div class="text-xs text-slate-500 mt-1">{order.date}</div>
-              </td>
-              <td class="px-6 py-4">
-                <div class="flex items-center gap-2">
-                  <span class="px-2 py-1 bg-slate-800 rounded text-xs">{order.agent}</span>
-                  <svg class="w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
-                  <span class="px-2 py-1 bg-slate-800 rounded text-xs text-emerald-400">{order.target}</span>
-                </div>
-              </td>
-              <td class="px-6 py-4 text-slate-300">{order.task}</td>
-              <td class="px-6 py-4">
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> {order.status}
-                </span>
-              </td>
+    <div class="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden shadow-2xl backdrop-blur-sm">
+      <div class="overflow-x-auto">
+        <table class="table table-zebra w-full text-slate-300">
+          <thead class="bg-slate-800/50 text-[10px] uppercase tracking-widest text-slate-500 border-b border-slate-800">
+            <tr>
+              <th class="px-6 py-4">ID / Date</th>
+              <th class="px-6 py-4">Flux d'ordre</th>
+              <th class="px-6 py-4">Instruction</th>
+              <th class="px-6 py-4">État</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody class="divide-y divide-slate-800/50">
+            {orders.map(order => (
+              <tr class="hover:bg-slate-800/30 transition border-slate-800/50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="font-mono text-xs text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{order.id}</span>
+                  <div class="text-[10px] text-slate-500 mt-1.5 font-mono uppercase">{order.date}</div>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex items-center gap-2">
+                    <span class="px-2 py-1 bg-slate-950 border border-slate-800 rounded text-[10px] font-bold text-slate-400">{order.agent}</span>
+                    <svg class="w-3 h-3 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                    <span class="px-2 py-1 bg-slate-950 border border-emerald-500/20 rounded text-[10px] font-bold text-emerald-500 uppercase">{order.target}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-4 text-sm font-medium text-slate-200">{order.task}</td>
+                <td class="px-6 py-4">
+                  <span class="badge badge-success badge-outline badge-sm gap-1.5 text-[10px] font-bold uppercase py-3 px-3">
+                    <span class="h-1 w-1 rounded-full bg-emerald-500"></span> {order.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </DashboardLayout>

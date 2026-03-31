@@ -1,0 +1,216 @@
+---
+// @ts-nocheck
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import fs from 'fs';
+import path from 'path';
+
+const githubPath = '/media/Github';
+
+const agents = [
+  'CHEF_TECHNIQUE',
+  'ARCHITECTE_LOGICIEL',
+  'DEV_BACKEND',
+  'DEV_FRONTEND',
+  'TESTEUR_QA',
+  'INFRA_TECH',
+  'SECURITE_CODE'
+];
+
+type AppItem = {
+  name: string;
+  status: 'Online' | 'Offline';
+  lastSync: string;
+  url: string;
+  updatedAt: Date;
+};
+
+type ChangeItem = {
+  title: string;
+  detail: string;
+  date: string;
+  by: string;
+};
+
+type RequestItem = {
+  id: string;
+  type: 'Fonctionnalite' | 'Correction';
+  title: string;
+  status: 'En attente' | 'En cours' | 'Traite';
+  agent: string;
+  updatedAt: string;
+};
+
+function loadApps(): AppItem[] {
+  if (!fs.existsSync(githubPath)) {
+    return [];
+  }
+
+  const entries = fs.readdirSync(githubPath, { withFileTypes: true });
+
+  return entries
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
+    .map((entry) => {
+      const stats = fs.statSync(path.join(githubPath, entry.name));
+      return {
+        name: entry.name,
+        status: 'Online',
+        lastSync: stats.mtime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        url: `${entry.name.toLowerCase()}.forge.local`,
+        updatedAt: stats.mtime
+      };
+    });
+}
+
+function seededValue(seed: string): number {
+  return [...seed].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+}
+
+function buildChanges(appName: string): ChangeItem[] {
+  const seed = seededValue(appName);
+  return [
+    {
+      title: 'Mise a jour du workflow CI',
+      detail: 'Optimisation des etapes de validation avant deploiement.',
+      date: `Il y a ${1 + (seed % 3)} jour(s)`,
+      by: agents[seed % agents.length]
+    },
+    {
+      title: 'Synchronisation des variables de configuration',
+      detail: 'Verification des variables critiques entre dev/staging/prod.',
+      date: `Il y a ${2 + (seed % 4)} jour(s)`,
+      by: agents[(seed + 2) % agents.length]
+    },
+    {
+      title: 'Audit automatique des dependances',
+      detail: 'Detection de versions a corriger sur les modules exposes.',
+      date: `Il y a ${3 + (seed % 5)} jour(s)`,
+      by: agents[(seed + 4) % agents.length]
+    }
+  ];
+}
+
+function buildRequests(appName: string): RequestItem[] {
+  const seed = seededValue(appName);
+  return [
+    {
+      id: `${appName.slice(0, 3).toUpperCase()}-${100 + (seed % 900)}`,
+      type: 'Fonctionnalite',
+      title: 'Ajouter une vue de pilotage des releases',
+      status: 'En cours',
+      agent: 'DEV_FRONTEND',
+      updatedAt: 'Mise a jour il y a 2h'
+    },
+    {
+      id: `${appName.slice(0, 3).toUpperCase()}-${200 + (seed % 700)}`,
+      type: 'Correction',
+      title: 'Corriger la validation des formulaires en edge-case',
+      status: 'En attente',
+      agent: 'DEV_BACKEND',
+      updatedAt: 'Mise a jour il y a 8h'
+    },
+    {
+      id: `${appName.slice(0, 3).toUpperCase()}-${300 + (seed % 500)}`,
+      type: 'Correction',
+      title: 'Stabiliser les notifications de deploiement',
+      status: 'Traite',
+      agent: 'TESTEUR_QA',
+      updatedAt: 'Mise a jour hier'
+    }
+  ];
+}
+
+export async function getStaticPaths() {
+  const apps = loadApps();
+  return apps.map((app) => ({
+    params: { app: app.name },
+    props: { app }
+  }));
+}
+
+const { app } = Astro.props as { app: AppItem };
+
+if (!app) {
+  return Astro.redirect('/apps');
+}
+
+const appName = app.name;
+const changes = buildChanges(appName);
+const requests = buildRequests(appName);
+---
+
+<DashboardLayout title={`Application: ${appName}`} currentPath="/apps">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <a href="/apps" class="text-xs uppercase tracking-widest text-slate-400 hover:text-blue-400 transition">Retour aux applications</a>
+          <h2 class="mt-2 text-2xl font-bold text-white">{appName}</h2>
+          <p class="mt-1 text-sm text-slate-400">Espace de gestion: suivi des evolutions, demandes et affectation des agents.</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-success badge-outline py-3 px-3 text-xs uppercase">{app.status}</span>
+          <span class="text-xs text-slate-500 font-mono">Sync: {app.lastSync}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <section class="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-lg font-semibold text-white">Derniers changements</h3>
+          <a href={`http://${app.url}`} target="_blank" class="text-xs text-blue-400 hover:text-blue-300 transition">{app.url}</a>
+        </div>
+        <div class="space-y-4">
+          {changes.map((change) => (
+            <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
+              <div class="flex items-start justify-between gap-4">
+                <h4 class="font-medium text-white">{change.title}</h4>
+                <span class="text-xs text-slate-500">{change.date}</span>
+              </div>
+              <p class="text-sm text-slate-400 mt-2">{change.detail}</p>
+              <p class="text-xs text-slate-500 mt-3">Traite par: <span class="text-blue-400 font-mono">{change.by}</span></p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <aside class="space-y-6">
+        <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">Demander une action</h3>
+          <div class="space-y-3">
+            <button class="btn btn-sm w-full bg-blue-600 hover:bg-blue-500 border-none text-white">Nouvelle fonctionnalite</button>
+            <button class="btn btn-sm w-full btn-outline border-slate-700 text-slate-200 hover:bg-slate-800">Signaler une correction</button>
+          </div>
+        </section>
+
+        <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">Traitement en cours</h3>
+          <div class="space-y-4">
+            {requests.map((request) => (
+              <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs text-slate-500 font-mono">{request.id}</p>
+                  <span class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
+                    request.status === 'Traite'
+                      ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
+                      : request.status === 'En cours'
+                      ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                      : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
+                  }`}>{request.status}</span>
+                </div>
+                <p class="mt-2 text-sm text-white">{request.title}</p>
+                <p class="mt-2 text-xs text-slate-400">
+                  Type: <span class="text-slate-300">{request.type}</span>
+                </p>
+                <p class="text-xs text-slate-400">
+                  Agent: <span class="text-blue-400 font-mono">{request.agent}</span>
+                </p>
+                <p class="text-xs text-slate-500 mt-2">{request.updatedAt}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</DashboardLayout>

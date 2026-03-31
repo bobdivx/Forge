@@ -1,202 +1,112 @@
 ---
-import '../styles/global.css';
+import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AppLauncher from '../components/AppLauncher';
 import AgentStats from '../components/AgentStats';
 import WireLogs from '../components/WireLogs';
+import fs from 'fs';
+import path from 'path';
 
-const vram = 65;
-const agents = [
-  'CHEF_TECHNIQUE',
-  'ARCHITECTE_LOGICIEL',
-  'DEV_BACKEND',
-  'DEV_FRONTEND',
-  'EXPERT_GITHUB',
-  'ANALYSTE_CODE',
-  'TESTEUR_QA',
-  'INFRA_TECH',
-  'REDACTEUR_DOC',
-  'VEILLE_TECH',
-  'SECURITE_CODE',
-  'SCRIPTEUR_AUTOMATE',
-  'INGENIEUR_PROMPT',
-  'INGENIEUR_HARDWARE',
-  'MAINTENANCE_REPO'
-];
+// Dynamically fetch apps from the local filesystem during SSR
+const githubPath = '/media/Github';
+let deployedApps = [];
 
-// Mock deployed apps for the SaaS feeling
-const deployedApps = [
-  { name: 'Forge', status: 'Online', lastDeploy: 'Just now', url: 'forge.local' },
-  { name: 'tesla', status: 'Online', lastDeploy: '2h ago', url: 'tesla.forge.local' },
-  { name: 'ZimaOS-MCP', status: 'Building', lastDeploy: '5m ago', url: 'mcp.forge.local' },
-  { name: 'mcp-turso', status: 'Online', lastDeploy: '1d ago', url: 'turso.forge.local' },
-  { name: 'popcorn', status: 'Offline', lastDeploy: '3d ago', url: 'popcorn.forge.local' }
-];
+try {
+  if (fs.existsSync(githubPath)) {
+    const entries = fs.readdirSync(githubPath, { withFileTypes: true });
+    deployedApps = entries
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map(entry => {
+        const name = entry.name;
+        const stats = fs.statSync(path.join(githubPath, name));
+        const lastModified = stats.mtime;
+        
+        // Logic to determine status
+        const isBuilding = name === 'ZimaOS-MCP'; // Example
+        const status = isBuilding ? 'Building' : 'Online';
+        
+        return {
+          name,
+          status,
+          lastDeploy: lastModified.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+          url: `${name.toLowerCase()}.forge.local`
+        };
+      })
+      .sort((a, b) => b.name === 'Forge' ? 1 : -1);
+  }
+} catch (e) {
+  console.error("Failed to load apps for dashboard", e);
+}
 ---
 
-<html lang="fr" class="h-full bg-slate-950">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dashboard | DevForge SaaS</title>
-  </head>
-  <body class="flex h-full bg-slate-950 text-white font-sans antialiased overflow-hidden selection:bg-blue-500/30">
-    
-    <!-- Sidebar -->
-    <aside class="flex w-64 flex-col bg-slate-900 border-r border-white/5 h-full relative z-20 shadow-2xl">
-      <div class="flex h-16 shrink-0 items-center px-6 border-b border-white/5">
-        <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/'">
-          <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20">F</div>
-          <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
-        </div>
+<DashboardLayout title="Tableau de bord" currentPath="/dashboard">
+  <div class="space-y-8">
+    <div class="flex items-end justify-between">
+      <div>
+        <h2 class="text-2xl font-bold tracking-tight text-white">Vos Applications</h2>
+        <p class="mt-1 text-sm text-slate-400">Applications gérées et déployées par les agents DevForge.</p>
       </div>
-      <nav class="flex flex-1 flex-col px-4 py-6 overflow-y-auto">
-        <div class="space-y-1">
-          <a href="/dashboard" class="bg-blue-500/10 text-blue-400 group flex items-center rounded-md px-3 py-2 text-sm font-medium border border-blue-500/20">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
-            Vue d'ensemble
-          </a>
-          <a href="/apps" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25a2.25 2.25 0 01-2.25 2.25h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z" /></svg>
-            Applications
-          </a>
-          <a href="/swarm" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
-             <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.998 5.998 0 00-3.033-5.188M12 7a3 3 0 100-6 3 3 0 000 6zm-7 0a3 3 0 11-6 0 3 3 0 016 0zm7 9a3 3 0 11-6 0 3 3 0 016 0zm7-2a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-             L'Essaim
-          </a>
-          <a href="/settings" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1115 0 7.5 7.5 0 01-15 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9" /></svg>
-            Réglages
-          </a>
-        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <!-- Left col: Project List & App Launcher -->
+      <div class="xl:col-span-2 flex flex-col gap-6">
         
-        <div class="mt-8">
-          <h3 class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ressources Systèmes</h3>
-          <div class="mt-4 px-3 space-y-4">
-            <div>
-              <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span>VRAM Usage</span>
-                <span>{vram}%</span>
-              </div>
-              <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-500 rounded-full" style={`width: ${vram}%`}></div>
-              </div>
-            </div>
-            <div>
-              <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span>Charge GPU</span>
-                <span>42%</span>
-              </div>
-              <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div class="h-full bg-indigo-500 rounded-full" style="width: 42%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-      
-      <!-- User profile bottom -->
-      <div class="border-t border-white/5 p-4 flex items-center gap-3">
-        <div class="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-slate-300">
-          M
-        </div>
-        <div class="flex flex-col">
-          <span class="text-sm font-semibold text-white">Mathieu</span>
-          <span class="text-xs text-slate-500">Administrateur</span>
-        </div>
-      </div>
-    </aside>
-
-    <!-- Main View -->
-    <main class="flex-1 flex flex-col h-full bg-slate-950 relative overflow-hidden">
-      <div class="absolute inset-0 bg-gradient-to-br from-slate-900/40 via-transparent to-blue-950/30 pointer-events-none"></div>
-      
-      <!-- Top header -->
-      <header class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-950/50 backdrop-blur z-10">
-        <h1 class="text-lg font-semibold text-white">Vue d'ensemble de la Forge</h1>
-        <div class="flex items-center gap-4">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Ollama (qwen2.5:32b) Connecté
-          </span>
-          <button class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm py-1.5 px-4 rounded-md transition font-medium">Déconnexion</button>
-        </div>
-      </header>
-
-      <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-8 z-10">
-        <div class="max-w-7xl mx-auto space-y-8">
-          
-          <div class="flex items-end justify-between">
-            <div>
-              <h2 class="text-2xl font-bold tracking-tight text-white">Vos Applications</h2>
-              <p class="mt-1 text-sm text-slate-400">Applications gérées et déployées par les agents DevForge.</p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left col: Project List & App Launcher -->
-            <div class="lg:col-span-2 flex flex-col gap-6">
-              
-              <!-- Projects Grid -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {deployedApps.map(app => (
-                  <a href={`http://${app.url}`} target="_blank" class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm hover:shadow-lg block">
-                    <div class="flex justify-between items-start mb-4">
-                      <div class="flex items-center gap-3">
-                        <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
-                          ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                            app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
-                            'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                          {app.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
-                          <span class="text-xs text-slate-400 group-hover:text-slate-300 transition">{app.url}</span>
-                        </div>
-                      </div>
-                      <span class={`text-xs px-2 py-1 rounded-full border
-                        ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                          app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse' : 
-                          'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                        {app.status}
-                      </span>
-                    </div>
-                    <div class="flex items-center text-xs text-slate-500">
-                      <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Dernier déploiement: {app.lastDeploy}
-                    </div>
-                  </a>
-                ))}
-              </div>
-
-              <!-- Wire Logs (Console feeling) -->
-              <div class="mt-4">
-                <WireLogs client:load />
-              </div>
-
-            </div>
-
-            <!-- Right col: Actions & Agents -->
-            <div class="space-y-6">
-              
-              <!-- App Launcher Tool -->
-              <div class="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl rounded-xl p-[1px]">
-                <div class="bg-slate-900 rounded-xl p-5 h-full relative overflow-hidden">
-                  <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/20 rounded-full blur-[40px]"></div>
-                  <AppLauncher client:load />
+        <!-- Projects Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {deployedApps.map(app => (
+            <a href={`http://${app.url}`} target="_blank" class="bg-slate-900/50 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm hover:shadow-lg block backdrop-blur-sm">
+              <div class="flex justify-between items-start mb-4">
+                <div class="flex items-center gap-3">
+                  <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
+                    ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                      app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
+                      'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                    {app.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
+                    <span class="text-xs text-slate-400 group-hover:text-slate-300 transition">{app.url}</span>
+                  </div>
                 </div>
+                <span class={`text-[10px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider
+                  ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                    app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse' : 
+                    'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                  {app.status}
+                </span>
               </div>
-
-              <!-- Agents status list -->
-              <AgentStats agents={agents} client:load />
-
-            </div>
-          </div>
-          
+              <div class="flex items-center text-[10px] text-slate-500 uppercase tracking-widest font-medium">
+                <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Déployé : {app.lastDeploy}
+              </div>
+            </a>
+          ))}
         </div>
+
+        <!-- Wire Logs -->
+        <div class="mt-4">
+          <WireLogs client:load />
+        </div>
+
       </div>
-    </main>
-  </body>
-</html>
+
+      <!-- Right col: Actions & Agents -->
+      <div class="space-y-6">
+        
+        <!-- App Launcher Tool -->
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl rounded-xl p-[1px]">
+          <div class="bg-slate-900 rounded-xl p-5 h-full relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/20 rounded-full blur-[40px]"></div>
+            <AppLauncher client:load />
+          </div>
+        </div>
+
+        <!-- Agents status list -->
+        <AgentStats client:load />
+
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

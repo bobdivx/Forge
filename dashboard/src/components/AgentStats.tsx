@@ -1,13 +1,30 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 
-type Props = {
-  agents: string[];
-};
+interface Agent {
+  name: string;
+  status: string;
+  cpu: number;
+}
 
-export default function AgentStats({ agents }: Props) {
+export default function AgentStats() {
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const filtered = agents.filter(a => a.toLowerCase().includes(search.toLowerCase()));
+  useEffect(() => {
+    fetch('/api/agents')
+      .then(res => res.json())
+      .then(data => {
+        setAgents(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch agents", err);
+        setLoading(false);
+      });
+  }, []);
+
+  const filtered = agents.filter(a => a.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div class="bg-slate-900 border border-slate-800 rounded-xl flex flex-col h-full max-h-[400px]">
@@ -39,20 +56,28 @@ export default function AgentStats({ agents }: Props) {
       </div>
 
       <div class="flex-1 overflow-y-auto px-5 pb-5 space-y-3 mt-2 custom-scrollbar">
-        {filtered.map((agent) => (
-          <div class="flex items-center justify-between group" key={agent}>
-            <div class="flex items-center gap-2.5">
-              <div class="relative flex h-2 w-2">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </div>
-              <span class="text-xs font-mono text-slate-300 group-hover:text-white transition cursor-default">{agent}</span>
-            </div>
-            <span class="text-[10px] uppercase font-semibold tracking-wider text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">Prêt</span>
-          </div>
-        ))}
-        {filtered.length === 0 && (
+        {loading ? (
+          <div class="text-center text-xs text-slate-500 py-4 animate-pulse">Chargement de l'essaim...</div>
+        ) : filtered.length === 0 ? (
           <div class="text-center text-xs text-slate-500 py-4">Aucun agent trouvé</div>
+        ) : (
+          filtered.map((agent) => (
+            <div class="flex items-center justify-between group" key={agent.name}>
+              <div class="flex items-center gap-2.5">
+                <div class="relative flex h-2 w-2">
+                  <span class={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${agent.status === 'actif' ? 'bg-emerald-400' : 'bg-slate-400'}`}></span>
+                  <span class={`relative inline-flex rounded-full h-2 w-2 ${agent.status === 'actif' ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
+                </div>
+                <span class="text-xs font-mono text-slate-300 group-hover:text-white transition cursor-default">{agent.name}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono text-slate-600">{agent.cpu}%</span>
+                <span class={`text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded border ${agent.status === 'actif' ? 'text-emerald-500 bg-slate-950 border-emerald-500/20' : 'text-slate-500 bg-slate-950 border-slate-800'}`}>
+                  {agent.status === 'actif' ? 'Connecté' : 'Prêt'}
+                </span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

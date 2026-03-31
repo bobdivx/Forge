@@ -1,70 +1,114 @@
 ---
+// @ts-nocheck
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AppLauncher from '../components/AppLauncher';
 import WireLogs from '../components/WireLogs';
+import fs from 'fs';
+import path from 'path';
 
-const deployedApps = [
-  { name: 'Forge', status: 'Online', lastDeploy: 'Just now', url: 'forge.local' },
-  { name: 'tesla', status: 'Online', lastDeploy: '2h ago', url: 'tesla.forge.local' },
-  { name: 'ZimaOS-MCP', status: 'Building', lastDeploy: '5m ago', url: 'mcp.forge.local' },
-  { name: 'mcp-turso', status: 'Online', lastDeploy: '1d ago', url: 'turso.forge.local' },
-  { name: 'popcorn', status: 'Offline', lastDeploy: '3d ago', url: 'popcorn.forge.local' }
-];
+// Dynamically fetch apps from the local filesystem
+const githubPath = '/media/Github';
+let deployedApps = [];
+
+try {
+  if (fs.existsSync(githubPath)) {
+    const entries = fs.readdirSync(githubPath, { withFileTypes: true });
+    deployedApps = entries
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map(entry => {
+        const name = entry.name;
+        const stats = fs.statSync(path.join(githubPath, name));
+        
+        return {
+          name,
+          status: 'Online',
+          lastDeploy: stats.mtime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+          url: `${name.toLowerCase()}.forge.local`
+        };
+      })
+      .sort((a, b) => a.name === 'Forge' ? -1 : 1);
+  }
+} catch (e) {
+  console.error("Failed to load apps", e);
+}
+
+if (deployedApps.length === 0) {
+  deployedApps = [
+    { name: 'Forge', status: 'Online', lastDeploy: 'Aujourd hui', url: 'forge.local' },
+    { name: 'ZimaOS-MCP', status: 'Online', lastDeploy: 'Hier', url: 'mcp.forge.local' },
+    { name: 'mcp-turso', status: 'Online', lastDeploy: 'Il y a 2j', url: 'turso.forge.local' },
+    { name: 'popcorn', status: 'Offline', lastDeploy: 'Il y a 3j', url: 'popcorn.forge.local' }
+  ];
+}
 ---
 
 <DashboardLayout title="Applications" currentPath="/apps">
   <div class="max-w-7xl mx-auto space-y-8">
     <div class="flex items-end justify-between">
       <div>
-        <h2 class="text-2xl font-bold tracking-tight text-white">Vos Applications</h2>
-        <p class="mt-1 text-sm text-slate-400">Applications gérées et déployées par les agents DevForge.</p>
+        <h2 class="text-3xl font-bold tracking-tight text-white">Gestion des Projets</h2>
+        <p class="mt-1 text-sm text-slate-400">Dépôts locaux identifiés dans <span class="font-mono text-blue-400">/media/Github</span>.</p>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 flex flex-col gap-6">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {deployedApps.map(app => (
-            <a href={`http://${app.url}`} target="_blank" class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm hover:shadow-lg block">
+            <a
+              href={`/apps/${app.name}`}
+              class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm flex flex-col justify-between h-40 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            >
               <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-3">
-                  <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
-                    ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                      app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
-                      'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                  <div class="h-10 w-10 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-lg">
                     {app.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
-                    <span class="text-xs text-slate-400 group-hover:text-slate-300 transition">{app.url}</span>
+                    <span class="text-[10px] text-slate-500 font-mono tracking-tighter">{app.url}</span>
                   </div>
                 </div>
-                <span class={`text-xs px-2 py-1 rounded-full border
-                  ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                    app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse' : 
-                    'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                  {app.status}
-                </span>
+                <div class="badge badge-success badge-outline badge-xs py-2 px-2 text-[9px] uppercase font-bold tracking-widest">{app.status}</div>
               </div>
-              <div class="flex items-center text-xs text-slate-500">
-                <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Dernier déploiement: {app.lastDeploy}
+              
+              <div class="flex items-center justify-between mt-auto pt-4 border-t border-slate-800/50">
+                <div class="flex items-center text-[10px] text-slate-500 uppercase font-bold tracking-widest">
+                  <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  Sync: {app.lastDeploy}
+                </div>
+                <div class="flex gap-2">
+                   <button class="btn btn-ghost btn-xs text-slate-400 hover:text-white px-1"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                   <button class="btn btn-ghost btn-xs text-slate-400 hover:text-blue-400 px-1"><svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg></button>
+                </div>
               </div>
             </a>
           ))}
         </div>
-        <div class="mt-4">
-          <WireLogs client:load />
-        </div>
+        
+        <WireLogs client:load />
       </div>
+      
       <div class="space-y-6">
         <div class="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl rounded-xl p-[1px]">
           <div class="bg-slate-900 rounded-xl p-5 h-full relative overflow-hidden">
             <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/20 rounded-full blur-[40px]"></div>
             <AppLauncher client:load />
           </div>
+        </div>
+        
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+           <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Statistiques Projets</h4>
+           <div class="space-y-4">
+              <div class="flex justify-between items-center text-sm">
+                 <span class="text-slate-400">Total Projets</span>
+                 <span class="text-white font-mono">{deployedApps.length}</span>
+              </div>
+              <div class="flex justify-between items-center text-sm">
+                 <span class="text-slate-400">Actifs</span>
+                 <span class="text-emerald-400 font-mono">{deployedApps.length}</span>
+              </div>
+           </div>
         </div>
       </div>
     </div>

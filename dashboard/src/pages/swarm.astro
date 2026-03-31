@@ -1,54 +1,67 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AgentStats from '../components/AgentStats';
-
-const agents = [
-  'CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL', 'DEV_BACKEND', 'DEV_FRONTEND', 
-  'EXPERT_GITHUB', 'ANALYSTE_CODE', 'TESTEUR_QA', 'INFRA_TECH', 
-  'REDACTEUR_DOC', 'VEILLE_TECH', 'SECURITE_CODE'
-];
 ---
 <DashboardLayout title="Essaim d'Agents" currentPath="/swarm">
-  <div class="max-w-7xl mx-auto">
-    <div class="flex justify-between items-end mb-8">
+  <div class="max-w-7xl mx-auto space-y-8">
+    <div class="flex justify-between items-end">
       <div>
-        <h2 class="text-2xl font-bold text-white mb-2">État de l'Essaim</h2>
-        <p class="text-slate-400">Supervision en temps réel de vos agents autonomes.</p>
+        <h2 class="text-3xl font-bold text-white mb-2 tracking-tight">État de l'Essaim</h2>
+        <p class="text-slate-400">Supervision en temps réel des 14 agents spécialisés de la Forge.</p>
       </div>
-      <button class="bg-blue-600 text-white px-4 py-2 rounded font-medium text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 flex items-center gap-2">
+      <button class="btn btn-primary shadow-lg shadow-blue-500/20 flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Forcer un Audit Global
       </button>
     </div>
     
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="md:col-span-1">
-        <AgentStats agents={agents} client:load />
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div class="xl:col-span-1">
+        <AgentStats client:load />
       </div>
-      <div class="md:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h3 class="font-bold text-white mb-4 border-b border-slate-800 pb-3">Activités Récentes des Agents</h3>
-        <div class="space-y-4">
-          <div class="flex gap-4">
-            <div class="mt-1 w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]"></div>
-            <div>
-              <p class="text-sm font-medium text-white">DEV_FRONTEND a modifié <span class="text-blue-400 font-mono text-xs">index.astro</span></p>
-              <p class="text-xs text-slate-500 mt-1">Application des correctifs responsifs demandés par le Chef.</p>
+      
+      <div class="xl:col-span-2 space-y-6">
+        <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur-sm">
+          <h3 class="font-bold text-white mb-6 border-b border-slate-800 pb-3 uppercase tracking-widest text-xs text-slate-500">Activités Récentes des Agents</h3>
+          <div class="space-y-6">
+            <div class="flex gap-4 group">
+              <div class="mt-1.5 w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] shrink-0"></div>
+              <div>
+                <p class="text-sm font-medium text-white group-hover:text-blue-400 transition">DEV_FRONTEND a modifié <span class="text-blue-400 font-mono text-xs bg-blue-500/10 px-1 rounded">index.astro</span></p>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">Correction de la responsivité du header et mise en place du système de drawer DaisyUI.</p>
+                <span class="text-[10px] text-slate-600 font-mono mt-2 block uppercase">Il y a 5 minutes</span>
+              </div>
+            </div>
+            
+            <div class="flex gap-4 group border-t border-slate-800/50 pt-6">
+              <div class="mt-1.5 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] shrink-0"></div>
+              <div>
+                <p class="text-sm font-medium text-white group-hover:text-emerald-400 transition">CHEF_TECHNIQUE a activé <span class="text-emerald-400 font-mono text-xs bg-emerald-500/10 px-1 rounded">/api/settings.ts</span></p>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">Déploiement du nouveau pont de configuration pour la gestion des jetons Vercel et GitHub.</p>
+                <span class="text-[10px] text-slate-600 font-mono mt-2 block uppercase">Il y a 12 minutes</span>
+              </div>
+            </div>
+            
+            <div class="flex gap-4 group border-t border-slate-800/50 pt-6">
+              <div class="mt-1.5 w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] shrink-0"></div>
+              <div>
+                <p class="text-sm font-medium text-white group-hover:text-amber-400 transition">INFRA_TECH vérifie <span class="text-amber-400 font-mono text-xs bg-amber-500/10 px-1 rounded">docker-compose.yml</span></p>
+                <p class="text-xs text-slate-500 mt-1 leading-relaxed">Audit de conformité ZimaOS sur les volumes montés et les permissions socket.</p>
+                <span class="text-[10px] text-slate-600 font-mono mt-2 block uppercase">Il y a 1 heure</span>
+              </div>
             </div>
           </div>
-          <div class="flex gap-4">
-            <div class="mt-1 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></div>
-            <div>
-              <p class="text-sm font-medium text-white">DEV_BACKEND a créé <span class="text-emerald-400 font-mono text-xs">/api/agents.ts</span></p>
-              <p class="text-xs text-slate-500 mt-1">Génération du mock API pour le dashboard.</p>
-            </div>
-          </div>
-          <div class="flex gap-4">
-            <div class="mt-1 w-2 h-2 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]"></div>
-            <div>
-              <p class="text-sm font-medium text-white">TESTEUR_QA a généré <span class="text-red-400 font-mono text-xs">QA_REPORT_V2.md</span></p>
-              <p class="text-xs text-slate-500 mt-1">Détection de 2 anomalies critiques sur la responsivité.</p>
-            </div>
-          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+           <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Tâches complétées</span>
+              <div class="text-3xl font-bold text-white mt-1">124</div>
+           </div>
+           <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+              <span class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Temps de calcul</span>
+              <div class="text-3xl font-bold text-white mt-1">42h <span class="text-sm font-normal text-slate-500">ce mois</span></div>
+           </div>
         </div>
       </div>
     </div>
