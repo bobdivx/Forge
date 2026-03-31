@@ -11,7 +11,7 @@ export default defineConfig({
   integrations: [tailwind(), preact()],
   vite: {
     server: {
-      allowedHosts: ['zimacube.local'],
+      allowedHosts: ['zimacube.local', 'forge.briseteia.me'],
     },
   },
 });

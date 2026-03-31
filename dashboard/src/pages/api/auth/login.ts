@@ -3,9 +3,14 @@ import type { APIRoute } from 'astro';
 import { createSessionToken, verifyCredentials, isValidEmail, isValidPassword } from '../../../lib/auth';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  const body = await request.json().catch(() => ({}));
+  console.log('Login attempt received');
+  const body = await request.json().catch((err) => {
+    console.error('Failed to parse login body', err);
+    return {};
+  });
   const email = String(body?.email ?? '').trim().toLowerCase();
   const password = String(body?.password ?? '');
+  console.log(`Attempting login for: ${email}`);
 
   if (!isValidEmail(email) || !isValidPassword(password)) {
     return new Response(JSON.stringify({ error: 'Identifiants invalides' }), { status: 400 });
