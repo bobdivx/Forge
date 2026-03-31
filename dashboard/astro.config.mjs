@@ -1,10 +1,17 @@
 import { defineConfig } from 'astro/config';
-import vercel from '@astrojs/vercel';
+import node from '@astrojs/node';
 import tailwind from '@astrojs/tailwind';
 import preact from '@astrojs/preact';
 
 export default defineConfig({
   output: 'server',
-  adapter: vercel(),
+  adapter: node({
+    mode: 'standalone',
+  }),
   integrations: [tailwind(), preact()],
+  vite: {
+    server: {
+      allowedHosts: ['zimacube.local'],
+    },
+  },
 });

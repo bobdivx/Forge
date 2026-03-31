@@ -16,12 +16,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 
   const token = createSessionToken(email);
-  const secure = process.env.NODE_ENV === 'production';
   cookies.set('forge_session', token, {
     path: '/',
     httpOnly: true,
-    sameSite: 'strict',
-    secure,
+    sameSite: 'lax', // Plus tolérant pour la redirection locale
+    secure: false,   // Désactivé pour le HTTP local (NAS)
     maxAge: 60 * 60 * 12
   });
 

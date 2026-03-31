@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { spawn } from 'child_process';
 import { getOpenClawToken, isValidAppName } from '../../lib/auth';
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   const data = await request.json();
   const name = String(data?.name ?? '').trim();
 
@@ -10,9 +10,10 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
 
-  const openclawToken = getOpenClawToken();
+  const email = locals.user?.email;
+  const openclawToken = getOpenClawToken(email);
   if (!openclawToken) {
-    return new Response(JSON.stringify({ error: 'Token OpenClaw manquant dans les parametres' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'Token OpenClaw manquant pour cet utilisateur' }), { status: 400 });
   }
 
   const result = await new Promise<{ error?: string }>((resolve) => {

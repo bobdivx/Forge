@@ -49,7 +49,7 @@ function hashPassword(password: string, salt: string): string {
 
 export function hasUser(): boolean {
   const store = getAuthStore();
-  return Boolean(store.user?.email && store.user?.passwordHash && store.user?.salt);
+  return Boolean((store.user?.email && store.user?.passwordHash) || (store.users && Object.keys(store.users).length > 0));
 }
 
 export function registerOrReplaceUser(email: string, password: string) {
@@ -57,32 +57,51 @@ export function registerOrReplaceUser(email: string, password: string) {
   const salt = randomHex(16);
   const passwordHash = hashPassword(password, salt);
   const store = getAuthStore();
-  store.user = {
+  
+  if (!store.users) store.users = {};
+  
+  store.users[normalized] = {
     email: normalized,
     salt,
     passwordHash,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    settings: {
+      githubToken: '',
+      vercelToken: '',
+      openclawToken: ''
+    }
   };
+  
+  // Legacy support
+  store.user = store.users[normalized];
+  
+  writeJson(AUTH_PATH, store);
+}
+
+export function getUser(email: string) {
+  const store = getAuthStore();
+  const normalized = String(email || '').trim().toLowerCase();
+  return store.users?.[normalized] || (store.user?.email === normalized ? store.user : null);
+}
+
+export function updateUser(email: string, data: any) {
+  const store = getAuthStore();
+  const normalized = String(email || '').trim().toLowerCase();
+  if (store.users && store.users[normalized]) {
+    store.users[normalized] = { ...store.users[normalized], ...data };
+  } else if (store.user?.email === normalized) {
+    store.user = { ...store.user, ...data };
+  }
   writeJson(AUTH_PATH, store);
 }
 
 export function verifyCredentials(email: string, password: string): boolean {
-  const store = getAuthStore();
-  const user = store.user;
-  if (!user?.email || !user?.passwordHash || !user?.salt) {
-    return false;
-  }
-  const normalized = String(email || '').trim().toLowerCase();
-  if (normalized !== user.email) {
+  const user = getUser(email);
+  if (!user?.passwordHash || !user?.salt) {
     return false;
   }
   const calculated = hashPassword(password, user.salt);
-  const a = Buffer.from(calculated, 'hex');
-  const b = Buffer.from(user.passwordHash, 'hex');
-  if (a.length !== b.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(a, b);
+  return calculated === user.passwordHash;
 }
 
 function signPayload(payload: string, secret: string): string {
@@ -119,16 +138,27 @@ export function verifySessionToken(token: string): { valid: boolean; email?: str
   }
 }
 
-export function readAppSettings() {
+export function readAppSettings(email?: string) {
+  if (email) {
+    const user = getUser(email);
+    if (user?.settings) return user.settings;
+  }
   return readJson(SETTINGS_PATH);
 }
 
-export function writeAppSettings(data: any) {
+export function writeAppSettings(data: any, email?: string) {
+  if (email) {
+    const user = getUser(email);
+    if (user) {
+      updateUser(email, { settings: data });
+      return;
+    }
+  }
   writeJson(SETTINGS_PATH, data);
 }
 
-export function getOpenClawToken(): string {
-  const settings = readAppSettings();
+export function getOpenClawToken(email?: string): string {
+  const settings = readAppSettings(email);
   return String(settings?.openclawToken || '');
 }
 

@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro';
 import { readAppSettings, writeAppSettings } from '../../lib/auth';
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ locals }) => {
   try {
-    const settings = readAppSettings();
+    const email = locals.user?.email;
+    const settings = readAppSettings(email);
     return new Response(JSON.stringify(settings), {
       status: 200, 
       headers: { 'Content-Type': 'application/json' } 
@@ -13,15 +14,16 @@ export const GET: APIRoute = async () => {
   }
 };
 
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, locals }) => {
   try {
+    const email = locals.user?.email;
     const data = await request.json();
     const payload = {
       githubToken: String(data?.githubToken ?? ''),
       vercelToken: String(data?.vercelToken ?? ''),
       openclawToken: String(data?.openclawToken ?? '')
     };
-    writeAppSettings(payload);
+    writeAppSettings(payload, email);
     
     return new Response(JSON.stringify({ status: 'success' }), { status: 200 });
   } catch (error) {
