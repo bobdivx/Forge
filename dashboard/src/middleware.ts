@@ -33,6 +33,5 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
   }
 
-  const loginUrl = new URL('/login', context.url);
-  return context.redirect(loginUrl.toString());
+  return context.redirect('/login');
 });
