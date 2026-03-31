@@ -2,7 +2,20 @@ import type { APIRoute } from 'astro';
 import fs from 'fs';
 import path from 'path';
 
-export const GET: APIRoute = async () => {
+// Middleware-like security check
+const validateAuth = (request: Request) => {
+  const authHeader = request.headers.get('Authorization');
+  const forgeToken = process.env.FORGE_API_TOKEN;
+  
+  if (!forgeToken) return true; // Bypass if not configured yet
+  return authHeader === `Bearer ${forgeToken}`;
+};
+
+export const GET: APIRoute = async ({ request }) => {
+  if (!validateAuth(request)) {
+    return new Response(JSON.stringify({ error: "Non autorisé" }), { status: 401 });
+  }
+
   try {
     const githubPath = '/media/Github';
     
