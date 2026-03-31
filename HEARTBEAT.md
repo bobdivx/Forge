@@ -13,3 +13,7 @@ Objectif : Cycle d'audit et d'orchestration toutes les 30 minutes.
 
 ## Escalade
 Si la validation échoue 3 fois, notifier Mathieu via interface.
+
+## 5. Audit de Production (Vercel)
+- **Tâche :** Le TESTEUR_QA effectue une requête HTTP (curl) toutes les 30 minutes sur `https://forge-rouge-five.vercel.app/`
+- **Critère :** Retour 200 OK. Si 4xx ou 5xx -> Notification d'Incident Critique.
