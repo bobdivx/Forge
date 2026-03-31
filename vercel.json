@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "npm install && npm run build",
-  "installCommand": "npm install",
-  "outputDirectory": "dist",
-  "rootDirectory": "dashboard"
+  "buildCommand": "cd dashboard && npm install && npm run build && cp -r .vercel/output ../.vercel",
+  "installCommand": "cd dashboard && npm install"
 }
