@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "buildCommand": "cd dashboard && npm install && npm run build",
-  "devCommand": "cd dashboard && npm run dev",
-  "installCommand": "cd dashboard && npm install",
-  "outputDirectory": "dashboard/dist"
-}
