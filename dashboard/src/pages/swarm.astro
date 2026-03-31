@@ -1,201 +1,56 @@
 ---
-import '../styles/global.css';
-import AppLauncher from '../components/AppLauncher';
+import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AgentStats from '../components/AgentStats';
-import WireLogs from '../components/WireLogs';
 
-const vram = 65;
 const agents = [
-  'CHEF_TECHNIQUE',
-  'ARCHITECTE_LOGICIEL',
-  'DEV_BACKEND',
-  'DEV_FRONTEND',
-  'EXPERT_GITHUB',
-  'ANALYSTE_CODE',
-  'TESTEUR_QA',
-  'INFRA_TECH',
-  'REDACTEUR_DOC',
-  'VEILLE_TECH',
-  'SECURITE_CODE',
-  'SCRIPTEUR_AUTOMATE',
-  'INGENIEUR_PROMPT',
-  'INGENIEUR_HARDWARE',
-  'MAINTENANCE_REPO'
-];
-
-// Mock deployed apps for the SaaS feeling
-const deployedApps = [
-  { name: 'tesla', status: 'Online', lastDeploy: '2h ago', url: 'tesla.forge.local' },
-  { name: 'ZimaOS-MCP', status: 'Building', lastDeploy: '5m ago', url: 'mcp.forge.local' },
-  { name: 'mcp-turso', status: 'Online', lastDeploy: '1d ago', url: 'turso.forge.local' },
-  { name: 'popcorn', status: 'Offline', lastDeploy: '3d ago', url: 'popcorn.forge.local' }
+  'CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL', 'DEV_BACKEND', 'DEV_FRONTEND', 
+  'EXPERT_GITHUB', 'ANALYSTE_CODE', 'TESTEUR_QA', 'INFRA_TECH', 
+  'REDACTEUR_DOC', 'VEILLE_TECH', 'SECURITE_CODE'
 ];
 ---
-
-<html lang="fr" class="h-full bg-slate-950">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dashboard | DevForge SaaS</title>
-  </head>
-  <body class="flex h-full bg-slate-950 text-white font-sans antialiased overflow-hidden selection:bg-blue-500/30">
+<DashboardLayout title="Essaim d'Agents" currentPath="/swarm">
+  <div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-end mb-8">
+      <div>
+        <h2 class="text-2xl font-bold text-white mb-2">État de l'Essaim</h2>
+        <p class="text-slate-400">Supervision en temps réel de vos agents autonomes.</p>
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-2 rounded font-medium text-sm hover:bg-blue-500 transition shadow-lg shadow-blue-500/20 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Forcer un Audit Global
+      </button>
+    </div>
     
-    <!-- Sidebar -->
-    <aside class="hidden md:flex w-64 flex-col bg-slate-900 border-r border-white/5 h-full relative z-20 shadow-2xl">
-      <div class="flex h-16 shrink-0 items-center px-6 border-b border-white/5">
-        <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/'">
-          <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20">F</div>
-          <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
-        </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="md:col-span-1">
+        <AgentStats agents={agents} client:load />
       </div>
-      <nav class="flex flex-1 flex-col px-4 py-6 overflow-y-auto">
-        <div class="space-y-1">
-          <a href="/dashboard" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium border border-blue-500/20">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
-            Vue d'ensemble
-          </a>
-          <a href="#" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.036-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" /></svg>
-            Applications
-          </a>
-          <a href="#" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            Essaim d'Agents
-          </a>
-          <a href="#" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
-            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Paramètres ZimaOS
-          </a>
-        </div>
-        
-        <div class="mt-8">
-          <h3 class="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ressources Systèmes</h3>
-          <div class="mt-4 px-3 space-y-4">
+      <div class="md:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h3 class="font-bold text-white mb-4 border-b border-slate-800 pb-3">Activités Récentes des Agents</h3>
+        <div class="space-y-4">
+          <div class="flex gap-4">
+            <div class="mt-1 w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]"></div>
             <div>
-              <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span>VRAM Usage</span>
-                <span>{vram}%</span>
-              </div>
-              <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-500 rounded-full" style={`width: ${vram}%`}></div>
-              </div>
+              <p class="text-sm font-medium text-white">DEV_FRONTEND a modifié <span class="text-blue-400 font-mono text-xs">index.astro</span></p>
+              <p class="text-xs text-slate-500 mt-1">Application des correctifs responsifs demandés par le Chef.</p>
             </div>
+          </div>
+          <div class="flex gap-4">
+            <div class="mt-1 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></div>
             <div>
-              <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                <span>Charge GPU</span>
-                <span>42%</span>
-              </div>
-              <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div class="h-full bg-indigo-500 rounded-full" style="width: 42%"></div>
-              </div>
+              <p class="text-sm font-medium text-white">DEV_BACKEND a créé <span class="text-emerald-400 font-mono text-xs">/api/agents.ts</span></p>
+              <p class="text-xs text-slate-500 mt-1">Génération du mock API pour le dashboard.</p>
+            </div>
+          </div>
+          <div class="flex gap-4">
+            <div class="mt-1 w-2 h-2 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.8)]"></div>
+            <div>
+              <p class="text-sm font-medium text-white">TESTEUR_QA a généré <span class="text-red-400 font-mono text-xs">QA_REPORT_V2.md</span></p>
+              <p class="text-xs text-slate-500 mt-1">Détection de 2 anomalies critiques sur la responsivité.</p>
             </div>
           </div>
         </div>
-      </nav>
-      
-      <!-- User profile bottom -->
-      <div class="border-t border-white/5 p-4 flex items-center gap-3">
-        <div class="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-slate-300">
-          M
-        </div>
-        <div class="flex flex-col">
-          <span class="text-sm font-semibold text-white">Mathieu</span>
-          <span class="text-xs text-slate-500">Administrateur</span>
-        </div>
       </div>
-    </aside>
-
-    <!-- Main View -->
-    <main class="flex-1 flex flex-col h-full bg-slate-950 relative overflow-hidden">
-      <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 mix-blend-overlay pointer-events-none"></div>
-      
-      <!-- Top header -->
-      <header class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-950/50 backdrop-blur z-10">
-        <h1 class="text-lg font-semibold text-white">Vue d'ensemble de la Forge</h1>
-        <div class="flex items-center gap-4">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Ollama (qwen2.5:32b) Connecté
-          </span>
-          <button class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm py-1.5 px-4 rounded-md transition font-medium">Déconnexion</button>
-        </div>
-      </header>
-
-      <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-8 z-10">
-        <div class="max-w-7xl mx-auto space-y-8">
-          
-          <div class="flex items-end justify-between">
-            <div>
-              <h2 class="text-2xl font-bold tracking-tight text-white">Vos Applications</h2>
-              <p class="mt-1 text-sm text-slate-400">Applications gérées et déployées par les agents DevForge.</p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left col: Project List & App Launcher -->
-            <div class="lg:col-span-2 flex flex-col gap-6">
-              
-              <!-- Projects Grid -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {deployedApps.map(app => (
-                  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition cursor-pointer group shadow-sm hover:shadow-lg">
-                    <div class="flex justify-between items-start mb-4">
-                      <div class="flex items-center gap-3">
-                        <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
-                          ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                            app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 
-                            'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                          {app.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
-                          <a href={`http://${app.url}`} target="_blank" class="text-xs text-slate-400 hover:text-slate-300 transition">{app.url}</a>
-                        </div>
-                      </div>
-                      <span class={`text-xs px-2 py-1 rounded-full border
-                        ${app.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                          app.status === 'Building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 animate-pulse' : 
-                          'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                        {app.status}
-                      </span>
-                    </div>
-                    <div class="flex items-center text-xs text-slate-500">
-                      <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Dernier déploiement: {app.lastDeploy}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <!-- Wire Logs (Console feeling) -->
-              <div class="mt-4">
-                <WireLogs client:load />
-              </div>
-
-            </div>
-
-            <!-- Right col: Actions & Agents -->
-            <div class="space-y-6">
-              
-              <!-- App Launcher Tool -->
-              <div class="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl rounded-xl p-[1px]">
-                <div class="bg-slate-900 rounded-xl p-5 h-full relative overflow-hidden">
-                  <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/20 rounded-full blur-[40px]"></div>
-                  <AppLauncher client:load />
-                </div>
-              </div>
-
-              <!-- Agents status list -->
-              <AgentStats agents={agents} client:load />
-
-            </div>
-          </div>
-          
-        </div>
-      </div>
-    </main>
-  </body>
-</html>
+    </div>
+  </div>
+</DashboardLayout>
