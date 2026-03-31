@@ -1,0 +1,98 @@
+{
+  "system_name": "DevForge_Ollama_Swarm",
+  "engine": "ollama",
+  "workspace_path": "media/Github",
+  "dashboard_path": "dashboard",
+  "entrypoint": {
+    "name": "CHEF_TECHNIQUE",
+    "model": "qwen2.5:32b",
+    "instructions_file": "./instructions/SOUL.md",
+    "auto_start_command": "openclaw start --engine ollama --model qwen2.5:32b --instructions ./instructions/SOUL.md --name CHEF_TECHNIQUE"
+  },
+  "capabilities": {
+    "create_new_app": {
+      "command": "CREATE_NEW_APP [NOM]",
+      "workflow": [
+        "mkdir media/Github/[NOM]",
+        "cd media/Github/[NOM]",
+        "git init",
+        "delegate ARCHITECTE_LOGICIEL",
+        "delegate DEV_BACKEND",
+        "delegate DEV_FRONTEND",
+        "delegate EXPERT_GITHUB"
+      ]
+    }
+  },
+  "agents": [
+    {
+      "id": "ARCHITECTE_LOGICIEL",
+      "model": "qwen2.5:32b",
+      "instructions_file": "./instructions/agents/ARCHITECTE_LOGICIEL.md"
+    },
+    {
+      "id": "DEV_BACKEND",
+      "model": "qwen2.5-coder:7b",
+      "instructions_file": "./instructions/agents/DEV_BACKEND.md"
+    },
+    {
+      "id": "DEV_FRONTEND",
+      "model": "qwen2.5-coder:7b",
+      "instructions_file": "./instructions/agents/DEV_FRONTEND.md"
+    },
+    {
+      "id": "EXPERT_GITHUB",
+      "model": "mistral:7b",
+      "instructions_file": "./instructions/agents/EXPERT_GITHUB.md"
+    },
+    {
+      "id": "ANALYSTE_CODE",
+      "model": "llama3.1:8b",
+      "instructions_file": "./instructions/agents/ANALYSTE_CODE.md"
+    },
+    {
+      "id": "TESTEUR_QA",
+      "model": "llama3.1:8b",
+      "instructions_file": "./instructions/agents/TESTEUR_QA.md"
+    },
+    {
+      "id": "INFRA_TECH",
+      "model": "qwen2.5-coder:7b",
+      "instructions_file": "./instructions/agents/INFRA_TECH.md"
+    },
+    {
+      "id": "REDACTEUR_DOC",
+      "model": "mistral:7b",
+      "instructions_file": "./instructions/agents/REDACTEUR_DOC.md"
+    },
+    {
+      "id": "VEILLE_TECH",
+      "model": "llama3.1:8b",
+      "instructions_file": "./instructions/agents/VEILLE_TECH.md"
+    },
+    {
+      "id": "SECURITE_CODE",
+      "model": "llama3.1:8b",
+      "instructions_file": "./instructions/agents/SECURITE_CODE.md"
+    },
+    {
+      "id": "SCRIPTEUR_AUTOMATE",
+      "model": "qwen2.5-coder:7b",
+      "instructions_file": "./instructions/agents/SCRIPTEUR_AUTOMATE.md"
+    },
+    {
+      "id": "INGENIEUR_PROMPT",
+      "model": "qwen2.5:32b",
+      "instructions_file": "./instructions/agents/INGENIEUR_PROMPT.md"
+    },
+    {
+      "id": "INGENIEUR_HARDWARE",
+      "model": "qwen2.5:7b",
+      "instructions_file": "./instructions/agents/INGENIEUR_HARDWARE.md"
+    },
+    {
+      "id": "MAINTENANCE_REPO",
+      "model": "mistral:7b",
+      "instructions_file": "./instructions/agents/MAINTENANCE_REPO.md"
+    }
+  ]
+}

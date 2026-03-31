@@ -1,0 +1,83 @@
+{
+  "system_name": "DevForge_Ollama_Swarm",
+  "engine": "ollama",
+  "workspace_path": "media/Github",
+  "dashboard_path": "dashboard",
+  "orchestrator": {
+    "id": "CHEF_TECHNIQUE",
+    "model": "qwen2.5:32b",
+    "instructions": "Tu geres le cycle de vie logiciel (SDLC). Tu analyses les demandes utilisateur pour creer de nouvelles apps ou modifier l'existant dans media/Github. Pour un projet Astro, impose des composants Preact uniquement."
+  },
+  "agents": [
+    {
+      "id": "ARCHITECTE_LOGICIEL",
+      "model": "qwen2.5:32b",
+      "task": "Design des patterns, choix des technos et structure des dossiers."
+    },
+    {
+      "id": "DEV_BACKEND",
+      "model": "qwen2.5-coder:7b",
+      "task": "Ecriture du code serveur, API, et logique metier."
+    },
+    {
+      "id": "DEV_FRONTEND",
+      "model": "qwen2.5-coder:7b",
+      "task": "Creation des interfaces UI (React, Vue, Tailwind). Si Astro, composants Preact uniquement."
+    },
+    {
+      "id": "ANALYSTE_CODE",
+      "model": "llama3.1:8b",
+      "task": "Code review, detection de bugs et optimisation de performance."
+    },
+    {
+      "id": "EXPERT_GITHUB",
+      "model": "mistral:7b",
+      "task": "Gestion des commits, PR, Issues et CI/CD via GitHub CLI."
+    },
+    {
+      "id": "REDACTEUR_DOC",
+      "model": "mistral:7b",
+      "task": "Generation de README.md et documentation technique."
+    },
+    {
+      "id": "TESTEUR_QA",
+      "model": "llama3.1:8b",
+      "task": "Ecriture et execution de tests unitaires et d'integration."
+    },
+    {
+      "id": "INFRA_TECH",
+      "model": "qwen2.5-coder:7b",
+      "task": "Gestion Docker, deploiement et scripts de build."
+    },
+    {
+      "id": "VEILLE_TECH",
+      "model": "llama3.1:8b",
+      "task": "Scraping de GitHub Trends pour suggerer des ameliorations."
+    },
+    {
+      "id": "INGENIEUR_HARDWARE",
+      "model": "qwen2.5:7b",
+      "task": "Optimisation VRAM pour faire tourner les modeles de code."
+    },
+    {
+      "id": "MAINTENANCE_REPO",
+      "model": "mistral:7b",
+      "task": "Refactoring de code legacy et montee de version des dependances."
+    },
+    {
+      "id": "SCRIPTEUR_AUTOMATE",
+      "model": "qwen2.5-coder:7b",
+      "task": "Creation de scripts Bash/Python pour automatiser les taches repetitives."
+    },
+    {
+      "id": "INGENIEUR_PROMPT",
+      "model": "qwen2.5:32b",
+      "task": "Affinement des instructions pour maximiser la qualite du code produit."
+    },
+    {
+      "id": "SECURITE_CODE",
+      "model": "llama3.1:8b",
+      "task": "Analyse des vulnerabilites et gestion des secrets (.env)."
+    }
+  ]
+}

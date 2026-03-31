@@ -1,0 +1,28 @@
+{
+  "project": "DevForge_Astro_SSR",
+  "engine": "ollama",
+  "mode": "SSR",
+  "workspace": "media/Github",
+  "dashboard_path": "dashboard",
+  "orchestrator": {
+    "id": "CHEF_TECHNIQUE",
+    "model": "qwen2.5:32b",
+    "role": "Lead Architect & Orchestrateur"
+  },
+  "agents": [
+    { "id": "ARCHITECTE_LOGICIEL", "model": "qwen2.5:32b", "task": "Design system & structures de dossiers" },
+    { "id": "DEV_BACKEND", "model": "qwen2.5-coder:7b", "task": "Logique métier & API" },
+    { "id": "DEV_FRONTEND", "model": "qwen2.5-coder:7b", "task": "UI Astro/Tailwind avec composants Preact" },
+    { "id": "EXPERT_GITHUB", "model": "mistral:7b", "task": "Git CLI, PR & Commits" },
+    { "id": "ANALYSTE_CODE", "model": "llama3.1:8b", "task": "Revue de code & Debug" },
+    { "id": "TESTEUR_QA", "model": "llama3.1:8b", "task": "Tests unitaires & intégration" },
+    { "id": "INFRA_TECH", "model": "qwen2.5-coder:7b", "task": "Docker & CI/CD" },
+    { "id": "REDACTEUR_DOC", "model": "mistral:7b", "task": "Documentation technique" },
+    { "id": "VEILLE_TECH", "model": "llama3.1:8b", "task": "Scraping GitHub Trends" },
+    { "id": "SECURITE_CODE", "model": "llama3.1:8b", "task": "Audit de vulnérabilités" },
+    { "id": "SCRIPTEUR_AUTOMATE", "model": "qwen2.5-coder:7b", "task": "Automatisation Bash/Python" },
+    { "id": "INGENIEUR_PROMPT", "model": "qwen2.5:32b", "task": "Optimisation des instructions" },
+    { "id": "INGENIEUR_HARDWARE", "model": "qwen2.5:7b", "task": "Gestion VRAM Ollama" },
+    { "id": "MAINTENANCE_REPO", "model": "mistral:7b", "task": "Update dépendances & Refactoring" }
+  ]
+}
