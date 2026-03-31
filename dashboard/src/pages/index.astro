@@ -24,12 +24,12 @@ import '../styles/global.css';
         </div>
         <div class="hidden md:flex items-center gap-4">
           <a href="/login" class="text-sm font-medium text-slate-300 hover:text-white transition">Connexion</a>
-          <a href="/dashboard" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+          <a href="/apps" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition shadow-[0_0_15px_rgba(37,99,235,0.4)]">
             Accéder au Dashboard
           </a>
         </div>
       </div>
-        <button class="md:hidden text-slate-400 hover:text-white"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+        <LandingMobileMenu client:load />
     </nav>
 
     <!-- Hero Section -->
@@ -54,7 +54,7 @@ import '../styles/global.css';
           </p>
           
           <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <a href="/dashboard" class="rounded-lg bg-white px-8 py-3.5 text-sm font-semibold text-slate-900 hover:bg-slate-100 transition shadow-lg">
+            <a href="/apps" class="rounded-lg bg-white px-8 py-3.5 text-sm font-semibold text-slate-900 hover:bg-slate-100 transition shadow-lg">
               Démarrer un projet
             </a>
             <a href="#demo" class="rounded-lg bg-slate-800 border border-slate-700 px-8 py-3.5 text-sm font-semibold text-white hover:bg-slate-700 transition">
@@ -143,7 +143,7 @@ import '../styles/global.css';
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Déploiements illimités</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Intégration GitHub</li>
               </ul>
-              <a href="/dashboard" class="block w-full text-center rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition">Commencer gratuitement</a>
+              <a href="/apps" class="block w-full text-center rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition">Commencer gratuitement</a>
             </div>
             
             <!-- Plan 2 -->

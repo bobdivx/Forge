@@ -1,2 +1,2 @@
-export { a as page } from '../chunks/node_cE9OE52G.mjs';
+export { a as page } from '../chunks/node_DJ6rQbOE.mjs';
 export { renderers } from '../renderers.mjs';
