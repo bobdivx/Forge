@@ -25,6 +25,7 @@ const agents = [
 
 // Mock deployed apps for the SaaS feeling
 const deployedApps = [
+  { name: 'Forge', status: 'Online', lastDeploy: 'Just now', url: 'forge.local' },
   { name: 'tesla', status: 'Online', lastDeploy: '2h ago', url: 'tesla.forge.local' },
   { name: 'ZimaOS-MCP', status: 'Building', lastDeploy: '5m ago', url: 'mcp.forge.local' },
   { name: 'mcp-turso', status: 'Online', lastDeploy: '1d ago', url: 'turso.forge.local' },
@@ -55,8 +56,17 @@ const deployedApps = [
             Vue d'ensemble
           </a>
           <a href="/apps" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
+            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25a2.25 2.25 0 01-2.25 2.25h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25h-2.25a2.25 2.25 0 01-2.25-2.25v-2.25z" /></svg>
+            Applications
+          </a>
           <a href="/swarm" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
+             <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.998 5.998 0 00-3.033-5.188M12 7a3 3 0 100-6 3 3 0 000 6zm-7 0a3 3 0 11-6 0 3 3 0 016 0zm7 9a3 3 0 11-6 0 3 3 0 016 0zm7-2a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+             L'Essaim
+          </a>
           <a href="/settings" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-md px-3 py-2 text-sm font-medium transition">
+            <svg class="mr-3 h-5 w-5 flex-shrink-0 text-slate-400 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 1115 0 7.5 7.5 0 01-15 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9" /></svg>
+            Réglages
+          </a>
         </div>
         
         <div class="mt-8">
@@ -130,7 +140,7 @@ const deployedApps = [
               <!-- Projects Grid -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {deployedApps.map(app => (
-                  <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition cursor-pointer group shadow-sm hover:shadow-lg">
+                  <a href={`http://${app.url}`} target="_blank" class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm hover:shadow-lg block">
                     <div class="flex justify-between items-start mb-4">
                       <div class="flex items-center gap-3">
                         <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
@@ -141,7 +151,7 @@ const deployedApps = [
                         </div>
                         <div>
                           <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
-                          <a href={`http://${app.url}`} target="_blank" class="text-xs text-slate-400 hover:text-slate-300 transition">{app.url}</a>
+                          <span class="text-xs text-slate-400 group-hover:text-slate-300 transition">{app.url}</span>
                         </div>
                       </div>
                       <span class={`text-xs px-2 py-1 rounded-full border
@@ -157,7 +167,7 @@ const deployedApps = [
                       </svg>
                       Dernier déploiement: {app.lastDeploy}
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
 

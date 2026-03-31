@@ -4,6 +4,7 @@ import AppLauncher from '../components/AppLauncher';
 import WireLogs from '../components/WireLogs';
 
 const deployedApps = [
+  { name: 'Forge', status: 'Online', lastDeploy: 'Just now', url: 'forge.local' },
   { name: 'tesla', status: 'Online', lastDeploy: '2h ago', url: 'tesla.forge.local' },
   { name: 'ZimaOS-MCP', status: 'Building', lastDeploy: '5m ago', url: 'mcp.forge.local' },
   { name: 'mcp-turso', status: 'Online', lastDeploy: '1d ago', url: 'turso.forge.local' },
@@ -24,7 +25,7 @@ const deployedApps = [
       <div class="lg:col-span-2 flex flex-col gap-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {deployedApps.map(app => (
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition cursor-pointer group shadow-sm hover:shadow-lg">
+            <a href={`http://${app.url}`} target="_blank" class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm hover:shadow-lg block">
               <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-3">
                   <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
@@ -35,7 +36,7 @@ const deployedApps = [
                   </div>
                   <div>
                     <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
-                    <a href={`http://${app.url}`} target="_blank" class="text-xs text-slate-400 hover:text-slate-300 transition">{app.url}</a>
+                    <span class="text-xs text-slate-400 group-hover:text-slate-300 transition">{app.url}</span>
                   </div>
                 </div>
                 <span class={`text-xs px-2 py-1 rounded-full border
@@ -51,7 +52,7 @@ const deployedApps = [
                 </svg>
                 Dernier déploiement: {app.lastDeploy}
               </div>
-            </div>
+            </a>
           ))}
         </div>
         <div class="mt-4">
