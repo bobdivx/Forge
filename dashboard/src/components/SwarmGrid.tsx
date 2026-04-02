@@ -70,8 +70,9 @@ export default function SwarmGrid() {
         <a 
           href={\`/swarm/\${agent.id}\`}
           key={agent.id}
-          class="group bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all duration-300 shadow-xl flex flex-col"
+          class=\`group bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all duration-300 shadow-xl flex flex-col\`
         >
+
           <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
               <div class="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
