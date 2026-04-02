@@ -1,32 +1,22 @@
 import type { APIRoute } from 'astro';
-import {
-  fetchOpenClawJson,
-  normalizeOpenClawSessions,
-  mapSessionToAgentRow,
-} from '../../lib/openclaw-gateway';
+import { execSync } from 'child_process';
+import { normalizeOpenClawSessions, mapSessionToAgentRow } from '../../lib/openclaw-gateway';
 
-export const GET: APIRoute = async ({ locals }) => {
-  const email = locals.user?.email;
-  const result = await fetchOpenClawJson(email, '/rpc/call/sessions.list');
-
-  if (!result.ok) {
-    if (result.status === 401) {
-      return new Response(JSON.stringify({ error: result.error }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    return new Response(JSON.stringify({ error: result.error || 'Gateway' }), {
-      status: result.status || 502,
+export const GET: APIRoute = async () => {
+  try {
+    const raw = execSync('openclaw gateway call sessions.list --token casaos --json').toString();
+    const data = JSON.parse(raw);
+    const sessions = normalizeOpenClawSessions(data);
+    const agents = sessions.map(mapSessionToAgentRow);
+    
+    return new Response(JSON.stringify(agents), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-
-  const sessions = normalizeOpenClawSessions(result.data);
-  const agents = sessions.map(mapSessionToAgentRow);
-
-  return new Response(JSON.stringify(agents), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
 };

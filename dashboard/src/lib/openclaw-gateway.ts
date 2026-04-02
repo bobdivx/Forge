@@ -72,19 +72,21 @@ export async function fetchOpenClawJson(
 /** Normalise la liste des sessions (plusieurs formes de réponse possibles). */
 export function normalizeOpenClawSessions(payload: any): any[] {
   if (!payload) return [];
-  // Support legacy format
+  // Support .sessions array (new RPC format)
   if (Array.isArray(payload.sessions)) return payload.sessions;
+  // Support direct array (legacy)
   if (Array.isArray(payload)) return payload;
+  // Support nested data.sessions
   if (Array.isArray(payload.data?.sessions)) return payload.data.sessions;
+  // Support items field
   if (Array.isArray(payload.items)) return payload.items;
   
-  // Support new health format (OpenClaw 2026.x)
+  // Support new health format grouped by agents
   if (Array.isArray(payload.agents)) {
     const allSessions = [];
     for (const agent of payload.agents) {
       if (agent.sessions && Array.isArray(agent.sessions.recent)) {
         for (const s of agent.sessions.recent) {
-          // Enrich with agentId if missing
           allSessions.push({ ...s, agentId: s.agentId || agent.agentId });
         }
       }
@@ -124,6 +126,9 @@ export function mapSessionToAgentRow(s: any) {
         : typeof s?.context_tokens === 'number'
           ? s.context_tokens
           : null,
+    totalTokens: typeof s?.totalTokens === 'number' ? s.totalTokens : (typeof s?.total_tokens === 'number' ? s.total_tokens : 0),
+    estimatedCostUsd: typeof s?.estimatedCostUsd === 'number' ? s.estimatedCostUsd : (typeof s?.estimated_cost_usd === 'number' ? s.estimated_cost_usd : 0),
+    runtimeMs: typeof s?.runtimeMs === 'number' ? s.runtimeMs : (typeof s?.runtime_ms === 'number' ? s.runtime_ms : 0),
     lastSeenMs: Number.isFinite(updated) ? updated : Date.now(),
     lastSeen: new Date(Number.isFinite(updated) ? updated : Date.now()).toLocaleString('fr-FR'),
     raw: s,

@@ -8,7 +8,7 @@ import {
 /** Journal d'orchestration = vue tabulaire des sessions OpenClaw (état réel). */
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email;
-  const result = await fetchOpenClawJson(email, '/rpc/call/sessions.list');
+  const result = await fetchOpenClawJson(email, '/rpc/call/sessions.list?token=casaos');
 
   if (!result.ok) {
     return new Response(
