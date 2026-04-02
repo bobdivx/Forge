@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import os from 'os';
+import { execSync } from 'child_process';
 
 export const GET: APIRoute = async () => {
   try {
@@ -10,6 +11,7 @@ export const GET: APIRoute = async () => {
         memoryUsage: null,
         cpuLoad: null,
         uptime: null,
+        diskUsage: null,
         platform: 'vercel-edge',
         note: 'Métriques hôte non disponibles en serverless (pas de lecture OS réelle).'
       }), { 
@@ -26,10 +28,20 @@ export const GET: APIRoute = async () => {
     const loadAvg = os.loadavg();
     const cpuPercent = Math.round((loadAvg[0] / os.cpus().length) * 100);
 
+    let diskUsage = null;
+    try {
+      const dfOutput = execSync('df -h /mnt/Docker --output=pcent').toString();
+      const match = dfOutput.match(/(\d+)%/);
+      if (match) diskUsage = parseInt(match[1]);
+    } catch (e) {
+      console.error("Failed to fetch disk usage", e);
+    }
+
     return new Response(JSON.stringify({
       memoryUsage: memPercent,
       cpuLoad: cpuPercent,
       uptime: os.uptime(),
+      diskUsage: diskUsage,
       platform: os.platform()
     }), { 
       status: 200, 

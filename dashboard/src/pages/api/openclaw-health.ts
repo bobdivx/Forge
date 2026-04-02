@@ -8,7 +8,7 @@ import {
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email;
   const base = getOpenClawGatewayBaseUrl(email);
-  const result = await fetchOpenClawJson(email, '/health');
+  const result = await fetchOpenClawJson(email, '/rpc/call/sessions.list');
 
   if (!result.ok) {
     return new Response(

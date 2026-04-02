@@ -4,7 +4,7 @@ import '../styles/global.css';
 import AppLauncher from '../components/AppLauncher';
 import AgentStats from '../components/AgentStats';
 import WireLogs from '../components/WireLogs';
-import SystemResources from '../components/SystemResources';
+import InfraHealth from '../components/InfraHealth';
 import OpenClawGatewayBadge from '../components/OpenClawGatewayBadge';
 import fs from 'fs';
 import path from 'path';
@@ -65,8 +65,8 @@ try {
           </a>
         </div>
         
-        <!-- System Resources Sidebar Component -->
-        <SystemResources client:load />
+        <!-- Infra Health Sidebar Component -->
+        <InfraHealth client:load />
 
       </nav>
       

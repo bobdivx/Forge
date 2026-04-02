@@ -1,25 +1,39 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
-import AgentStats from '../components/AgentStats';
+import SwarmGrid from '../components/SwarmGrid';
 import SwarmActivities from '../components/SwarmActivities';
 ---
 <DashboardLayout title="Essaim d'Agents" currentPath="/swarm">
-  <div class="max-w-7xl mx-auto space-y-8">
+  <div class="max-w-7xl mx-auto space-y-12">
     <div class="flex justify-between items-end flex-wrap gap-4">
       <div>
-        <h2 class="text-3xl font-bold text-white mb-2 tracking-tight">État de l'Essaim</h2>
+        <h2 class="text-3xl font-bold text-white mb-2 tracking-tight">Vue de l'Essaim</h2>
         <p class="text-slate-400">
-          Supervision branchée sur le gateway OpenClaw (sessions réelles, pas de scénario de démo).
+          Supervision des agents actifs et analyse de leur consommation.
         </p>
+      </div>
+      <div class="flex gap-2">
+        <div class="badge badge-outline border-slate-700 text-slate-500 gap-2 p-3">
+          <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          Liaison Gateway OK
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-      <div class="xl:col-span-1">
-        <AgentStats client:load />
+    <section class="space-y-6">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-1 h-6 bg-blue-500 rounded-full"></div>
+        <h3 class="text-lg font-bold text-white uppercase tracking-widest text-sm">Cartes Agents</h3>
       </div>
+      <SwarmGrid client:load />
+    </section>
 
-      <div class="xl:col-span-2 space-y-6">
+    <div class="grid grid-cols-1 gap-8">
+      <div class="space-y-6">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="w-1 h-6 bg-purple-500 rounded-full"></div>
+          <h3 class="text-lg font-bold text-white uppercase tracking-widest text-sm">Journal d'Activités</h3>
+        </div>
         <SwarmActivities client:load />
       </div>
     </div>
