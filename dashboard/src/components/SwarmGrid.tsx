@@ -17,6 +17,22 @@ export default function SwarmGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const formatAgentName = (name: string) => {
+    // Si c'est un subagent complexe, on essaie d'extraire la partie métier
+    if (name.includes('subagent:')) {
+      // Cas agent:main:subagent:ID -> on garde "Subagent (ID)"
+      const parts = name.split(':');
+      const id = parts.pop() || '';
+      return \`Sub-Agent (\${id.slice(0, 8)})\`;
+    }
+    // Nettoyage des préfixes techniques courants
+    return name
+      .replace('telegram:g-agent-', '')
+      .replace('agent:', '')
+      .replace(':main', '')
+      .toUpperCase();
+  };
+
   useEffect(() => {
     const fetchAgents = () => {
       fetch('/api/agents')
@@ -52,9 +68,9 @@ export default function SwarmGrid() {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {agents.map((agent) => (
         <a 
-          href={`/swarm/${agent.id}`}
+          href={\`/swarm/\${agent.id}\`}
           key={agent.id}
-          class="group bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all duration-300 shadow-xl"
+          class="group bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-blue-500/50 hover:bg-slate-800/50 transition-all duration-300 shadow-xl flex flex-col"
         >
           <div class="flex justify-between items-start mb-4">
             <div class="flex items-center gap-3">
@@ -64,38 +80,43 @@ export default function SwarmGrid() {
                 </svg>
               </div>
               <div>
-                <h3 class="font-bold text-white group-hover:text-blue-400 transition-colors truncate max-w-[120px]">
-                  {agent.name.replace('telegram:g-agent-', '')}
+                <h3 class="font-bold text-white group-hover:text-blue-400 transition-colors truncate max-w-[150px]">
+                  {formatAgentName(agent.name)}
                 </h3>
                 <span class="text-[10px] font-mono text-slate-500">{agent.id.split(':').pop()?.slice(0,8)}</span>
               </div>
             </div>
-            <div class={`badge ${agent.status === 'actif' ? 'badge-success' : 'badge-ghost'} badge-sm font-bold uppercase tracking-wider text-[9px]`}>
+            <div class={\`badge \${agent.status === 'actif' ? 'badge-success' : 'badge-ghost'} badge-sm font-bold uppercase tracking-wider text-[9px]\`}>
               {agent.status}
             </div>
           </div>
 
-          <div class="space-y-3">
+          <div class="space-y-3 flex-1">
             <div class="flex justify-between items-center text-[11px]">
-              <span class="text-slate-500">Modèle</span>
-              <span class="text-slate-300 font-mono">{agent.model.split('/').pop()}</span>
+              <span class="text-slate-500 uppercase tracking-tighter">Modèle Actuel</span>
+              <span class="text-blue-300 font-mono bg-blue-500/5 px-1.5 py-0.5 rounded">{agent.model.split('/').pop()}</span>
             </div>
             
             <div class="flex justify-between items-center text-[11px]">
-              <span class="text-slate-500">Consommation</span>
+              <span class="text-slate-500">Volume Data</span>
               <span class="text-slate-300">{(agent.totalTokens || 0).toLocaleString()} tokens</span>
             </div>
 
-            {agent.estimatedCostUsd && (
+            {agent.estimatedCostUsd > 0 && (
               <div class="flex justify-between items-center text-[11px]">
-                <span class="text-slate-500">Coût estimé</span>
-                <span class="text-blue-400 font-bold">${agent.estimatedCostUsd.toFixed(2)}</span>
+                <span class="text-slate-500">Coût Estimé</span>
+                <span class="text-emerald-400 font-bold">$\${agent.estimatedCostUsd.toFixed(2)}</span>
               </div>
             )}
           </div>
 
-          <div class="mt-6 flex items-center justify-end">
-            <span class="text-[10px] text-slate-600 italic">Dernière activité : {agent.lastSeen?.split(' ').pop()}</span>
+          <div class="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+            <span class="text-[10px] text-slate-600 italic">Vu le {agent.lastSeen?.split(' ').pop()}</span>
+            <div class="text-blue-500 group-hover:translate-x-1 transition-transform">
+               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+               </svg>
+            </div>
           </div>
         </a>
       ))}

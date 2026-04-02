@@ -2,7 +2,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { verifySessionToken } from './lib/auth';
 
-const PUBLIC_PATHS = ['/api/agents', '/api/openclaw-health', '/api/openclaw-activity', '/api/openclaw-orchestration', '/api/openclaw-economics-stats', '/login', '/api/auth/login', '/api/auth/register', '/api/auth/logout'];
+const PUBLIC_PATHS = ['/api/agents', '/api/models', '/api/openclaw-steer', '/api/openclaw-health', '/api/openclaw-activity', '/api/openclaw-orchestration', '/api/openclaw-economics-stats', '/login', '/api/auth/login', '/api/auth/register', '/api/auth/logout'];
 
 function isPublic(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) {
