@@ -23,6 +23,24 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       </div>
     </section>
 
+    <section class="bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-700">
+      <h2 class="text-2xl font-semibold text-emerald-400 mb-4">Dépôts Git & fiche projet</h2>
+      <ul class="text-gray-300 space-y-2 list-disc ml-6 text-sm leading-relaxed">
+        <li>
+          Variable d'environnement <code class="text-green-400">FORGE_REPOS_ROOT</code> : racine des dépôts sur le serveur (défaut{' '}
+          <code class="text-green-400">/media/Github</code>).
+        </li>
+        <li>
+          La page <code class="text-green-400">/apps/&lt;nom&gt;</code> résout le dossier sous cette racine, affiche l'historique{' '}
+          <code class="text-green-400">git log</code> et l'état de la branche (Git doit être installé sur l'hôte).
+        </li>
+        <li>
+          Les demandes créées depuis le dashboard sont enregistrées dans{' '}
+          <code class="text-green-400">.forge/demandes.json</code> (versionné avec le dépôt si vous committez ce dossier).
+        </li>
+      </ul>
+    </section>
+
     <section class="space-y-4">
       <h2 class="text-2xl font-semibold text-white">Documentation du Token</h2>
       

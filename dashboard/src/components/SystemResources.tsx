@@ -35,25 +35,25 @@ export default function SystemResources() {
         <div>
           <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
             <span>RAM Usage</span>
-            <span>{stats.memoryUsage}%</span>
+            <span>{stats.memoryUsage == null ? '—' : `${stats.memoryUsage}%`}</span>
           </div>
           <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div class="h-full bg-blue-500 rounded-full transition-all duration-500" style={`width: ${stats.memoryUsage}%`}></div>
+            <div class="h-full bg-blue-500 rounded-full transition-all duration-500" style={`width: ${stats.memoryUsage == null ? 0 : stats.memoryUsage}%`}></div>
           </div>
         </div>
         <div>
           <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
             <span>Charge CPU</span>
-            <span>{stats.cpuLoad}%</span>
+            <span>{stats.cpuLoad == null ? '—' : `${stats.cpuLoad}%`}</span>
           </div>
           <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div class="h-full bg-indigo-500 rounded-full transition-all duration-500" style={`width: ${stats.cpuLoad}%`}></div>
+            <div class="h-full bg-indigo-500 rounded-full transition-all duration-500" style={`width: ${stats.cpuLoad == null ? 0 : stats.cpuLoad}%`}></div>
           </div>
         </div>
         <div class="pt-2">
           <div class="flex items-center justify-between text-[10px] text-slate-500 font-mono">
             <span>Uptime</span>
-            <span>{Math.floor(stats.uptime / 3600)}h {Math.floor((stats.uptime % 3600) / 60)}m</span>
+            <span>{stats.uptime == null ? '—' : `${Math.floor(stats.uptime / 3600)}h ${Math.floor((stats.uptime % 3600) / 60)}m`}</span>
           </div>
         </div>
       </div>

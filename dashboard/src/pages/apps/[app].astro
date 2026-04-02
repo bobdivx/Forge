@@ -1,73 +1,44 @@
 ---
 // @ts-nocheck
+export const prerender = false;
+
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
-import fs from 'fs';
-import path from 'path';
+import ProjectDemandesForm from '../../components/ProjectDemandesForm';
+import { resolveProjectPath, isSafeRepoDirName } from '../../lib/forge-repos';
+import { getGitCommits, getGitSummary } from '../../lib/project-git';
+import { readForgeRequests } from '../../lib/project-requests';
 
-const githubPath = '/media/Github';
+const rawParam = Astro.params.app;
+const appName = typeof rawParam === 'string' ? decodeURIComponent(rawParam) : '';
 
-type AppItem = {
-  name: string;
-  status: string;
-  lastSync: string;
-  url: string;
-  updatedAt: Date;
-};
-
-type ChangeItem = {
-  title: string;
-  detail: string;
-  date: string;
-  by: string;
-};
-
-type RequestItem = {
-  id: string;
-  type: 'Fonctionnalite' | 'Correction';
-  title: string;
-  status: 'En attente' | 'En cours' | 'Traite';
-  agent: string;
-  updatedAt: string;
-};
-
-function loadApps(): AppItem[] {
-  if (!fs.existsSync(githubPath)) {
-    return [];
-  }
-
-  const entries = fs.readdirSync(githubPath, { withFileTypes: true });
-
-  return entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-    .map((entry) => {
-      const stats = fs.statSync(path.join(githubPath, entry.name));
-      return {
-        name: entry.name,
-        status: 'Inconnu',
-        lastSync: stats.mtime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-        url: `${entry.name.toLowerCase()}.forge.local`,
-        updatedAt: stats.mtime
-      };
-    });
-}
-
-export async function getStaticPaths() {
-  const apps = loadApps();
-  return apps.map((app) => ({
-    params: { app: app.name },
-    props: { app }
-  }));
-}
-
-const { app } = Astro.props as { app: AppItem };
-
-if (!app) {
+if (!isSafeRepoDirName(appName)) {
   return Astro.redirect('/apps');
 }
 
-const appName = app.name;
-const changes: ChangeItem[] = [];
-const requests: RequestItem[] = [];
+const projectPath = resolveProjectPath(appName);
+
+if (!projectPath) {
+  return Astro.redirect('/apps');
+}
+
+const { commits, error: gitLogError } = getGitCommits(projectPath, 30);
+const gitSummary = getGitSummary(projectPath);
+const requests = readForgeRequests(projectPath);
+
+const changes = commits.map((c) => ({
+  title: c.subject,
+  detail: `${c.shortHash} — ${c.hash}`,
+  date: c.date,
+  by: c.author,
+}));
+
+const lastSync = commits[0]?.date || '—';
+const app = {
+  name: appName,
+  status: gitSummary.isRepo ? (gitSummary.dirty ? 'Modifications locales' : 'Dépôt Git') : 'Dépôt local',
+  lastSync,
+  url: `${appName.toLowerCase()}.forge.local`,
+};
 ---
 
 <DashboardLayout title={`Application: ${appName}`} currentPath="/apps">
@@ -77,80 +48,100 @@ const requests: RequestItem[] = [];
         <div>
           <a href="/apps" class="text-xs uppercase tracking-widest text-slate-400 hover:text-blue-400 transition">Retour aux applications</a>
           <h2 class="mt-2 text-2xl font-bold text-white">{appName}</h2>
-          <p class="mt-1 text-sm text-slate-400">Espace de gestion: suivi des evolutions, demandes et affectation des agents.</p>
+          <p class="mt-1 text-[11px] font-mono text-slate-500 break-all">{projectPath}</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-col items-end gap-2">
           <span class="badge badge-success badge-outline py-3 px-3 text-xs uppercase">{app.status}</span>
-          <span class="text-xs text-slate-500 font-mono">Sync: {app.lastSync}</span>
+          {gitSummary.isRepo && (
+            <div class="text-right text-[11px] text-slate-500 font-mono space-y-0.5">
+              <div>
+                branche <span class="text-blue-400">{gitSummary.branch || '—'}</span>
+                {gitSummary.dirty && <span class="text-amber-400 ml-2">● non commité</span>}
+              </div>
+              {gitSummary.aheadBehind && <div class="text-slate-400">{gitSummary.aheadBehind} vs upstream</div>}
+              {gitSummary.error && <div class="text-amber-500">{gitSummary.error}</div>}
+            </div>
+          )}
         </div>
       </div>
     </div>
 
+    {gitLogError && (
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-sm text-amber-200">
+        Git : {gitLogError}
+      </div>
+    )}
+
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <section class="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <div class="flex items-center justify-between mb-5">
-          <h3 class="text-lg font-semibold text-white">Derniers changements</h3>
-          <a href={`http://${app.url}`} target="_blank" class="text-xs text-blue-400 hover:text-blue-300 transition">{app.url}</a>
+        <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
+          <h3 class="text-lg font-semibold text-white">Historique Git</h3>
+          <a href={`http://${app.url}`} target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 hover:text-blue-300 transition">{app.url}</a>
         </div>
         {changes.length > 0 ? (
           <div class="space-y-4">
             {changes.map((change) => (
               <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
                 <div class="flex items-start justify-between gap-4">
-                  <h4 class="font-medium text-white">{change.title}</h4>
-                  <span class="text-xs text-slate-500">{change.date}</span>
+                  <h4 class="font-medium text-white break-words">{change.title}</h4>
+                  <span class="text-xs text-slate-500 shrink-0">{change.date}</span>
                 </div>
-                <p class="text-sm text-slate-400 mt-2">{change.detail}</p>
-                <p class="text-xs text-slate-500 mt-3">Traite par: <span class="text-blue-400 font-mono">{change.by}</span></p>
+                <p class="text-sm text-slate-400 mt-2 font-mono text-[11px]">{change.detail}</p>
+                <p class="text-xs text-slate-500 mt-3">
+                  Auteur : <span class="text-blue-400 font-mono">{change.by}</span>
+                </p>
               </article>
             ))}
           </div>
         ) : (
           <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
-            Aucun changement disponible pour cette application.
+            {gitSummary.isRepo
+              ? 'Aucun commit lisible (dépôt vide ou erreur git log).'
+              : 'Initialisez un dépôt Git dans ce dossier pour afficher l’historique.'}
           </div>
         )}
       </section>
 
       <aside class="space-y-6">
-        <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">Demander une action</h3>
-          <div class="space-y-3">
-            <button class="btn btn-sm w-full bg-blue-600 hover:bg-blue-500 border-none text-white">Nouvelle fonctionnalite</button>
-            <button class="btn btn-sm w-full btn-outline border-slate-700 text-slate-200 hover:bg-slate-800">Signaler une correction</button>
-          </div>
-        </section>
+        <ProjectDemandesForm client:load appName={appName} />
 
         <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">Traitement en cours</h3>
+          <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">File de demandes</h3>
           {requests.length > 0 ? (
             <div class="space-y-4">
               {requests.map((request) => (
                 <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
                   <div class="flex items-center justify-between gap-3">
                     <p class="text-xs text-slate-500 font-mono">{request.id}</p>
-                    <span class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
-                      request.status === 'Traite'
-                        ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
-                        : request.status === 'En cours'
-                        ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
-                        : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
-                    }`}>{request.status}</span>
+                    <span
+                      class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
+                        request.status === 'Traite'
+                          ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
+                          : request.status === 'En cours'
+                            ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                            : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
+                      }`}
+                    >
+                      {request.status}
+                    </span>
                   </div>
                   <p class="mt-2 text-sm text-white">{request.title}</p>
+                  {request.detail && <p class="mt-2 text-xs text-slate-500">{request.detail}</p>}
                   <p class="mt-2 text-xs text-slate-400">
-                    Type: <span class="text-slate-300">{request.type}</span>
+                    Type : <span class="text-slate-300">{request.type}</span>
                   </p>
                   <p class="text-xs text-slate-400">
-                    Agent: <span class="text-blue-400 font-mono">{request.agent}</span>
+                    Agent : <span class="text-blue-400 font-mono">{request.agent}</span>
                   </p>
-                  <p class="text-xs text-slate-500 mt-2">{request.updatedAt}</p>
+                  <p class="text-xs text-slate-500 mt-2">
+                    {new Date(request.updatedAt).toLocaleString('fr-FR')}
+                  </p>
                 </article>
               ))}
             </div>
           ) : (
             <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
-              Aucune demande de fonctionnalite ou correction pour le moment.
+              Aucune entrée dans <span class="font-mono text-slate-500">.forge/demandes.json</span>. Utilisez le formulaire ci-dessus.
             </div>
           )}
         </section>

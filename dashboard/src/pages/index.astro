@@ -7,7 +7,7 @@ import '../styles/global.css';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DevForge - La Forge Logicielle Autonome</title>
-    <meta name="description" content="Déployez vos applications avec 14 agents IA spécialisés." />
+    <meta name="description" content="Pilotez OpenClaw, Ollama et Gemini pour vos déploiements sur infrastructure propre." />
   </head>
   <body class="bg-slate-950 text-white selection:bg-blue-500/30 font-sans antialiased">
     <div class="drawer drawer-end">
@@ -22,7 +22,7 @@ import '../styles/global.css';
             </div>
             <div class="hidden md:flex gap-8 text-sm font-medium text-slate-300">
               <a href="#features" class="hover:text-white transition">Fonctionnalités</a>
-              <a href="#agents" class="hover:text-white transition">L'Équipe</a>
+              <a href="#stack" class="hover:text-white transition">Stack</a>
               <a href="#pricing" class="hover:text-white transition">Tarifs</a>
             </div>
             <div class="hidden md:flex items-center gap-4">
@@ -49,7 +49,7 @@ import '../styles/global.css';
         <div class="relative mx-auto max-w-7xl px-6 text-center">
           <div class="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 mb-8">
             <span class="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <span class="text-xs font-medium text-blue-300">OpenClaw + Ollama (qwen2.5:32b) propulsé</span>
+            <span class="text-xs font-medium text-blue-300">OpenClaw · Ollama · Gemini (selon votre config)</span>
           </div>
           
           <h1 class="mx-auto max-w-4xl text-5xl font-extrabold tracking-tight text-white sm:text-7xl">
@@ -57,7 +57,7 @@ import '../styles/global.css';
           </h1>
           
           <p class="mx-auto mt-6 max-w-2xl text-lg text-slate-300">
-            De l'idée au déploiement en production. Pilotez 14 agents IA spécialisés pour créer, tester, et héberger vos applications sur votre propre infrastructure.
+            De l'idée au déploiement en production. Le tableau de bord affiche les sessions et l'état réels renvoyés par votre gateway OpenClaw une fois connecté.
           </p>
           
           <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -69,20 +69,21 @@ import '../styles/global.css';
             </a>
           </div>
           
-          <!-- Dashboard Preview Image/Mockup -->
-          <div class="mt-20 mx-auto max-w-5xl rounded-2xl border border-white/10 bg-slate-900/50 p-2 backdrop-blur-sm shadow-2xl">
-            <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/50 relative">
+          <p id="demo" class="sr-only">Démo</p>
+          <div id="stack" class="mt-20 mx-auto max-w-5xl rounded-2xl border border-white/10 bg-slate-900/50 p-2 backdrop-blur-sm shadow-2xl">
+            <p class="text-center text-[10px] uppercase tracking-widest text-slate-500 px-2 pt-2">
+              Illustration — les vues connectées lisent les données OpenClaw (sessions, gateway), pas des scénarios fictifs
+            </p>
+            <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-800/50 relative mt-2">
                <div class="absolute top-0 w-full h-8 bg-slate-900 border-b border-slate-800 flex items-center px-4 gap-2">
                  <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
                  <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
                  <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
                </div>
-               <div class="pt-8 p-6 text-left font-mono text-sm text-blue-400">
-                 <p><span class="text-green-400">~/forge</span> $ openclaw task "CREATE_NEW_APP saas-billing"</p>
-                 <p class="text-slate-400 mt-2">[CHEF_TECHNIQUE] Ordre reçu. Initialisation du dépôt GitHub...</p>
-                 <p class="text-slate-400">[ARCHITECTE_LOGICIEL] Génération de l'architecture Astro + Tailwind...</p>
-                 <p class="text-slate-400">[DEV_BACKEND] Création de l'API Stripe en cours...</p>
-                 <p class="text-emerald-400 mt-2">✓ Application générée avec succès ! Déploiement Docker en préparation.</p>
+               <div class="pt-8 p-6 text-left font-mono text-sm text-slate-400">
+                 <p class="text-blue-400">GET /health → sessions réelles (jeton OpenClaw)</p>
+                 <p class="mt-2">The Wire → lignes dérivées des sessions actives / veille</p>
+                 <p class="mt-2 text-slate-500">Paramètres : token gateway + option <span class="text-slate-400">OPENCLAW_GATEWAY_URL</span></p>
                </div>
             </div>
           </div>
@@ -94,7 +95,7 @@ import '../styles/global.css';
         <div class="mx-auto max-w-7xl px-6">
           <div class="text-center max-w-2xl mx-auto mb-16">
             <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Conçu pour la productivité absolue</h2>
-            <p class="mt-4 text-slate-400">Notre essaim de 14 agents IA gère le cycle de vie complet de vos applications, de la première ligne de code jusqu'au monitoring en production.</p>
+            <p class="mt-4 text-slate-400">Vos agents OpenClaw orchestrent le cycle de vie des applications ; la Forge affiche ce que le gateway expose réellement.</p>
           </div>
           
           <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -105,7 +106,7 @@ import '../styles/global.css';
                 </svg>
               </div>
               <h3 class="text-xl font-semibold text-white mb-3">Code Généré par l'IA</h3>
-              <p class="text-slate-400 leading-relaxed">Les agents utilisent Qwen 2.5 (32b et 7b-coder) pour rédiger un code propre, moderne et documenté. Spécialisés Astro, React (Preact) et Node.</p>
+              <p class="text-slate-400 leading-relaxed">Modèles locaux Ollama (ex. Qwen) et Gemini côté Google, selon votre openclaw.json — ce dashboard n'invente pas de charge GPU ni de modèle.</p>
             </div>
             
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 hover:border-indigo-500/50 transition duration-300">
@@ -146,7 +147,7 @@ import '../styles/global.css';
               <p class="text-slate-400 text-sm mb-6">Pour les NAS personnels et ZimaBoard.</p>
               <div class="text-4xl font-bold text-white mb-6">0€ <span class="text-lg font-normal text-slate-500">/mois</span></div>
               <ul class="space-y-3 mb-8 flex-1 text-slate-300 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> 14 Agents Locaux (Ollama)</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> OpenClaw + Ollama / Gemini (self-host)</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Déploiements illimités</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Intégration GitHub</li>
               </ul>
@@ -160,7 +161,7 @@ import '../styles/global.css';
               <p class="text-slate-400 text-sm mb-6">Pour les entreprises et freelances.</p>
               <div class="text-4xl font-bold text-white mb-6">49€ <span class="text-lg font-normal text-slate-500">/mois</span></div>
               <ul class="space-y-3 mb-8 flex-1 text-slate-300 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Agents propulsés par GPT-4 / Claude 3</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Extensions cloud optionnelles (selon plugins OpenClaw)</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Cluster GPU Dédié</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Auto-Scaling ZimaOS</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Support prioritaire Slack</li>
@@ -198,7 +199,7 @@ import '../styles/global.css';
            </div>
         </li>
         <li><a href="#features" class="text-lg">Fonctionnalités</a></li>
-        <li><a href="#agents" class="text-lg">L'Équipe</a></li>
+        <li><a href="#stack" class="text-lg">Stack</a></li>
         <li><a href="#pricing" class="text-lg">Tarifs</a></li>
         <div class="divider"></div>
         <li><a href="/login" class="text-lg">Connexion</a></li>

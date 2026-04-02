@@ -2,6 +2,7 @@
 // @ts-nocheck
 import '../styles/global.css';
 import MobileMenu from "../components/MobileMenu";
+import OpenClawLayoutBadge from "../components/OpenClawLayoutBadge";
 const { title, currentPath } = Astro.props;
 const userEmail = String(Astro.locals?.user?.email ?? 'utilisateur');
 const userInitial = userEmail.charAt(0).toUpperCase();
@@ -59,10 +60,7 @@ const navItems = [
           <h1 class="text-lg font-semibold text-white">{title}</h1>
         </div>
         <div class="navbar-end gap-2">
-          <span class="badge badge-success badge-outline gap-2 py-3 px-3 text-xs">
-            <span class="status status-success animate-pulse"></span>
-            Essaim Autonome Actif
-          </span>
+          <OpenClawLayoutBadge client:load />
           <a href="/api/auth/logout" class="btn btn-ghost btn-sm border border-slate-700">Deconnexion</a>
         </div>
       </header>

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import fs from 'fs';
 import path from 'path';
+import { getReposRoot } from '../../lib/forge-repos';
 
 // Middleware-like security check
 const validateAuth = (request: Request) => {
@@ -17,7 +18,7 @@ export const GET: APIRoute = async ({ request }) => {
   }
 
   try {
-    const githubPath = '/media/Github';
+    const githubPath = getReposRoot();
     
     if (!fs.existsSync(githubPath)) {
       return new Response(JSON.stringify({ error: "Chemin GitHub non trouvé" }), { 

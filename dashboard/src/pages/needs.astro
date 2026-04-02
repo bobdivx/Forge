@@ -1,80 +1,18 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
-
-const requests = [
-  { 
-    agent: "INFRA_TECH", 
-    tool: "Vercel CLI (vercel)", 
-    reason: "Besoin de la commande `vercel env pull` pour synchroniser les secrets de production en local.",
-    status: "Installé (Autonome)",
-    priority: "Haute",
-    actionRequired: "Exécuter `npm i -g vercel` sur l'hôte ZimaOS."
-  },
-  { 
-    agent: "DEV_BACKEND", 
-    tool: "Turso CLI (turso)", 
-    reason: "Nécessaire pour le provisioning autonome des bases de données de l'essaim.",
-    status: "Installé (Autonome)",
-    priority: "Critique",
-    actionRequired: "Exécuter `curl -sSfL https://get.tur.so/install.sh | bash` sur l'hôte ZimaOS."
-  },
-  { 
-    agent: "CHEF_TECHNIQUE", 
-    tool: "Vercel Access Token", 
-    reason: "Permet à l'essaim de piloter les déploiements et de surveiller la production.",
-    status: "Connecté ✅",
-    priority: "Critique",
-    actionRequired: "Token fourni par Mathieu."
-  },
-  { 
-    agent: "EXPERT_GITHUB", 
-    tool: "GitHub CLI (gh)", 
-    reason: "Nécessaire pour la gestion des Pull Requests et le suivi des Issues.",
-    status: "Opérationnel ✅",
-    priority: "Haute",
-    actionRequired: "Token ghp_* détecté dans les crédentials système."
-  }
-];
+import NeedsFromOpenClaw from '../components/NeedsFromOpenClaw';
 ---
 <DashboardLayout title="Demandes Systèmes" currentPath="/needs">
   <div class="max-w-7xl mx-auto">
     <div class="flex justify-between items-end mb-8">
       <div>
-        <h2 class="text-2xl font-bold text-white mb-2">Besoins Logiciels de l'Essaim</h2>
-        <p class="text-slate-400">Liste des outils (CLI, API Keys) requis par les agents pour atteindre l'autonomie totale.</p>
+        <h2 class="text-2xl font-bold text-white mb-2">Agents & modèles (OpenClaw)</h2>
+        <p class="text-slate-400">
+          Vue dérivée des sessions actuellement connues du gateway : pas de liste d’outils inventée.
+        </p>
       </div>
     </div>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {requests.map(req => (
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
-          {req.priority === 'Critique' && (
-            <div class="absolute top-0 right-0 bg-red-500/20 text-red-400 border-b border-l border-red-500/30 text-xs font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">
-              {req.priority}
-            </div>
-          )}
-          <div class="flex items-center gap-3 mb-4">
-            <span class="px-2.5 py-1 bg-slate-800 rounded text-xs font-mono text-blue-400">{req.agent}</span>
-            <span class="text-sm font-semibold text-white">Requête : {req.tool}</span>
-          </div>
-          <p class="text-sm text-slate-300 mb-4">{req.reason}</p>
-          
-          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4">
-            <div class="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">Action Requise par l'Admin</div>
-            <code class="text-xs text-emerald-400 font-mono block mb-4 p-2 bg-black/50 rounded border border-white/5">
-              {req.actionRequired}
-            </code>
-            <div class="flex justify-between items-center border-t border-slate-800 pt-3">
-              <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 "></span> {req.status}
-              </span>
-              <button class="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded transition">
-                Marquer comme Installé
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
+
+    <NeedsFromOpenClaw client:load />
   </div>
 </DashboardLayout>

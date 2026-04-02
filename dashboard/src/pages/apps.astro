@@ -5,31 +5,23 @@ import AppLauncher from '../components/AppLauncher';
 import WireLogs from '../components/WireLogs';
 import fs from 'fs';
 import path from 'path';
+import { db, Project } from 'astro:db';
 
-// Dynamically fetch apps from the local filesystem
-const githubPath = '/media/Github';
+// Fetch apps from Astro DB
 let deployedApps = [];
 
 try {
-  if (fs.existsSync(githubPath)) {
-    const entries = fs.readdirSync(githubPath, { withFileTypes: true });
-    deployedApps = entries
-      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
-      .map(entry => {
-        const name = entry.name;
-        const stats = fs.statSync(path.join(githubPath, name));
-        
-        return {
-          name,
-          status: 'Inconnu',
-          lastDeploy: stats.mtime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-          url: `${name.toLowerCase()}.forge.local`
-        };
-      })
-      .sort((a, b) => a.name === 'Forge' ? -1 : 1);
-  }
+  deployedApps = await db.select().from(Project);
+  
+  // Format for display if needed
+  deployedApps = deployedApps.map(app => ({
+    ...app,
+    lastDeploy: app.updatedAt ? new Date(app.updatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'N/A',
+    url: `${app.name.toLowerCase()}.forge.local`
+  })).sort((a, b) => a.name === 'Forge' ? -1 : 1);
+
 } catch (e) {
-  console.error("Failed to load apps", e);
+  console.error("Failed to load apps from DB", e);
 }
 
 ---
@@ -39,7 +31,7 @@ try {
     <div class="flex items-end justify-between">
       <div>
         <h2 class="text-3xl font-bold tracking-tight text-white">Gestion des Projets</h2>
-        <p class="mt-1 text-sm text-slate-400">Dépôts locaux identifiés dans <span class="font-mono text-blue-400">/media/Github</span>.</p>
+        <p class="mt-1 text-sm text-slate-400">Dépôts locaux gérés via <span class="font-mono text-blue-400">Astro DB</span>.</p>
       </div>
     </div>
 
@@ -49,7 +41,7 @@ try {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {deployedApps.map(app => (
               <a
-                href={`/apps/${app.name}`}
+                href={`/apps/${encodeURIComponent(app.name)}`}
                 class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm flex flex-col justify-between h-40 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               >
                 <div class="flex justify-between items-start mb-4">
@@ -80,7 +72,7 @@ try {
           </div>
         ) : (
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-sm text-slate-400">
-            Aucune application detectee dans <span class="font-mono text-blue-400">/media/Github</span>.
+            Aucune application detectee dans la base de données.
           </div>
         )}
         
@@ -103,8 +95,8 @@ try {
                  <span class="text-white font-mono">{deployedApps.length}</span>
               </div>
               <div class="flex justify-between items-center text-sm">
-                 <span class="text-slate-400">Actifs</span>
-                 <span class="text-emerald-400 font-mono">{deployedApps.length}</span>
+                 <span class="text-slate-400">Statut actif (DB)</span>
+                 <span class="text-emerald-400 font-mono">{deployedApps.filter((a) => String(a.status).toLowerCase() === 'active' || String(a.status).toLowerCase() === 'online').length}</span>
               </div>
            </div>
         </div>

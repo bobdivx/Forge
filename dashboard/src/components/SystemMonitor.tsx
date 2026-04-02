@@ -23,19 +23,19 @@ export default function SystemMonitor() {
       <div>
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span>RAM (Système)</span>
-          <span class="font-mono">{stats.memoryUsage}%</span>
+          <span class="font-mono">{stats.memoryUsage == null ? '—' : `${stats.memoryUsage}%`}</span>
         </div>
         <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-          <div class="h-full bg-blue-500 rounded-full transition-all duration-1000" style={`width: ${stats.memoryUsage}%`}></div>
+          <div class="h-full bg-blue-500 rounded-full transition-all duration-1000" style={`width: ${stats.memoryUsage == null ? 0 : stats.memoryUsage}%`}></div>
         </div>
       </div>
       <div>
         <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
           <span>Charge CPU</span>
-          <span class="font-mono">{stats.cpuLoad}%</span>
+          <span class="font-mono">{stats.cpuLoad == null ? '—' : `${stats.cpuLoad}%`}</span>
         </div>
         <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-          <div class={`h-full rounded-full transition-all duration-1000 ${stats.cpuLoad > 80 ? 'bg-red-500' : stats.cpuLoad > 50 ? 'bg-yellow-500' : 'bg-indigo-500'}`} style={`width: ${stats.cpuLoad}%`}></div>
+          <div class={`h-full rounded-full transition-all duration-1000 ${(stats.cpuLoad ?? 0) > 80 ? 'bg-red-500' : (stats.cpuLoad ?? 0) > 50 ? 'bg-yellow-500' : 'bg-indigo-500'}`} style={`width: ${stats.cpuLoad == null ? 0 : stats.cpuLoad}%`}></div>
         </div>
       </div>
     </div>

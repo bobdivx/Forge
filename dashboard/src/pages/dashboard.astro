@@ -5,32 +5,27 @@ import AppLauncher from '../components/AppLauncher';
 import AgentStats from '../components/AgentStats';
 import WireLogs from '../components/WireLogs';
 import SystemResources from '../components/SystemResources';
+import OpenClawGatewayBadge from '../components/OpenClawGatewayBadge';
 import fs from 'fs';
 import path from 'path';
+import { db, Project } from 'astro:db';
 
 const userEmail = String(Astro.locals?.user?.email ?? 'utilisateur');
 const userInitial = userEmail.charAt(0).toUpperCase();
 
-const githubPath = '/media/Github';
+// Fetch apps from Astro DB
 let deployedApps = [];
 
 try {
-  if (fs.existsSync(githubPath)) {
-    const entries = fs.readdirSync(githubPath, { withFileTypes: true });
-    deployedApps = entries
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
-      .map((entry) => {
-        const stats = fs.statSync(path.join(githubPath, entry.name));
-        return {
-          name: entry.name,
-          status: 'Online', // Simplified for now as we don't have per-app status probe yet
-          lastDeploy: stats.mtime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
-          url: `${entry.name.toLowerCase()}.forge.local`
-        };
-      });
-  }
+  deployedApps = await db.select().from(Project);
+  
+  deployedApps = deployedApps.map(app => ({
+    ...app,
+    lastDeploy: app.updatedAt ? new Date(app.updatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'N/A',
+    url: `${app.name.toLowerCase()}.forge.local`
+  }));
 } catch (e) {
-  console.error('Failed to load apps', e);
+  console.error('Failed to load apps from DB', e);
 }
 ---
 
@@ -95,10 +90,7 @@ try {
       <header class="h-16 flex items-center justify-between px-8 border-b border-white/5 bg-slate-950/50 backdrop-blur z-10">
         <h1 class="text-lg font-semibold text-white">Vue d'ensemble de la Forge</h1>
         <div class="flex items-center gap-4">
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            Instance Ollama Connectée
-          </span>
+          <OpenClawGatewayBadge client:load />
           <a href="/api/auth/logout" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm py-1.5 px-4 rounded-md transition font-medium">Deconnexion</a>
         </div>
       </header>
@@ -122,7 +114,10 @@ try {
               {deployedApps.length > 0 ? (
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {deployedApps.map(app => (
-                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition cursor-pointer group shadow-sm hover:shadow-lg">
+                    <a
+                      href={`/apps/${encodeURIComponent(app.name)}`}
+                      class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition cursor-pointer group shadow-sm hover:shadow-lg block no-underline text-inherit"
+                    >
                       <div class="flex justify-between items-start mb-4">
                         <div class="flex items-center gap-3">
                           <div class={`h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border
@@ -133,7 +128,7 @@ try {
                           </div>
                           <div>
                             <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
-                            <a href={`http://${app.url}`} target="_blank" class="text-xs text-slate-400 hover:text-slate-300 transition">{app.url}</a>
+                            <span class="text-xs text-slate-400">{app.url}</span>
                           </div>
                         </div>
                         <span class={`text-xs px-2 py-1 rounded-full border
@@ -149,12 +144,12 @@ try {
                         </svg>
                         Dernier commit: {app.lastDeploy}
                       </div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               ) : (
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 text-sm text-slate-400">
-                  Aucune application detectee dans <span class="font-mono text-blue-400">/media/Github</span>.
+                  Aucune application detectee dans la base de données.
                 </div>
               )}
 

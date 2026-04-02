@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
-const AUTH_PATH = '/media/Github/Forge/instructions/auth.json';
-const SETTINGS_PATH = '/media/Github/Forge/instructions/config.json';
+const AUTH_PATH = '/mnt/GitHub/Forge/instructions/auth.json';
+const SETTINGS_PATH = '/mnt/GitHub/Forge/instructions/config.json';
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 12; // 12h
 
 function ensureDir(filePath: string) {
@@ -68,7 +68,8 @@ export function registerOrReplaceUser(email: string, password: string) {
     settings: {
       githubToken: '',
       vercelToken: '',
-      openclawToken: ''
+      openclawToken: '',
+      openclawGatewayUrl: '',
     }
   };
   

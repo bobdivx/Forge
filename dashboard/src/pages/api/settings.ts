@@ -21,7 +21,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const payload = {
       githubToken: String(data?.githubToken ?? ''),
       vercelToken: String(data?.vercelToken ?? ''),
-      openclawToken: String(data?.openclawToken ?? '')
+      openclawToken: String(data?.openclawToken ?? ''),
+      openclawGatewayUrl: String(data?.openclawGatewayUrl ?? '').trim(),
     };
     writeAppSettings(payload, email);
     

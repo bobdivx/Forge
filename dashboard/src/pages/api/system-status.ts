@@ -6,13 +6,12 @@ export const GET: APIRoute = async () => {
     const isVercel = !!process.env.VERCEL || !!process.env.VERCEL_ENV;
     
     if (isVercel) {
-      // Return mock or limited data for Vercel sandbox
       return new Response(JSON.stringify({
-        memoryUsage: 15,
-        cpuLoad: 5,
-        uptime: os.uptime(),
+        memoryUsage: null,
+        cpuLoad: null,
+        uptime: null,
         platform: 'vercel-edge',
-        note: "Metrics unavailable in serverless sandbox"
+        note: 'Métriques hôte non disponibles en serverless (pas de lecture OS réelle).'
       }), { 
         status: 200, 
         headers: { 'Content-Type': 'application/json' } 

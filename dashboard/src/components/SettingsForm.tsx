@@ -4,7 +4,8 @@ export default function SettingsForm() {
   const [settings, setSettings] = useState({
     githubToken: '',
     vercelToken: '',
-    openclawToken: ''
+    openclawToken: '',
+    openclawGatewayUrl: '',
   });
   const [auth, setAuth] = useState({
     currentEmail: '',
@@ -202,13 +203,31 @@ export default function SettingsForm() {
               />
             </div>
             <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">URL du gateway OpenClaw</label>
+              <input
+                id="openclaw-gateway-url"
+                name="openclawGatewayUrl"
+                type="url"
+                autoComplete="off"
+                placeholder="http://zimacube.local:18789"
+                value={settings.openclawGatewayUrl}
+                onInput={(e) =>
+                  setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })
+                }
+                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              />
+              <p class="text-[10px] text-slate-500 mt-1">
+                Priorité à la variable d'environnement <span class="font-mono">OPENCLAW_GATEWAY_URL</span> si définie sur le serveur.
+              </p>
+            </div>
+            <div>
               <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Token Forge ↔ OpenClaw</label>
               <input 
                 id="openclaw-token"
                 name="openclawToken"
                 type="password" 
                 autoComplete="off"
-                placeholder="Token de liaison OpenClaw"
+                placeholder="Même valeur que gateway.auth.token (openclaw.json)"
                 value={settings.openclawToken} 
                 onInput={(e) => setSettings({...settings, openclawToken: (e.target as HTMLInputElement).value})}
                 class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
