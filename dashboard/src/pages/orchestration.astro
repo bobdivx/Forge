@@ -1,18 +1,63 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import OrchestrationJournal from '../components/OrchestrationJournal';
+import AgentTaskTable from '../components/AgentTaskTable';
+import ContainerLogs from '../components/ContainerLogs';
 ---
-<DashboardLayout title="Orchestration" currentPath="/orchestration">
-  <div class="max-w-7xl mx-auto space-y-8">
-    <div>
-      <h2 class="text-3xl font-bold text-white mb-2 tracking-tight">Journal d'Orchestration</h2>
-      <p class="text-slate-400">
-        Données issues des sessions OpenClaw (gateway). Aucun ordre fictif : une ligne par session connue.
-      </p>
+<DashboardLayout title="Orchestration & Logs" currentPath="/orchestration">
+  <div class="max-w-7xl mx-auto space-y-12 pb-12">
+    
+    <!-- Section 1: Historique des Tâches Agent (Nouveau avec badges DaisyUI) -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+            <svg class="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            Suivi des Tâches Agents
+          </h2>
+          <p class="text-slate-400 text-sm">Historique persistant des actions (Astro DB) avec statuts colorés.</p>
+        </div>
+        <div class="hidden sm:flex badge badge-outline badge-info gap-2 py-3 px-4 bg-info/5 border-info/20">
+          <span class="w-2 h-2 rounded-full bg-info animate-pulse"></span>
+          Auto-refresh (10s)
+        </div>
+      </div>
+      <div class="bg-slate-900/40 border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+        <AgentTaskTable client:load />
+      </div>
     </div>
 
-    <div class="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden shadow-2xl backdrop-blur-sm">
-      <OrchestrationJournal client:load />
+    <!-- Section 2: Visualisation des Logs Docker (Nouveau) -->
+    <div class="space-y-4">
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+            <svg class="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Console Docker Real-time
+        </h2>
+        <p class="text-slate-400 text-sm">Visualisation des flux de sortie standards des conteneurs actifs.</p>
+      </div>
+      <ContainerLogs client:load />
     </div>
+
+    <!-- Section 3: Journal d'Orchestration OpenClaw -->
+    <div class="space-y-4">
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
+            <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Sessions Gateway
+        </h2>
+        <p class="text-slate-400 text-sm">État brut des sessions exposées par le point d'entrée OpenClaw.</p>
+      </div>
+      <div class="bg-slate-900/40 border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md">
+        <OrchestrationJournal client:load />
+      </div>
+    </div>
+
   </div>
 </DashboardLayout>

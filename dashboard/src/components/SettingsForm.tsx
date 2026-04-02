@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 
 export default function SettingsForm() {
+  const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState({
     githubToken: '',
     vercelToken: '',
@@ -70,9 +71,9 @@ export default function SettingsForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setAuthMessage(data.error || 'Erreur lors de la mise a jour');
+        setAuthMessage(data.error || 'Erreur lors de la mise à jour');
       } else {
-        setAuthMessage('Identifiants mis a jour.');
+        setAuthMessage('Identifiants mis à jour.');
         setAuth((prev) => ({
           ...prev,
           currentEmail: prev.newEmail,
@@ -81,7 +82,7 @@ export default function SettingsForm() {
         }));
       }
     } catch (err) {
-      setAuthMessage('Erreur reseau.');
+      setAuthMessage('Erreur réseau.');
     } finally {
       setAuthSaving(false);
     }
@@ -95,157 +96,178 @@ export default function SettingsForm() {
   if (loading) return <div class="animate-pulse text-slate-500">Chargement...</div>;
 
   return (
-    <div class="space-y-8">
-      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div class="p-6 border-b border-slate-800">
-          <h3 class="font-semibold text-white mb-4">Compte utilisateur</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Email actuel</label>
-              <input 
-                id="current-email"
-                name="currentEmail"
-                type="email" 
-                autoComplete="email"
-                value={auth.currentEmail}
-                disabled
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400" 
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Nouvel email</label>
-              <input 
-                id="new-email"
-                name="newEmail"
-                type="email" 
-                autoComplete="email"
-                value={auth.newEmail} 
-                onInput={(e) => setAuth({...auth, newEmail: (e.target as HTMLInputElement).value})}
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition" 
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Mot de passe actuel</label>
-              <input 
-                id="current-password"
-                name="currentPassword"
-                type="password" 
-                autoComplete="current-password"
-                value={auth.currentPassword} 
-                onInput={(e) => setAuth({...auth, currentPassword: (e.target as HTMLInputElement).value})}
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition" 
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Nouveau mot de passe</label>
-              <input 
-                id="new-password"
-                name="newPassword"
-                type="password" 
-                autoComplete="new-password"
-                value={auth.newPassword} 
-                onInput={(e) => setAuth({...auth, newPassword: (e.target as HTMLInputElement).value})}
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition" 
-              />
-            </div>
-          </div>
-          <div class="mt-4 flex items-center justify-between">
-            <span class={`text-sm ${authMessage.includes('Erreur') || authMessage.includes('invalide') ? 'text-red-400' : 'text-emerald-400'}`}>{authMessage}</span>
-            <div class="flex gap-2">
-              <button
-                onClick={logout}
-                class="btn btn-ghost border border-slate-700"
-              >
-                Deconnexion
-              </button>
-              <button
-                onClick={updateCredentials}
-                disabled={authSaving || !auth.currentPassword || !auth.newPassword || !auth.newEmail}
-                class={`btn btn-primary ${authSaving ? 'loading' : ''}`}
-              >
-                {authSaving ? 'Mise a jour...' : 'Mettre a jour les identifiants'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div class="p-6">
-          <h3 class="font-semibold text-white mb-1">Jetons d'acces (API)</h3>
-          <p class="text-xs text-slate-400 mb-6">Nécessaire pour que les agents puissent déployer et synchroniser le code.</p>
-          
-          <div class="space-y-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">GitHub Personal Access Token</label>
-              <input 
-                id="github-token"
-                name="githubToken"
-                type="password" 
-                autoComplete="off"
-                placeholder="ghp_xxxxxxxxxxxx"
-                value={settings.githubToken} 
-                onInput={(e) => setSettings({...settings, githubToken: (e.target as HTMLInputElement).value})}
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Vercel Access Token</label>
-              <input 
-                id="vercel-token"
-                name="vercelToken"
-                type="password" 
-                autoComplete="off"
-                placeholder="Bearer xxxxxxxxxxxx"
-                value={settings.vercelToken} 
-                onInput={(e) => setSettings({...settings, vercelToken: (e.target as HTMLInputElement).value})}
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">URL du gateway OpenClaw</label>
-              <input
-                id="openclaw-gateway-url"
-                name="openclawGatewayUrl"
-                type="url"
-                autoComplete="off"
-                placeholder="http://zimacube.local:18789"
-                value={settings.openclawGatewayUrl}
-                onInput={(e) =>
-                  setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })
-                }
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
-              />
-              <p class="text-[10px] text-slate-500 mt-1">
-                Priorité à la variable d'environnement <span class="font-mono">OPENCLAW_GATEWAY_URL</span> si définie sur le serveur.
-              </p>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Token Forge ↔ OpenClaw</label>
-              <input 
-                id="openclaw-token"
-                name="openclawToken"
-                type="password" 
-                autoComplete="off"
-                placeholder="Même valeur que gateway.auth.token (openclaw.json)"
-                value={settings.openclawToken} 
-                onInput={(e) => setSettings({...settings, openclawToken: (e.target as HTMLInputElement).value})}
-                class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between">
-        <span class={`text-sm ${message.includes('Erreur') ? 'text-red-400' : 'text-emerald-400'}`}>{message}</span>
+    <div class="space-y-6">
+      {/* Menu Onglets */}
+      <div class="flex gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg w-fit">
         <button 
-          onClick={save}
-          disabled={saving}
-          class={`btn btn-primary px-8 ${saving ? 'loading' : ''}`}
+          onClick={() => setActiveTab('account')}
+          class={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'account' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
         >
-          {saving ? 'Sauvegarde...' : 'Sauvegarder les réglages'}
+          Compte & Sécurité
         </button>
+        <button 
+          onClick={() => setActiveTab('openclaw')}
+          class={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'openclaw' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+        >
+          Connexion OpenClaw
+        </button>
+        <button 
+          onClick={() => setActiveTab('api')}
+          class={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'api' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+        >
+          Jetons API
+        </button>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl min-h-[400px]">
+        {/* COMPTE & SECURITE */}
+        {activeTab === 'account' && (
+          <div class="p-6 space-y-6 animate-in fade-in duration-300">
+            <div>
+              <h3 class="font-semibold text-white mb-1">Compte utilisateur</h3>
+              <p class="text-xs text-slate-400 mb-6">Gérez vos identifiants d'accès au dashboard Forge.</p>
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Email actuel</label>
+                  <input 
+                    type="email" 
+                    value={auth.currentEmail}
+                    disabled
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 cursor-not-allowed opacity-60" 
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Nouvel email</label>
+                  <input 
+                    type="email" 
+                    value={auth.newEmail} 
+                    onInput={(e) => setAuth({...auth, newEmail: (e.target as HTMLInputElement).value})}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition" 
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Mot de passe actuel</label>
+                  <input 
+                    type="password" 
+                    value={auth.currentPassword} 
+                    onInput={(e) => setAuth({...auth, currentPassword: (e.target as HTMLInputElement).value})}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition" 
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Nouveau mot de passe</label>
+                  <input 
+                    type="password" 
+                    value={auth.newPassword} 
+                    onInput={(e) => setAuth({...auth, newPassword: (e.target as HTMLInputElement).value})}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-4 flex items-center justify-between border-t border-slate-800">
+              <span class={`text-sm ${authMessage.includes('Erreur') ? 'text-red-400' : 'text-emerald-400'}`}>{authMessage}</span>
+              <div class="flex gap-2">
+                <button onClick={logout} class="btn btn-ghost border border-slate-700 text-xs h-9 min-h-0">Déconnexion</button>
+                <button
+                  onClick={updateCredentials}
+                  disabled={authSaving || !auth.currentPassword || !auth.newPassword || !auth.newEmail}
+                  class={`btn btn-primary text-xs h-9 min-h-0 ${authSaving ? 'loading' : ''}`}
+                >
+                  Mettre à jour les identifiants
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* OPENCLAW GATEWAY */}
+        {activeTab === 'openclaw' && (
+          <div class="p-6 space-y-6 animate-in fade-in duration-300">
+            <div>
+              <h3 class="font-semibold text-white mb-1">Connexion OpenClaw Gateway</h3>
+              <p class="text-xs text-slate-400 mb-6">Configurez la liaison entre ce dashboard et votre instance OpenClaw.</p>
+              
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">URL du gateway</label>
+                  <input
+                    type="url"
+                    placeholder="http://127.0.0.1:18789"
+                    value={settings.openclawGatewayUrl}
+                    onInput={(e) => setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+                  />
+                  <p class="text-[10px] text-slate-500 mt-1">
+                    C'est l'adresse où OpenClaw écoute (défaut: 18789).
+                  </p>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Token d'accès (Gateway Token)</label>
+                  <input 
+                    type="password" 
+                    placeholder="Token défini dans openclaw.json"
+                    value={settings.openclawToken} 
+                    onInput={(e) => setSettings({...settings, openclawToken: (e.target as HTMLInputElement).value})}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
+                  />
+                  <p class="text-[10px] text-slate-500 mt-1">
+                    Correspond au champ <span class="font-mono text-blue-400">gateway.auth.token</span> de votre configuration.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-4 flex items-center justify-between border-t border-slate-800">
+              <span class={`text-sm ${message.includes('Erreur') ? 'text-red-400' : 'text-emerald-400'}`}>{message}</span>
+              <button onClick={save} disabled={saving} class={`btn btn-primary text-xs h-9 min-h-0 ${saving ? 'loading' : ''}`}>
+                Sauvegarder la connexion
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* JETONS API */}
+        {activeTab === 'api' && (
+          <div class="p-6 space-y-6 animate-in fade-in duration-300">
+            <div>
+              <h3 class="font-semibold text-white mb-1">Jetons d'accès (Déploiement)</h3>
+              <p class="text-xs text-slate-400 mb-6">Utilisés par les agents pour automatiser vos déploiements GitHub et Vercel.</p>
+              
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">GitHub (PAT)</label>
+                  <input 
+                    type="password" 
+                    placeholder="ghp_xxxxxxxxxxxx"
+                    value={settings.githubToken} 
+                    onInput={(e) => setSettings({...settings, githubToken: (e.target as HTMLInputElement).value})}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Vercel Token</label>
+                  <input 
+                    type="password" 
+                    placeholder="xxxxxxxxxxxx"
+                    value={settings.vercelToken} 
+                    onInput={(e) => setSettings({...settings, vercelToken: (e.target as HTMLInputElement).value})}
+                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-4 flex items-center justify-between border-t border-slate-800">
+              <span class={`text-sm ${message.includes('Erreur') ? 'text-red-400' : 'text-emerald-400'}`}>{message}</span>
+              <button onClick={save} disabled={saving} class={`btn btn-primary text-xs h-9 min-h-0 ${saving ? 'loading' : ''}`}>
+                Sauvegarder les jetons
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

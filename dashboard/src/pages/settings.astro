@@ -9,41 +9,37 @@ const reposRoot = getReposRoot();
 <DashboardLayout title="Paramètres" currentPath="/settings">
   <div class="max-w-4xl mx-auto space-y-12">
     <div>
-      <h2 class="text-3xl font-bold text-white mb-2">Configuration de la Forge</h2>
-      <p class="text-slate-400">Gérez vos accès API et personnalisez votre environnement de travail autonome.</p>
+      <h2 class="text-3xl font-bold text-white mb-2">Paramètres de la Forge</h2>
+      <p class="text-slate-400 text-sm">Gérez vos accès et configurez l'infrastructure de votre environnement autonome.</p>
     </div>
     
     <SettingsForm client:load />
 
-    <div class="pt-8 border-t border-white/5">
-      <h3 class="text-xl font-bold text-white mb-6">Infrastructure ZimaOS</h3>
-      
+    <div class="pt-8">
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div class="p-6 border-b border-slate-800">
-          <h3 class="font-semibold text-white mb-1">Chemins des Volumes (NAS)</h3>
-          <p class="text-xs text-slate-400 mb-4">Emplacements physiques des sources de vérité sur le disque NAS.</p>
+        <div class="p-6">
+          <h3 class="font-semibold text-white mb-1">Infrastructure ZimaOS (Lecture seule)</h3>
+          <p class="text-[10px] text-slate-500 mb-6">Emplacements physiques des sources de vérité sur le disque NAS.</p>
           
-          <div class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Dépôts GitHub</label>
-              <input type="text" disabled value={reposRoot} class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
-              <p class="text-[10px] text-slate-600 mt-1">Variable serveur : <span class="font-mono">FORGE_REPOS_ROOT</span> (défaut /media/Github)</p>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Dépôts GitHub</label>
+              <div class="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-400 font-mono truncate">{reposRoot}</div>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Docker Compose (YAML)</label>
-              <input type="text" disabled value="/media/Docker/yaml" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
+              <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Docker YAML</label>
+              <div class="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-400 font-mono truncate">/mnt/Docker/yaml</div>
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">AppData ZimaOS</label>
-              <input type="text" disabled value="/media/Docker/AppData" class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 opacity-70 cursor-not-allowed font-mono" />
+              <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">AppData ZimaOS</label>
+              <div class="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-400 font-mono truncate">/mnt/Docker/AppData</div>
             </div>
           </div>
         </div>
         
-        <div class="p-6 bg-slate-800/20">
-          <h3 class="font-semibold text-white mb-1 text-sm uppercase tracking-wider">Liaison OpenClaw</h3>
-          <p class="text-xs text-slate-500 mb-3">État mesuré par un appel réel au gateway (token + URL configurés ci-dessus).</p>
-          <div class="flex items-center justify-between mt-4 flex-wrap gap-3">
+        <div class="p-4 bg-slate-800/20 border-t border-slate-800">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">État de liaison</span>
             <OpenClawLayoutBadge client:load />
           </div>
         </div>
