@@ -11,6 +11,25 @@ interface SteerFormProps {
   currentModel: string;
 }
 
+/** models.list peut renvoyer le même id plusieurs fois (fournisseurs / entrées dupliquées) — une seule <option> par id. */
+function dedupeModelsById(list: unknown[]): Model[] {
+  const seen = new Set<string>();
+  const out: Model[] = [];
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object') continue;
+    const m = raw as Record<string, unknown>;
+    const id = typeof m.id === 'string' ? m.id : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name: typeof m.name === 'string' ? m.name : id,
+      provider: typeof m.provider === 'string' ? m.provider : '',
+    });
+  }
+  return out;
+}
+
 export default function AgentSteerForm({ sessionKey, currentModel }: SteerFormProps) {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState(currentModel);
@@ -20,12 +39,22 @@ export default function AgentSteerForm({ sessionKey, currentModel }: SteerFormPr
 
   useEffect(() => {
     fetch('/api/models')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setModels(data);
+      .then((res) => res.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        const deduped = dedupeModelsById(data);
+        const hasCurrent = deduped.some((m) => m.id === currentModel);
+        if (currentModel && !hasCurrent) {
+          deduped.unshift({
+            id: currentModel,
+            name: currentModel,
+            provider: 'session',
+          });
+        }
+        setModels(deduped);
       })
       .finally(() => setFetching(false));
-  }, []);
+  }, [currentModel]);
 
   const handleSteer = async () => {
     setLoading(true);
@@ -65,9 +94,10 @@ export default function AgentSteerForm({ sessionKey, currentModel }: SteerFormPr
             value={selectedModel}
             onChange={(e) => setSelectedModel((e.target as HTMLSelectElement).value)}
           >
-            {models.map(m => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.provider})
+            {models.map((m, index) => (
+              <option key={`${m.id}:${index}`} value={m.id}>
+                {m.name}
+                {m.provider ? ` (${m.provider})` : ''}
               </option>
             ))}
           </select>
