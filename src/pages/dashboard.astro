@@ -1,0 +1,118 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import AppLauncher from '../components/apps/AppLauncher';
+import AgentStats from '../components/agents/AgentStats';
+import WireLogs from '../components/openclaw/WireLogs';
+import ForgeEconomics from '../components/system/ForgeEconomics';
+import DashboardKpis from '../components/system/DashboardKpis';
+import { db, Project } from 'astro:db';
+
+let deployedApps = [];
+try {
+  const rows = await db.select().from(Project);
+  deployedApps = rows.map((app) => ({
+    ...app,
+    lastDeploy: app.updatedAt
+      ? new Date(app.updatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      : '—',
+    url: `${String(app.name).toLowerCase()}.forge.local`,
+  }));
+} catch {
+  /* Astro DB indisponible */
+}
+---
+
+<DashboardLayout title="Vue d'ensemble" currentPath="/dashboard">
+  <div class="max-w-7xl mx-auto space-y-8">
+
+    <!-- Titre -->
+    <div>
+      <h2 class="text-2xl font-bold tracking-tight text-white">Tableau de bord</h2>
+      <p class="mt-1 text-sm text-slate-400">Vue d'ensemble de vos applications et agents DevForge.</p>
+    </div>
+
+    <!-- KPIs -->
+    <DashboardKpis client:load />
+
+    <!-- Grille principale -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Colonne gauche : Applications + WireLogs -->
+      <div class="lg:col-span-2 flex flex-col gap-6">
+
+        <!-- Applications -->
+        <section>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-semibold text-white">Applications</h3>
+            <a href="/apps" class="text-xs text-blue-400 hover:text-blue-300 transition">Voir tout →</a>
+          </div>
+
+          {deployedApps.length > 0 ? (
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {deployedApps.map((app) => (
+                <a
+                  href={`/apps/by-id/${app.id}`}
+                  class="group bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 hover:bg-slate-800/50 transition block no-underline text-inherit shadow-sm"
+                >
+                  <div class="flex justify-between items-start mb-3">
+                    <div class="flex items-center gap-3">
+                      <div class="h-10 w-10 rounded-lg flex items-center justify-center font-bold text-lg border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                        {String(app.name).charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 class="font-semibold text-white group-hover:text-blue-400 transition text-sm">
+                          {app.name}
+                        </h4>
+                        <span class="text-[11px] text-slate-500 font-mono">{app.url}</span>
+                      </div>
+                    </div>
+                    <span class="text-[10px] px-2 py-1 rounded-full border bg-slate-800/50 text-slate-400 border-slate-700">
+                      {app.status || 'actif'}
+                    </span>
+                  </div>
+                  <div class="flex items-center text-[11px] text-slate-500 gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Mis à jour : {app.lastDeploy}
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+              <p class="text-slate-500 text-sm mb-3">Aucune application en base.</p>
+              <a href="/apps" class="btn btn-sm btn-outline border-slate-700 text-slate-300 hover:bg-slate-800">
+                Gérer les applications
+              </a>
+            </div>
+          )}
+        </section>
+
+        <!-- Logs réseau -->
+        <section>
+          <h3 class="text-base font-semibold text-white mb-4">Activité réseau (Wire Logs)</h3>
+          <WireLogs client:load />
+        </section>
+
+      </div>
+
+      <!-- Colonne droite : Finances + Agents + Launcher -->
+      <div class="space-y-6">
+        <ForgeEconomics client:load />
+
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-xl p-[1px] shadow-xl">
+          <div class="bg-slate-900 rounded-xl p-5 relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/10 rounded-full blur-[40px] pointer-events-none"></div>
+            <AppLauncher client:load />
+          </div>
+        </div>
+
+        <AgentStats client:load />
+      </div>
+
+    </div>
+  </div>
+</DashboardLayout>

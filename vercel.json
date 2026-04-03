@@ -1,5 +1,5 @@
 {
   "version": 2,
-  "buildCommand": "cd dashboard && npm install && npm run build && mv .vercel/output ../.vercel",
-  "installCommand": "cd dashboard && npm install"
+  "buildCommand": "npm run build",
+  "installCommand": "npm install"
 }

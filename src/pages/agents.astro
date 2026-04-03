@@ -1,0 +1,84 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import AgentsGrid from '../components/agents/AgentsGrid';
+import SwarmInteractionsBoard from '../components/agents/SwarmInteractionsBoard';
+import AgentTaskTable from '../components/agents/AgentTaskTable';
+import AgentRepl from '../components/agents/AgentRepl';
+---
+
+<DashboardLayout title="Agents" currentPath="/agents">
+  <div class="max-w-7xl mx-auto space-y-12">
+
+    <!-- En-tête -->
+    <div class="flex items-end justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-3xl font-bold text-white tracking-tight">Agents</h2>
+        <p class="mt-2 text-slate-400 max-w-2xl text-sm">
+          Sessions actives sur le gateway OpenClaw, statistiques de tâches et interactions inter-agents.
+          Rafraîchissement automatique toutes les 15 secondes.
+        </p>
+      </div>
+      <div class="flex gap-3">
+        <a
+          href="/agents/instructions"
+          class="btn btn-sm btn-outline border-orange-800 text-orange-300 hover:bg-orange-900/30 hover:border-orange-600"
+        >
+          ⚙ Instructions agents
+        </a>
+        <a
+          href="/orchestration"
+          class="btn btn-sm btn-outline border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
+        >
+          Journal d'orchestration
+        </a>
+      </div>
+    </div>
+
+    <!-- Cartes agents + charts -->
+    <AgentsGrid client:load />
+
+    <!-- Suivi des tâches -->
+    <section>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-1 h-6 bg-violet-500 rounded-full"></div>
+        <h3 class="text-lg font-bold text-white">Suivi des Tâches</h3>
+        <span class="text-[10px] uppercase tracking-widest text-slate-500">
+          Historique persistant (Astro DB) · Auto-refresh 10s
+        </span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <AgentTaskTable client:load />
+      </div>
+    </section>
+
+    <!-- Forge REPL -->
+    <section>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-1 h-6 bg-emerald-500 rounded-full"></div>
+        <h3 class="text-lg font-bold text-white">Forge REPL</h3>
+        <span class="text-[10px] uppercase tracking-widest text-slate-500">
+          Commandes slash · Outils git/docker/file · Mémoire persistante
+        </span>
+        <span class="ml-auto text-[10px] font-mono text-slate-600">
+          /help · /tools · /memory · /task
+        </span>
+      </div>
+      <AgentRepl client:load />
+    </section>
+
+    <!-- Interactions inter-agents -->
+    <section>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-1 h-6 bg-blue-500 rounded-full"></div>
+        <h3 class="text-lg font-bold text-white">Interactions inter-agents</h3>
+        <span class="text-[10px] uppercase tracking-widest text-slate-500">
+          Messages AgentMessage en base Forge
+        </span>
+      </div>
+      <SwarmInteractionsBoard client:load />
+    </section>
+
+  </div>
+</DashboardLayout>

@@ -3,7 +3,7 @@
   "engine": "ollama",
   "mode": "SSR",
   "workspace": "media/Github",
-  "dashboard_path": "dashboard",
+  "dashboard_path": ".",
   "orchestrator": {
     "id": "CHEF_TECHNIQUE",
     "model": "qwen2.5:32b",

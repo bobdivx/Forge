@@ -1,0 +1,12 @@
+# Exemple de volumes à ajouter au service OpenClaw pour que les agents travaillent dans le dépôt Forge.
+# Après montage sur /forge, dans openclaw.json : agents.defaults.workspace = "/forge"
+# (redémarrer OpenClaw / gateway).
+#
+# Adapte le chemin hôte : /mnt/GitHub/Forge, /media/GitHub/Forge, etc.
+#
+# services:
+#   openclaw:
+#     volumes:
+#       - /mnt/GitHub/Forge:/forge:rw
+#       # Données OpenClaw existantes (inchangé chez toi) :
+#       - /chemin/vers/AppData/openclaw:/home/node/.openclaw:rw

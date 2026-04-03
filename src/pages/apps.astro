@@ -1,0 +1,105 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import AppLauncher from '../components/apps/AppLauncher';
+import WireLogs from '../components/openclaw/WireLogs';
+import SyncProjectsButton from '../components/apps/SyncProjectsButton';
+import { db, Project } from 'astro:db';
+// Fetch apps from Astro DB
+let deployedApps = [];
+
+try {
+  deployedApps = await db.select().from(Project);
+  
+  // Format for display if needed
+  deployedApps = deployedApps.map(app => ({
+    ...app,
+    lastDeploy: app.updatedAt ? new Date(app.updatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : 'N/A',
+    url: `${app.name.toLowerCase()}.forge.local`
+  })).sort((a, b) => a.name === 'Forge' ? -1 : 1);
+
+} catch (e) {
+  /* Astro DB indisponible */
+}
+
+---
+
+<DashboardLayout title="Applications" currentPath="/apps">
+  <div class="max-w-7xl mx-auto space-y-8">
+    <div class="flex items-end justify-between flex-wrap gap-4">
+      <div>
+        <h2 class="text-3xl font-bold tracking-tight text-white">Gestion des Projets</h2>
+        <p class="mt-1 text-sm text-slate-400">Dépôts locaux gérés via <span class="font-mono text-blue-400">Astro DB</span>.</p>
+      </div>
+      <SyncProjectsButton client:load />
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-6">
+        {deployedApps.length > 0 ? (
+          <div class="relative z-20 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {deployedApps.map(app => (
+              <a
+                href={`/apps/by-id/${app.id}`}
+                class="block bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-blue-500/50 transition group shadow-sm flex flex-col justify-between h-40 focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer no-underline text-inherit"
+              >
+                <div class="flex justify-between items-start mb-4">
+                  <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-lg">
+                      {app.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h3 class="font-semibold text-white group-hover:text-blue-400 transition">{app.name}</h3>
+                      <span class="text-[10px] text-slate-500 font-mono tracking-tighter">{app.url}</span>
+                    </div>
+                  </div>
+                <div class="badge badge-outline badge-xs py-2 px-2 text-[9px] uppercase font-bold tracking-widest border-slate-600 text-slate-300">{app.status}</div>
+                </div>
+                
+                <div class="flex items-center justify-between mt-auto pt-4 border-t border-slate-800/50">
+                  <div class="flex items-center text-[10px] text-slate-500 uppercase font-bold tracking-widest">
+                    <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Sync: {app.lastDeploy}
+                  </div>
+                  <span class="text-[10px] text-blue-400/80 font-semibold">Ouvrir →</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-8 flex flex-col items-center gap-4 text-center">
+            <p class="text-slate-400 text-sm">Aucune application en base de données.</p>
+            <p class="text-slate-500 text-xs">Clique sur <strong class="text-blue-400">⟳ Synchroniser les dépôts Git</strong> en haut pour scanner <code class="font-mono text-orange-400">/media/Github</code> et importer tous tes dépôts.</p>
+            <SyncProjectsButton client:load />
+          </div>
+        )}
+        
+        <WireLogs client:load />
+      </div>
+      
+      <div class="space-y-6">
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 shadow-xl rounded-xl p-[1px]">
+          <div class="bg-slate-900 rounded-xl p-5 h-full relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/20 rounded-full blur-[40px]"></div>
+            <AppLauncher client:load />
+          </div>
+        </div>
+        
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+           <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Statistiques Projets</h4>
+           <div class="space-y-4">
+              <div class="flex justify-between items-center text-sm">
+                 <span class="text-slate-400">Total Projets</span>
+                 <span class="text-white font-mono">{deployedApps.length}</span>
+              </div>
+              <div class="flex justify-between items-center text-sm">
+                 <span class="text-slate-400">Statut actif (DB)</span>
+                 <span class="text-emerald-400 font-mono">{deployedApps.filter((a) => String(a.status).toLowerCase() === 'active' || String(a.status).toLowerCase() === 'online').length}</span>
+              </div>
+           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

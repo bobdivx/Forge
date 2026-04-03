@@ -1,0 +1,49 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import SettingsForm from '../components/settings/SettingsForm';
+import OpenClawLayoutBadge from '../components/layout/OpenClawLayoutBadge';
+import { getReposRoot } from '../lib/forge-repos';
+
+const reposRoot = getReposRoot();
+---
+<DashboardLayout title="Paramètres" currentPath="/settings">
+  <div class="max-w-4xl mx-auto space-y-12">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-2">Paramètres de la Forge</h2>
+      <p class="text-slate-400 text-sm">Gérez vos accès et configurez l'infrastructure de votre environnement autonome.</p>
+    </div>
+    
+    <SettingsForm client:load />
+
+    <div class="pt-8">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div class="p-6">
+          <h3 class="font-semibold text-white mb-1">Infrastructure ZimaOS (Lecture seule)</h3>
+          <p class="text-[10px] text-slate-500 mb-6">Emplacements physiques des sources de vérité sur le disque NAS.</p>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Dépôts GitHub</label>
+              <div class="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-400 font-mono truncate">{reposRoot}</div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">Docker YAML</label>
+              <div class="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-400 font-mono truncate">/mnt/Docker/yaml</div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase tracking-wider">AppData ZimaOS</label>
+              <div class="bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-400 font-mono truncate">/mnt/Docker/AppData</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="p-4 bg-slate-800/20 border-t border-slate-800">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">État de liaison</span>
+            <OpenClawLayoutBadge client:load />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

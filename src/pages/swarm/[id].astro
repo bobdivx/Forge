@@ -1,0 +1,147 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import AgentSteerForm from '../../components/agents/AgentSteerForm';
+import AgentDirectiveForm from '../../components/agents/AgentDirectiveForm';
+import { db, AgentTask, eq, desc } from 'astro:db';
+import {
+  fetchOpenClawJson,
+  normalizeOpenClawSessions,
+  mapSessionToAgentRow,
+} from '../../lib/openclaw-gateway';
+
+const { id } = Astro.params;
+const email = Astro.locals.user?.email;
+
+// 1. Récupération des sessions via gateway HTTP
+let agentInfo = null;
+try {
+  const result = await fetchOpenClawJson(email, '/health');
+  if (result.ok) {
+    const sessions = normalizeOpenClawSessions(result.data);
+    const session = sessions.find((s) => s.sessionKey === id || s.key === id || s.id === id);
+    if (session) agentInfo = mapSessionToAgentRow(session);
+  }
+} catch {
+  /* session info indisponible */
+}
+
+// 2. On récupère les tâches de la DB pour cet agent
+const tasks = await db.select().from(AgentTask).where(eq(AgentTask.agentId, id || '')).orderBy(desc(AgentTask.createdAt));
+
+const displayName = agentInfo ? agentInfo.name.replace('telegram:g-agent-', '').replace('agent:', '').toUpperCase() : id;
+---
+<DashboardLayout title={`Agent ${displayName}`} currentPath="/agents">
+  <div class="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div class="flex items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <a href="/agents" class="btn btn-ghost btn-sm border-slate-800 text-slate-400 hover:text-white">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Retour
+        </a>
+        <h2 class="text-2xl font-bold text-white tracking-tight truncate flex items-center gap-3">
+          {displayName}
+          {agentInfo && (
+            <span class={`badge ${agentInfo.status === 'actif' ? 'badge-success' : 'badge-ghost'} badge-sm`}>
+              {agentInfo.status}
+            </span>
+          )}
+        </h2>
+      </div>
+      <div class="text-[10px] font-mono text-slate-600 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
+        ID: {id}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div class="lg:col-span-2 space-y-6">
+        {/* STATS RAPIDES */}
+        {agentInfo && (
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Modèle</span>
+              <span class="text-sm font-mono text-blue-400 truncate block">{agentInfo.model.split('/').pop()}</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Tokens</span>
+              <span class="text-sm font-mono text-white">{(agentInfo.totalTokens || 0).toLocaleString()}</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Coût Estimé</span>
+              <span class="text-sm font-mono text-emerald-400">${agentInfo.estimatedCostUsd.toFixed(2)}</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <span class="text-[10px] font-bold text-slate-500 uppercase block mb-1">Maj</span>
+              <span class="text-sm font-mono text-slate-400">{agentInfo.lastSeen.split(' ').pop()}</span>
+            </div>
+          </div>
+        )}
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-6 border-b border-slate-800 bg-slate-800/20">
+            <h3 class="font-bold text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Journal de Mission (Astro DB)
+            </h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+              <thead>
+                <tr class="text-slate-500 border-slate-800">
+                  <th class="text-[10px] uppercase">Date</th>
+                  <th class="text-[10px] uppercase">Tâche d'Orchestration</th>
+                  <th class="text-[10px] uppercase">Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.length === 0 ? (
+                  <tr>
+                    <td colspan="3" class="text-center py-16 text-slate-500 italic">
+                       <div class="flex flex-col items-center gap-2">
+                          <svg class="w-8 h-8 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                          </svg>
+                          Aucun enregistrement persistant pour cet agent.
+                       </div>
+                    </td>
+                  </tr>
+                ) : (
+                  tasks.map((t) => (
+                    <tr class="border-slate-800/50 hover:bg-slate-800/30 transition-colors cursor-default">
+                      <td class="text-xs text-slate-400 whitespace-nowrap font-mono">{t.createdAt.toLocaleTimeString('fr-FR')}</td>
+                      <td class="text-xs font-semibold text-slate-200">
+                        <div class="max-w-md truncate" title={t.task}>{t.task}</div>
+                        {t.input && <div class="text-[10px] text-slate-500 italic mt-0.5 truncate">{t.input.slice(0, 80)}...</div>}
+                      </td>
+                      <td>
+                        <span class={`badge badge-xs ${t.status === 'success' ? 'badge-success' : t.status === 'running' ? 'badge-info animate-pulse' : t.status === 'error' ? 'badge-error' : 'badge-warning'}`}>
+                          {t.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-1 space-y-6">
+         {/* PILOTAGE DU MODELE */}
+         {agentInfo && (
+           <AgentSteerForm client:load sessionKey={id || ''} currentModel={agentInfo.raw.model} />
+         )}
+
+         {agentInfo && (
+           <AgentDirectiveForm client:load sessionKey={id || ''} />
+         )}
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

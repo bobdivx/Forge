@@ -1,0 +1,54 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import AgentInstructionEditor from '../../components/agents/AgentInstructionEditor';
+---
+
+<DashboardLayout title="Instructions Agents" currentPath="/agents/instructions">
+  <div class="max-w-7xl mx-auto space-y-8">
+
+    <!-- En-tête -->
+    <div class="flex items-end justify-between flex-wrap gap-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <a href="/agents" class="text-slate-500 hover:text-white text-sm transition-colors">Agents</a>
+          <span class="text-slate-700">/</span>
+          <span class="text-white text-sm">Instructions</span>
+        </div>
+        <h2 class="text-3xl font-bold text-white tracking-tight">Instructions Agents</h2>
+        <p class="mt-2 text-slate-400 max-w-2xl text-sm">
+          Gérez les system prompts de chaque agent directement depuis le dashboard.
+          La DB est la source de vérité — le bouton <strong class="text-white">⚡ Sync</strong> régénère les fichiers
+          <code class="text-orange-400 text-xs">.md</code> lus par OpenClaw.
+        </p>
+      </div>
+      <div class="flex gap-3">
+        <a
+          href="/agents"
+          class="btn btn-sm btn-outline border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
+        >
+          ← Retour aux agents
+        </a>
+      </div>
+    </div>
+
+    <!-- Explication du flux -->
+    <div class="flex items-center gap-3 text-xs text-slate-500 bg-slate-900/50 border border-slate-800 rounded-lg px-4 py-3">
+      <span class="text-slate-300 font-medium">Flux :</span>
+      <span class="px-2 py-1 bg-slate-800 rounded font-mono">Dashboard (DB)</span>
+      <span>→ Sauvegarder</span>
+      <span class="px-2 py-1 bg-blue-900/40 border border-blue-800/40 rounded font-mono text-blue-300">DB AgentInstruction</span>
+      <span>→ ⚡ Sync</span>
+      <span class="px-2 py-1 bg-orange-900/40 border border-orange-800/40 rounded font-mono text-orange-300">.md sur disque</span>
+      <span>→ relire</span>
+      <span class="px-2 py-1 bg-slate-800 rounded font-mono">OpenClaw</span>
+    </div>
+
+    <!-- Éditeur -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+      <AgentInstructionEditor client:load />
+    </div>
+
+  </div>
+</DashboardLayout>

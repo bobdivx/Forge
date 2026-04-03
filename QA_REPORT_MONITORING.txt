@@ -1,1 +1,0 @@
-[TESTEUR_QA] Audit de l'API système: OK. Fuites mémoires: 0.

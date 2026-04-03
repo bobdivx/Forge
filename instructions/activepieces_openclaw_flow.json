@@ -13,7 +13,7 @@
       "type": "CODE",
       "language": "bash",
       "input": {
-        "command": "mkdir -p media/Github && mkdir -p dashboard"
+        "command": "mkdir -p media/Github"
       }
     },
     {
