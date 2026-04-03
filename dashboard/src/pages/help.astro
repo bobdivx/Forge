@@ -19,7 +19,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 
       <div class="bg-black rounded p-4 mb-4">
         <h3 class="text-sm font-bold text-gray-500 uppercase mb-2">Chemin du jeton (Dashboard)</h3>
-        <code class="text-green-400">/media/Github/Forge/instructions/config.json</code>
+        <code class="text-green-400">/mnt/GitHub/Forge/instructions/config.json</code>
       </div>
     </section>
 
@@ -28,7 +28,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
       <ul class="text-gray-300 space-y-2 list-disc ml-6 text-sm leading-relaxed">
         <li>
           Variable d'environnement <code class="text-green-400">FORGE_REPOS_ROOT</code> : racine des dépôts sur le serveur (défaut{' '}
-          <code class="text-green-400">/media/Github</code>).
+          <code class="text-green-400">/mnt/GitHub</code>).
         </li>
         <li>
           La page <code class="text-green-400">/apps/&lt;nom&gt;</code> résout le dossier sous cette racine, affiche l'historique{' '}
@@ -62,7 +62,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         <div class="collapse-content text-gray-400 space-y-2">
           <p>Pour que le Dashboard puisse s'authentifier, le token doit être copié dans le fichier de configuration local de la Forge :</p>
           <ol class="list-decimal ml-6 space-y-1">
-            <li>Ouvrir <code>/media/Github/Forge/instructions/config.json</code></li>
+            <li>Ouvrir <code>/mnt/GitHub/Forge/instructions/config.json</code></li>
             <li>Ajouter ou modifier la clé <code>"openclawToken": "VOTRE_TOKEN"</code></li>
             <li>Le Dashboard utilisera automatiquement ce jeton pour les futures requêtes.</li>
           </ol>

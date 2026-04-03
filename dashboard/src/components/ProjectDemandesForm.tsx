@@ -39,7 +39,7 @@ export default function ProjectDemandesForm({ appName }: Props) {
     <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
       <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-2">Demander une action</h3>
       <p class="text-[11px] text-slate-600 mb-4">
-        Les demandes sont stockées dans le dépôt : <span class="font-mono text-slate-500">.forge/demandes.json</span>
+        Les demandes sont centralisées dans la base de données de la Forge (Astro DB).
       </p>
 
       {!open ? (

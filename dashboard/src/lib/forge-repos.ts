@@ -4,7 +4,7 @@ import path from 'path';
 
 /** Racine des dépôts (NAS). Surcharge : FORGE_REPOS_ROOT */
 export function getReposRoot(): string {
-  return process.env.FORGE_REPOS_ROOT?.trim() || '/media/Github';
+  return process.env.FORGE_REPOS_ROOT?.trim() || '/mnt/GitHub';
 }
 
 const SAFE_NAME = /^[a-zA-Z0-9._-]{1,128}$/;

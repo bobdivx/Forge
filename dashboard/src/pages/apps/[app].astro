@@ -6,7 +6,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import ProjectDemandesForm from '../../components/ProjectDemandesForm';
 import { resolveProjectPath, isSafeRepoDirName } from '../../lib/forge-repos';
 import { getGitCommits, getGitSummary } from '../../lib/project-git';
-import { readForgeRequests } from '../../lib/project-requests';
+import { db, Project, Request, eq, desc } from 'astro:db';
 
 const rawParam = Astro.params.app;
 const appName = typeof rawParam === 'string' ? decodeURIComponent(rawParam) : '';
@@ -21,9 +21,16 @@ if (!projectPath) {
   return Astro.redirect('/apps');
 }
 
+// 1. Infos Git
 const { commits, error: gitLogError } = getGitCommits(projectPath, 30);
 const gitSummary = getGitSummary(projectPath);
-const requests = readForgeRequests(projectPath);
+
+// 2. Récupération des demandes depuis Astro DB
+const projects = await db.select().from(Project).where(eq(Project.name, appName));
+const projectId = projects[0]?.id;
+const requests = projectId 
+  ? await db.select().from(Request).where(eq(Request.projectId, projectId)).orderBy(desc(Request.createdAt))
+  : [];
 
 const changes = commits.map((c) => ({
   title: c.subject,
@@ -112,12 +119,12 @@ const app = {
               {requests.map((request) => (
                 <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
                   <div class="flex items-center justify-between gap-3">
-                    <p class="text-xs text-slate-500 font-mono">{request.id}</p>
+                    <p class="text-xs text-slate-500 font-mono">#{request.id}</p>
                     <span
                       class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
-                        request.status === 'Traite'
+                        request.status === 'completed'
                           ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
-                          : request.status === 'En cours'
+                          : request.status === 'in-progress'
                             ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
                             : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
                       }`}
@@ -125,23 +132,21 @@ const app = {
                       {request.status}
                     </span>
                   </div>
-                  <p class="mt-2 text-sm text-white">{request.title}</p>
-                  {request.detail && <p class="mt-2 text-xs text-slate-500">{request.detail}</p>}
-                  <p class="mt-2 text-xs text-slate-400">
-                    Type : <span class="text-slate-300">{request.type}</span>
-                  </p>
-                  <p class="text-xs text-slate-400">
-                    Agent : <span class="text-blue-400 font-mono">{request.agent}</span>
-                  </p>
-                  <p class="text-xs text-slate-500 mt-2">
-                    {new Date(request.updatedAt).toLocaleString('fr-FR')}
-                  </p>
+                  <p class="mt-2 text-sm text-white font-semibold">{request.title}</p>
+                  {request.content && <p class="mt-2 text-xs text-slate-400">{request.content}</p>}
+                  <div class="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-[10px]">
+                    <span class="text-slate-500">Priorité : <span class="text-slate-300 uppercase">{request.priority}</span></span>
+                    <span class="text-slate-500">{new Date(request.createdAt).toLocaleDateString('fr-FR')}</span>
+                  </div>
                 </article>
               ))}
             </div>
           ) : (
-            <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
-              Aucune entrée dans <span class="font-mono text-slate-500">.forge/demandes.json</span>. Utilisez le formulaire ci-dessus.
+            <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400 text-center py-8">
+              <svg class="w-8 h-8 mx-auto text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Aucune demande en base pour ce projet.
             </div>
           )}
         </section>

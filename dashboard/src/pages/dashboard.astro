@@ -6,6 +6,8 @@ import AgentStats from '../components/AgentStats';
 import WireLogs from '../components/WireLogs';
 import InfraHealth from '../components/InfraHealth';
 import ForgeEconomics from '../components/ForgeEconomics';
+import ServiceHealthMonitor from '../components/ServiceHealthMonitor';
+import AuditLogViewer from '../components/AuditLogViewer';
 import OpenClawGatewayBadge from '../components/OpenClawGatewayBadge';
 import fs from 'fs';
 import path from 'path';
@@ -68,6 +70,7 @@ try {
         
         <!-- Infra Health Sidebar Component -->
         <InfraHealth client:load />
+        <ServiceHealthMonitor client:load />
 
       </nav>
       
@@ -155,8 +158,9 @@ try {
               )}
 
               <!-- Wire Logs (Console feeling) -->
-              <div class="mt-4">
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <WireLogs client:load />
+                <AuditLogViewer client:load />
               </div>
 
             </div>

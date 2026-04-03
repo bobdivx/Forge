@@ -56,6 +56,20 @@ const AgentMessage = defineTable({
   },
 });
 
+const Request = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    projectId: column.number({ references: () => Project.columns.id }),
+    title: column.text(),
+    content: column.text(),
+    status: column.text({ default: 'pending' }), // pending, in-progress, completed, rejected
+    priority: column.text({ default: 'medium' }),
+    author: column.text({ default: 'Mathieu' }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
-  tables: { Project, AppData, Heartbeat, AgentTask, AgentMessage }
+  tables: { Project, AppData, Heartbeat, AgentTask, AgentMessage, Request }
 });
