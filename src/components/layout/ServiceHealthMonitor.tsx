@@ -10,10 +10,20 @@ export default function ServiceHealthMonitor() {
     const fetchHealth = async () => {
       try {
         const res = await fetch('/api/docker-health');
-        const data = await res.json();
-        if (data.containers) setContainers(data.containers);
+        const data = await res.json().catch(() => ({}));
+        const raw = Array.isArray(data.containers) ? data.containers : [];
+        setContainers(
+          raw.map((c: Record<string, unknown>) => ({
+            Names: String(c?.Names ?? c?.Name ?? '—'),
+            State: String(c?.State ?? 'unknown'),
+            Status: String(c?.Status ?? ''),
+            Image: String(c?.Image ?? ''),
+          })),
+        );
         setLoading(false);
-      } catch { /* ignore */ }
+      } catch {
+        setLoading(false);
+      }
     };
     fetchHealth();
     const interval = setInterval(fetchHealth, 60000);
@@ -21,7 +31,7 @@ export default function ServiceHealthMonitor() {
   }, []);
 
   const statusBadge = (state: string) => {
-    switch (state.toLowerCase()) {
+    switch (String(state || '').toLowerCase()) {
       case 'running': return 'badge-success';
       case 'exited': return 'badge-error';
       case 'paused': return 'badge-warning';
@@ -53,7 +63,7 @@ export default function ServiceHealthMonitor() {
           <div key={c.Names} class="flex items-center justify-between gap-2">
             <div class="flex flex-col min-w-0">
               <span class="text-[11px] font-bold text-slate-300 truncate leading-tight" title={c.Names}>{c.Names.replace(/^\//, '')}</span>
-              <span class="text-[9px] text-slate-500 truncate leading-tight" title={c.Image}>{c.Image.split('/').pop()}</span>
+              <span class="text-[9px] text-slate-500 truncate leading-tight" title={c.Image}>{(c.Image || '').split('/').pop() || '—'}</span>
             </div>
             <div class={`badge badge-xs ${statusBadge(c.State)} font-bold p-1 text-[8px] h-3.5`}>{c.State.toUpperCase()}</div>
           </div>

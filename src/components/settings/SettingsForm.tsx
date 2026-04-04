@@ -2,7 +2,7 @@ import { useState, useEffect } from 'preact/hooks';
 import TabBar from '../ui/TabBar';
 import AccountTab from './AccountTab';
 import OpenClawTab from './OpenClawTab';
-import ApiTokensTab from './ApiTokensTab';
+import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
 import InfraTab from './InfraTab';
 import MaintenanceTab from './MaintenanceTab';
 
@@ -40,7 +40,7 @@ export default function SettingsForm() {
     githubToken:       '',
     vercelToken:       '',
     openclawToken:     '',
-    openclawGatewayUrl: 'http://127.0.0.1:18789',
+    openclawGatewayUrl: 'http://127.0.0.1:24190',
   });
   const [auth, setAuth] = useState<AuthState>({
     currentEmail: '',
@@ -54,10 +54,11 @@ export default function SettingsForm() {
   const [message, setMessage] = useState('');
   const [authSaving, setAuthSaving] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
+  const [customTokens, setCustomTokens] = useState<CustomTokenRow[]>([]);
 
   useEffect(() => {
-    Promise.all([fetch('/api/settings'), fetch('/api/auth/me')])
-      .then(async ([settingsRes, meRes]) => {
+    Promise.all([fetch('/api/settings'), fetch('/api/custom-api-tokens'), fetch('/api/auth/me')])
+      .then(async ([settingsRes, tokensRes, meRes]) => {
         const s = await settingsRes.json();
         setSettings((prev) => ({
           ...prev,
@@ -70,6 +71,17 @@ export default function SettingsForm() {
           openclawGatewayUrl:
             String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
         }));
+        const t = await tokensRes.json().catch(() => ({ items: [] }));
+        const items = Array.isArray(t.items) ? t.items : [];
+        setCustomTokens(
+          items.map((i: { id: number; key: string; label?: string; hasSecret?: boolean }) => ({
+            id: i.id,
+            key: i.key || '',
+            label: i.label || '',
+            secret: '',
+            hasSecret: Boolean(i.hasSecret),
+          })),
+        );
         const me = await meRes.json();
         if (me?.email) setAuth((a) => ({ ...a, currentEmail: me.email, newEmail: me.email }));
       })
@@ -86,6 +98,50 @@ export default function SettingsForm() {
         body: JSON.stringify(settings),
       });
       setMessage(res.ok ? 'Configurations sauvegardées !' : 'Erreur lors de la sauvegarde.');
+    } catch {
+      setMessage('Erreur réseau.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Onglet Jetons API : GitHub/Vercel + jetons personnalisés. */
+  const saveApiSection = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const resSettings = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          githubToken: settings.githubToken,
+          vercelToken: settings.vercelToken,
+        }),
+      });
+      const resTokens = await fetch('/api/custom-api-tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: customTokens.map(({ id, key, label, secret }) => ({ id, key, label, secret })),
+        }),
+      });
+      const dataErr = await resTokens.json().catch(() => ({}));
+      if (!resSettings.ok || !resTokens.ok) {
+        setMessage(dataErr.error || 'Erreur lors de la sauvegarde des jetons.');
+      } else {
+        setMessage('Jetons enregistrés.');
+        const t = await fetch('/api/custom-api-tokens').then((r) => r.json());
+        const items = Array.isArray(t.items) ? t.items : [];
+        setCustomTokens(
+          items.map((i: { id: number; key: string; label?: string; hasSecret?: boolean }) => ({
+            id: i.id,
+            key: i.key || '',
+            label: i.label || '',
+            secret: '',
+            hasSecret: Boolean(i.hasSecret),
+          })),
+        );
+      }
     } catch {
       setMessage('Erreur réseau.');
     } finally {
@@ -171,7 +227,9 @@ export default function SettingsForm() {
           <ApiTokensTab
             settings={settings}
             setSettings={setSettings}
-            onSave={save}
+            customTokens={customTokens}
+            setCustomTokens={setCustomTokens}
+            onSave={saveApiSection}
             saving={saving}
             message={message}
           />

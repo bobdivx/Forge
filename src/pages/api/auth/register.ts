@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { APIRoute } from 'astro';
 import { registerOrReplaceUser, createSessionToken, isValidEmail, isValidPassword } from '../../../lib/auth';
 
@@ -11,15 +10,16 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return new Response(JSON.stringify({ error: 'Identifiants invalides' }), { status: 400 });
   }
 
-  registerOrReplaceUser(email, password);
-  
-  const token = createSessionToken(email);
+  await registerOrReplaceUser(email, password);
+
+  const token = await createSessionToken(email);
+  const secure = process.env.NODE_ENV === 'production';
   cookies.set('forge_session', token, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: false,
-    maxAge: 60 * 60 * 12
+    secure,
+    maxAge: 60 * 60 * 12,
   });
 
   return new Response(JSON.stringify({ status: 'ok' }), { status: 200 });

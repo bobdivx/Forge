@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
+import { logForgeOpenClaw } from '../../lib/forge-openclaw-console';
 
 type Kpi = { label: string; value: number | string; sub?: string; color: 'blue' | 'emerald' | 'violet' | 'amber'; icon: string; };
 
@@ -29,6 +30,7 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
 export default function DashboardKpis() {
   const [kpis, setKpis] = useState<Kpi[]>([]);
   const [loading, setLoading] = useState(true);
+  const [gatewayHint, setGatewayHint] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -37,6 +39,25 @@ export default function DashboardKpis() {
         const agentData = await agentRes.json();
         const kpiData = kpiRes.ok ? await kpiRes.json() : {};
         const agents: any[] = Array.isArray(agentData) ? agentData : (agentData.agents ?? []);
+        const gwErr = typeof agentData.gatewayError === 'string' ? agentData.gatewayError : '';
+        const gwVia = typeof agentData.gatewayVia === 'string' ? agentData.gatewayVia : '';
+        if (gwErr) {
+          setGatewayHint(
+            `${gwErr}${gwVia ? ` (via ${gwVia})` : ''}. Vérifiez l’URL / token OpenClaw dans Paramètres — l’URL doit être joignable depuis le serveur qui exécute Forge (pas seulement depuis votre navigateur).`
+          );
+        } else {
+          setGatewayHint(null);
+        }
+        const dbg = agentData.openclawDebug;
+        if (dbg && typeof dbg === 'object') {
+          logForgeOpenClaw('GET /api/agents (tableau KPIs)', {
+            ...dbg,
+            agentsCount: agents.length,
+            gatewayError: gwErr || null,
+            gatewayVia: gwVia || null,
+          });
+        }
+
         const active = agents.filter((a: any) => a.status === 'actif').length;
         setKpis([
           { label: 'Applications', value: kpiData.projectCount ?? '—', sub: 'projets en base', color: 'blue', icon: 'M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-10.5v9' },
@@ -59,8 +80,21 @@ export default function DashboardKpis() {
     );
   }
   return (
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {kpis.map((kpi) => <KpiCard key={kpi.label} kpi={kpi} />)}
+    <div class="space-y-4">
+      {gatewayHint && (
+        <div
+          class="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/95"
+          role="status"
+        >
+          <span class="font-semibold text-amber-200">OpenClaw : </span>
+          {gatewayHint}
+        </div>
+      )}
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((kpi) => (
+          <KpiCard key={kpi.label} kpi={kpi} />
+        ))}
+      </div>
     </div>
   );
 }

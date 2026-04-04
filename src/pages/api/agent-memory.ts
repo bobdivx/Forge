@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { db, AgentMemory, eq, desc } from 'astro:db';
+import { loadAstroDb } from '../../lib/load-astro-db';
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -10,6 +10,7 @@ function json(data: unknown, status = 200) {
 
 /** GET ?agentId=xxx — liste les mémoires d'un agent. */
 export const GET: APIRoute = async ({ url }) => {
+  const { db, AgentMemory, eq, desc } = await loadAstroDb();
   const agentId = url.searchParams.get('agentId');
   if (!agentId) return json({ error: 'Paramètre agentId requis' }, 400);
 
@@ -28,6 +29,7 @@ export const GET: APIRoute = async ({ url }) => {
 
 /** POST { agentId, content, tags? } — crée une mémoire. */
 export const POST: APIRoute = async ({ request }) => {
+  const { db, AgentMemory } = await loadAstroDb();
   let body: any;
   try {
     body = await request.json();
@@ -59,6 +61,7 @@ export const POST: APIRoute = async ({ request }) => {
  *  DELETE ?id=42      — supprime une mémoire par ID.
  */
 export const DELETE: APIRoute = async ({ url }) => {
+  const { db, AgentMemory, eq } = await loadAstroDb();
   const id = url.searchParams.get('id');
   const agentId = url.searchParams.get('agentId');
 

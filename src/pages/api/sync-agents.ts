@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
-import { db, AgentInstruction } from 'astro:db';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { getForgeRepoRoot } from '../../lib/forge-repo-root';
+import { loadAstroDb } from '../../lib/load-astro-db';
 
 /**
  * POST /api/sync-agents
@@ -12,6 +12,7 @@ import { getForgeRepoRoot } from '../../lib/forge-repo-root';
  * Body optionnel : { agentId: "DEV_FRONTEND" }  → sync un seul agent
  */
 export const POST: APIRoute = async ({ request }) => {
+  const { db, AgentInstruction } = await loadAstroDb();
   const body = await request.json().catch(() => ({}));
   const targetAgent: string | undefined = body?.agentId;
 
@@ -51,6 +52,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 /** GET /api/sync-agents → statut (liste les agents et si leur fichier existe) */
 export const GET: APIRoute = async () => {
+  const { db, AgentInstruction } = await loadAstroDb();
   const { existsSync } = await import('node:fs');
   const repoRoot = getForgeRepoRoot();
   const rows = await db.select().from(AgentInstruction);

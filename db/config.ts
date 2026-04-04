@@ -82,6 +82,21 @@ const Config = defineTable({
 });
 
 /**
+ * Comptes dashboard (email = clé primaire).
+ * Nom exporté `ForgeUser` : évite le conflit avec l’identifiant `User` du module virtuel `astro:db`
+ * (sinon `User` est `undefined` → erreur Drizzle « Symbol(drizzle:Columns) »).
+ */
+const ForgeUser = defineTable({
+  columns: {
+    email: column.text({ primaryKey: true }),
+    salt: column.text(),
+    passwordHash: column.text(),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
  * Instructions système des agents — source de vérité gérée via le dashboard.
  * Un enregistrement = un agent OpenClaw. Le fichier .md correspondant est
  * regénéré via POST /api/sync-agents.
@@ -116,6 +131,35 @@ const AgentMemory = defineTable({
   },
 });
 
+/**
+ * Jetons API nommés (clé stable type STRIPE_LIVE) pour les agents.
+ * Les valeurs sont lues côté serveur via GET /api/agent-api-secrets (réseau local uniquement).
+ */
+const CustomApiToken = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Clé d’accès pour les scripts / agents (ex. ANTHROPIC_API_KEY). */
+    key: column.text(),
+    /** Libellé affiché dans le dashboard (optionnel). */
+    label: column.text({ optional: true }),
+    secret: column.text(),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
-  tables: { Project, AppData, Heartbeat, AgentTask, AgentMessage, Request, Config, AgentMemory, AgentInstruction }
+  tables: {
+    Project,
+    AppData,
+    Heartbeat,
+    AgentTask,
+    AgentMessage,
+    Request,
+    Config,
+    ForgeUser,
+    AgentMemory,
+    AgentInstruction,
+    CustomApiToken,
+  },
 });

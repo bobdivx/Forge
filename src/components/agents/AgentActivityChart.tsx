@@ -70,7 +70,7 @@ export default function AgentActivityChart({ barData, doughnutData }: Props) {
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <h4 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Répartition statuts</h4>
-        {hasDoughnut ? <div class="h-52"><DoughnutChart data={doughnutData} /></div> : <div class="h-52 flex items-center justify-center text-slate-600 text-sm italic">Aucune tâche en base</div>}
+        {hasDoughnut ? <div class="h-52"><DoughnutChart data={doughnutData} /></div> : <div class="h-52 flex items-center justify-center text-slate-600 text-sm italic">Aucune activité agrégée</div>}
       </div>
     </div>
   );

@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../Docker/AppData/openclaw"
+		},
+		{
+			"path": "../../Docker/AppData/ollama-nvidia"
+		},
+		{
+			"path": "../../Docker/AppData/open-webui"
+		}
+	],
+	"settings": {}
+}

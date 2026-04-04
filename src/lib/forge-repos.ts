@@ -1,10 +1,22 @@
 // @ts-nocheck
 import fs from 'fs';
 import path from 'path';
+import { getConfig } from './config-db';
 
 /** Racine des dépôts (NAS). Surcharge : FORGE_REPOS_ROOT */
 export function getReposRoot(): string {
   return process.env.FORGE_REPOS_ROOT?.trim() || '/media/Github';
+}
+
+/** Préfère la valeur enregistrée en base (Paramètres), puis l’env, puis défaut. */
+export async function getReposRootResolved(): Promise<string> {
+  try {
+    const fromDb = (await getConfig('forgeReposRoot')).trim();
+    if (fromDb) return fromDb;
+  } catch {
+    /* ignore */
+  }
+  return getReposRoot();
 }
 
 const SAFE_NAME = /^[a-zA-Z0-9._-]{1,128}$/;
@@ -15,10 +27,11 @@ export function isSafeRepoDirName(name: string): boolean {
 
 /**
  * Résout le chemin du projet et empêche la sortie du répertoire racine (path traversal).
+ * Utilise la racine Paramètres / Astro DB (`forgeReposRoot`), pas seulement l’env.
  */
-export function resolveProjectPath(appName: string): string | null {
+export async function resolveProjectPath(appName: string): Promise<string | null> {
   if (!isSafeRepoDirName(appName)) return null;
-  const root = path.resolve(getReposRoot());
+  const root = path.resolve(await getReposRootResolved());
   const full = path.resolve(path.join(root, appName));
   const rel = path.relative(root, full);
   if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
@@ -47,16 +60,16 @@ export function repoSlugFromProject(project: { name: string; path?: string | nul
 /**
  * Résout le projet même si la casse du paramètre URL ne correspond pas au dossier (Linux).
  */
-export function resolveProjectPathVariants(appKey: string): string | null {
+export async function resolveProjectPathVariants(appKey: string): Promise<string | null> {
   if (!isSafeRepoDirName(appKey)) return null;
-  const direct = resolveProjectPath(appKey);
+  const direct = await resolveProjectPath(appKey);
   if (direct) return direct;
   const lower = appKey.toLowerCase();
   if (lower !== appKey) {
-    const p = resolveProjectPath(lower);
+    const p = await resolveProjectPath(lower);
     if (p) return p;
   }
-  const root = path.resolve(getReposRoot());
+  const root = path.resolve(await getReposRootResolved());
   try {
     const entries = fs.readdirSync(root, { withFileTypes: true });
     const want = appKey.toLowerCase();
@@ -64,7 +77,7 @@ export function resolveProjectPathVariants(appKey: string): string | null {
       if (!e.isDirectory()) continue;
       if (!isSafeRepoDirName(e.name)) continue;
       if (e.name.toLowerCase() !== want) continue;
-      return resolveProjectPath(e.name);
+      return await resolveProjectPath(e.name);
     }
   } catch {
     /* ignore */
@@ -74,13 +87,13 @@ export function resolveProjectPathVariants(appKey: string): string | null {
 
 /**
  * Résout le dossier projet à partir d'une ligne Astro DB (path absolu + repli slug / root).
- * Indispensable quand FORGE_REPOS_ROOT ne correspond pas au préfixe enregistré en base.
+ * Indispensable quand la racine en base (Paramètres) ne correspond pas au path enregistré.
  */
-export function resolveProjectPathFromDbProject(project: {
+export async function resolveProjectPathFromDbProject(project: {
   name: string;
   path?: string | null;
-}): string | null {
-  const root = path.resolve(getReposRoot());
+}): Promise<string | null> {
+  const root = path.resolve(await getReposRootResolved());
   const raw = project.path != null ? String(project.path).trim() : '';
   if (raw) {
     try {
@@ -99,7 +112,7 @@ export function resolveProjectPathFromDbProject(project: {
             return canonical;
           }
           const base = path.basename(canonical);
-          const underRoot = resolveProjectPathVariants(base);
+          const underRoot = await resolveProjectPathVariants(base);
           if (underRoot) return underRoot;
           if (isSafeRepoDirName(base)) {
             return canonical;

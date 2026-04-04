@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import {
-  fetchOpenClawJson,
+  fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
   mapSessionToAgentRow,
 } from '../../lib/openclaw-gateway';
@@ -8,7 +8,7 @@ import {
 /** Journal d'orchestration = vue tabulaire des sessions OpenClaw (état réel). */
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email;
-  const result = await fetchOpenClawJson(email, '/health');
+  const result = await fetchOpenClawSessionsPayload(email);
 
   if (!result.ok) {
     return new Response(

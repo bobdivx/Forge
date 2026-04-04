@@ -1,13 +1,14 @@
 import type { APIRoute } from 'astro';
-import { db, AgentTask, desc, eq } from 'astro:db';
 import {
   fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
   mapSessionToAgentRow,
 } from '../../lib/openclaw-gateway';
+import { loadAstroDb } from '../../lib/load-astro-db';
 
 /** POST { agentId, task, status? } — crée une tâche en base. */
 export const POST: APIRoute = async ({ request }) => {
+  const { db, AgentTask } = await loadAstroDb();
   let body: any;
   try {
     body = await request.json();
@@ -53,6 +54,7 @@ type TaskRow = {
 };
 
 export const GET: APIRoute = async ({ locals }) => {
+  const { db, AgentTask, desc } = await loadAstroDb();
   const email = locals.user?.email as string | undefined;
 
   let dbTasks: TaskRow[] = [];
@@ -115,6 +117,7 @@ export const GET: APIRoute = async ({ locals }) => {
  * Statuts valides : pending | running | completed | failed | bug | cancelled
  */
 export const PUT: APIRoute = async ({ request }) => {
+  const { db, AgentTask, eq } = await loadAstroDb();
   let body: any;
   try {
     body = await request.json();

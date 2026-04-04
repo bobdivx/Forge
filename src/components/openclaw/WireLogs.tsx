@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { logForgeOpenClaw } from '../../lib/forge-openclaw-console';
 
 export default function WireLogs() {
   const [lines, setLines] = useState<string[]>([]);
@@ -12,6 +13,11 @@ export default function WireLogs() {
         .then((res) => res.json())
         .then((data) => {
           if (cancelled) return;
+          logForgeOpenClaw('GET /api/openclaw-activity', {
+            ok: Boolean(data.ok),
+            lineCount: Array.isArray(data.lines) ? data.lines.length : 0,
+            ...(data.openclawDebug && typeof data.openclawDebug === 'object' ? data.openclawDebug : {}),
+          });
           if (data.lines && Array.isArray(data.lines)) { setLines(data.lines); setErr(null); }
           else { setLines([]); setErr('Réponse inattendue'); }
           setLoading(false);

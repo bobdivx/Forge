@@ -5,7 +5,14 @@ import { verifySessionToken } from './lib/auth';
 const PUBLIC_PATHS = ['/api/agents', '/api/models', '/api/openclaw-steer', '/api/openclaw-health', '/api/openclaw-activity', '/api/openclaw-orchestration', '/api/openclaw-economics-stats', '/login', '/api/auth/login', '/api/auth/register', '/api/auth/logout', '/api/forge-hook'];
 
 /** Endpoints appelables depuis le réseau local sans session (agents Ollama). */
-const LOCAL_ONLY_PATHS = ['/api/forge-hook', '/api/agent-tasks', '/api/agent-memory', '/api/agent-repl', '/api/forge-tools'];
+const LOCAL_ONLY_PATHS = [
+  '/api/forge-hook',
+  '/api/agent-tasks',
+  '/api/agent-memory',
+  '/api/agent-repl',
+  '/api/forge-tools',
+  '/api/agent-api-secrets',
+];
 
 function isLocalRequest(request: Request): boolean {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -42,7 +49,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   const token = context.cookies.get('forge_session')?.value ?? '';
-  const session = verifySessionToken(token);
+  const session = await verifySessionToken(token);
 
   if (session.valid) {
     context.locals.user = { email: session.email };

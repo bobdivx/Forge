@@ -16,16 +16,18 @@ export default function OpenClawTab({ settings, setSettings, onSave, saving, mes
     <div class="p-6 space-y-6">
       <div>
         <p class="text-xs text-slate-400 mb-6">
-          Configurez la liaison entre ce dashboard et votre instance OpenClaw.
+          Configurez la liaison entre ce dashboard et votre instance OpenClaw. Les vérifications passent par le{' '}
+          <strong class="text-slate-300">serveur Forge</strong> (API <code class="text-slate-500">/api/openclaw-health</code>), pas par votre navigateur : utilisez une URL joignable depuis l’hôte qui exécute Astro (hostname LAN, tunnel, ou variable{' '}
+          <code class="text-slate-500">OPENCLAW_GATEWAY_URL</code> en production).           <code class="text-slate-500">localhost</code> ne fonctionne pas si Forge tourne sur Vercel ou un autre serveur distant.
         </p>
         <div class="space-y-4">
           <FormField
             label="URL du gateway"
-            hint="Adresse où OpenClaw écoute (défaut : 18789)."
+            hint="Adresse où OpenClaw écoute (défaut seed / config : 24190)."
           >
             <input
               type="url"
-              placeholder="http://127.0.0.1:18789"
+              placeholder="http://127.0.0.1:24190"
               value={settings.openclawGatewayUrl}
               onInput={(e) =>
                 setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })

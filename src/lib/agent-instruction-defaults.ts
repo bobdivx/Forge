@@ -23,6 +23,9 @@ export const FORGE_AGENT_INSTRUCTION_ROWS = [
   { agentId: 'VEILLE_TECH',         model: 'llama3.1:8b',      filePath: 'instructions/agents/VEILLE_TECH.md' },
 ] as const;
 
+/** Toujours égal au nombre de lignes ci-dessus (vérification / comparaison avec `agents_list` OpenClaw). */
+export const FORGE_SWARM_AGENT_COUNT = FORGE_AGENT_INSTRUCTION_ROWS.length;
+
 export function readInstructionMdFromRepo(relativePath: string): string {
   const repoRoot = getForgeRepoRoot();
   const fullPath = resolve(repoRoot, relativePath);

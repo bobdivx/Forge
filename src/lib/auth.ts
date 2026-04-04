@@ -1,139 +1,236 @@
-// @ts-nocheck
-import fs from 'fs';
-import path from 'path';
-import crypto from 'crypto';
+/**
+ * Authentification : utilisateurs (table ForgeUser) + secret de session (Config).
+ * Migration ponctuelle depuis auth.json / config.json si ForgeUser est vide.
+ */
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { eq } from 'drizzle-orm';
+import { CONFIG_DEFAULTS } from './config-db';
+import { loadAstroDb } from './load-astro-db';
 
-// Résolution du chemin selon l'environnement (FORGE_DATA_PATH > /media/Github > /mnt/GitHub)
-function resolveDataPath(filename: string): string {
-  const env = process.env.FORGE_DATA_PATH?.trim();
-  if (env) return path.join(env, filename);
-  if (fs.existsSync('/media/Github/Forge/instructions')) return `/media/Github/Forge/instructions/${filename}`;
-  if (fs.existsSync('/media/GitHub/Forge/instructions')) return `/media/GitHub/Forge/instructions/${filename}`;
-  return `/mnt/GitHub/Forge/instructions/${filename}`;
-}
-
-const AUTH_PATH = resolveDataPath('auth.json');
-const SETTINGS_PATH = resolveDataPath('config.json');
-const SESSION_DURATION_MS = 1000 * 60 * 60 * 12; // 12h
-
-function ensureDir(filePath: string) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
+const SESSION_DURATION_MS = 1000 * 60 * 60 * 12;
 
 function randomHex(size = 32): string {
   return crypto.randomBytes(size).toString('hex');
-}
-
-function readJson(filePath: string): any {
-  if (!fs.existsSync(filePath)) {
-    return {};
-  }
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  } catch {
-    return {};
-  }
-}
-
-function writeJson(filePath: string, data: any) {
-  ensureDir(filePath);
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-function getAuthStore() {
-  const store = readJson(AUTH_PATH);
-  if (!store.sessionSecret) {
-    store.sessionSecret = randomHex(32);
-    writeJson(AUTH_PATH, store);
-  }
-  return store;
 }
 
 function hashPassword(password: string, salt: string): string {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
-export function hasUser(): boolean {
-  const store = getAuthStore();
-  return Boolean((store.user?.email && store.user?.passwordHash) || (store.users && Object.keys(store.users).length > 0));
+function legacyAuthPath(): string {
+  const env = process.env.FORGE_DATA_PATH?.trim();
+  if (env) return path.join(env, 'auth.json');
+  if (fs.existsSync('/media/Github/Forge/instructions')) return '/media/Github/Forge/instructions/auth.json';
+  if (fs.existsSync('/media/GitHub/Forge/instructions')) return '/media/GitHub/Forge/instructions/auth.json';
+  return '/mnt/GitHub/Forge/instructions/auth.json';
 }
 
-export function registerOrReplaceUser(email: string, password: string) {
-  const normalized = String(email || '').trim().toLowerCase();
-  const salt = randomHex(16);
-  const passwordHash = hashPassword(password, salt);
-  const store = getAuthStore();
-  
-  if (!store.users) store.users = {};
-  
-  store.users[normalized] = {
-    email: normalized,
-    salt,
-    passwordHash,
-    updatedAt: new Date().toISOString(),
-    settings: {
-      githubToken: '',
-      vercelToken: '',
-      openclawToken: '',
-      openclawGatewayUrl: '',
+function legacyConfigPath(): string {
+  const env = process.env.FORGE_DATA_PATH?.trim();
+  if (env) return path.join(env, 'config.json');
+  if (fs.existsSync('/media/Github/Forge/instructions')) return '/media/Github/Forge/instructions/config.json';
+  if (fs.existsSync('/media/GitHub/Forge/instructions')) return '/media/GitHub/Forge/instructions/config.json';
+  return '/mnt/GitHub/Forge/instructions/config.json';
+}
+
+/**
+ * Si aucun utilisateur en DB : importe auth.json (+ secret session + config.json métier).
+ * Idempotent ; adapté au premier démarrage après migration code.
+ */
+export async function migrateLegacyAuthOnce(): Promise<void> {
+  try {
+    const { db, ForgeUser, Config } = await loadAstroDb();
+    const anyUser = await db.select().from(ForgeUser).limit(1);
+    if (anyUser.length) return;
+
+    const authPath = legacyAuthPath();
+    if (fs.existsSync(authPath)) {
+      const store = JSON.parse(fs.readFileSync(authPath, 'utf-8'));
+      if (store.sessionSecret && typeof store.sessionSecret === 'string') {
+        const sec = await db.select().from(Config).where(eq(Config.key, 'sessionSecret'));
+        if (!sec.length) {
+          await db.insert(Config).values({
+            key: 'sessionSecret',
+            value: store.sessionSecret,
+            updatedAt: new Date(),
+          });
+        }
+      }
+      const now = new Date();
+      const usersToAdd: { email: string; salt: string; passwordHash: string }[] = [];
+      if (store.users && typeof store.users === 'object') {
+        for (const u of Object.values(store.users) as { email?: string; salt?: string; passwordHash?: string }[]) {
+          if (u?.email && u?.salt && u?.passwordHash) {
+            usersToAdd.push({
+              email: String(u.email).trim().toLowerCase(),
+              salt: u.salt,
+              passwordHash: u.passwordHash,
+            });
+          }
+        }
+      }
+      if (!usersToAdd.length && store.user?.email && store.user?.salt && store.user?.passwordHash) {
+        usersToAdd.push({
+          email: String(store.user.email).trim().toLowerCase(),
+          salt: store.user.salt,
+          passwordHash: store.user.passwordHash,
+        });
+      }
+      for (const u of usersToAdd) {
+        try {
+          await db.insert(ForgeUser).values({
+            email: u.email,
+            salt: u.salt,
+            passwordHash: u.passwordHash,
+            createdAt: now,
+            updatedAt: now,
+          });
+        } catch {
+          /* doublon */
+        }
+      }
     }
-  };
-  
-  // Legacy support
-  store.user = store.users[normalized];
-  
-  writeJson(AUTH_PATH, store);
-}
 
-export function getUser(email: string) {
-  const store = getAuthStore();
-  const normalized = String(email || '').trim().toLowerCase();
-  return store.users?.[normalized] || (store.user?.email === normalized ? store.user : null);
-}
-
-export function updateUser(email: string, data: any) {
-  const store = getAuthStore();
-  const normalized = String(email || '').trim().toLowerCase();
-  if (store.users && store.users[normalized]) {
-    store.users[normalized] = { ...store.users[normalized], ...data };
-  } else if (store.user?.email === normalized) {
-    store.user = { ...store.user, ...data };
+    const cfgPath = legacyConfigPath();
+    if (fs.existsSync(cfgPath)) {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8')) as Record<string, unknown>;
+      for (const key of Object.keys(CONFIG_DEFAULTS) as (keyof typeof CONFIG_DEFAULTS)[]) {
+        const val = cfg[key as string];
+        if (typeof val !== 'string' || !val.trim()) continue;
+        const row = await db.select().from(Config).where(eq(Config.key, key as string));
+        if (!row.length) {
+          await db.insert(Config).values({
+            key: key as string,
+            value: val.trim(),
+            updatedAt: new Date(),
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[forge] migration legacy auth/config ignorée:', e);
   }
-  writeJson(AUTH_PATH, store);
 }
 
-export function verifyCredentials(email: string, password: string): boolean {
-  const user = getUser(email);
-  if (!user?.passwordHash || !user?.salt) {
-    return false;
-  }
-  const calculated = hashPassword(password, user.salt);
-  return calculated === user.passwordHash;
+async function resolveSessionSecret(): Promise<string> {
+  const env = process.env.FORGE_SESSION_SECRET?.trim();
+  if (env) return env;
+  const { db, Config } = await loadAstroDb();
+  const rows = await db.select().from(Config).where(eq(Config.key, 'sessionSecret'));
+  if (rows.length && rows[0].value) return rows[0].value;
+  const secret = randomHex(32);
+  await db.insert(Config).values({
+    key: 'sessionSecret',
+    value: secret,
+    updatedAt: new Date(),
+  });
+  return secret;
 }
 
 function signPayload(payload: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
 }
 
-export function createSessionToken(email: string): string {
-  const store = getAuthStore();
+export async function hasUser(): Promise<boolean> {
+  try {
+    await migrateLegacyAuthOnce();
+    const { db, ForgeUser } = await loadAstroDb();
+    const rows = await db.select().from(ForgeUser).limit(1);
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function getUser(email: string) {
+  const normalized = String(email || '').trim().toLowerCase();
+  const { db, ForgeUser } = await loadAstroDb();
+  const rows = await db.select().from(ForgeUser).where(eq(ForgeUser.email, normalized));
+  return rows[0] ?? null;
+}
+
+export async function registerOrReplaceUser(email: string, password: string): Promise<void> {
+  await migrateLegacyAuthOnce();
+  const normalized = String(email || '').trim().toLowerCase();
+  const salt = randomHex(16);
+  const passwordHash = hashPassword(password, salt);
+  const { db, ForgeUser } = await loadAstroDb();
+  const now = new Date();
+  const existing = await db.select().from(ForgeUser).where(eq(ForgeUser.email, normalized));
+  if (existing.length) {
+    await db.update(ForgeUser).set({ salt, passwordHash, updatedAt: now }).where(eq(ForgeUser.email, normalized));
+  } else {
+    await db.insert(ForgeUser).values({
+      email: normalized,
+      salt,
+      passwordHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
+/** Changement d’email et/ou mot de passe (compte déjà authentifié). */
+export async function replaceAccountCredentials(
+  oldEmail: string,
+  newEmail: string,
+  password: string,
+): Promise<void> {
+  await migrateLegacyAuthOnce();
+  const o = String(oldEmail || '').trim().toLowerCase();
+  const n = String(newEmail || '').trim().toLowerCase();
+  const salt = randomHex(16);
+  const passwordHash = hashPassword(password, salt);
+  const { db, ForgeUser } = await loadAstroDb();
+  const now = new Date();
+  if (o !== n) {
+    const taken = await db.select().from(ForgeUser).where(eq(ForgeUser.email, n));
+    if (taken.length) {
+      const err = new Error('Cet email est déjà utilisé');
+      (err as Error & { code?: string }).code = 'EMAIL_TAKEN';
+      throw err;
+    }
+    await db.delete(ForgeUser).where(eq(ForgeUser.email, o));
+    await db.insert(ForgeUser).values({
+      email: n,
+      salt,
+      passwordHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return;
+  }
+  await db.update(ForgeUser).set({ salt, passwordHash, updatedAt: now }).where(eq(ForgeUser.email, o));
+}
+
+export async function verifyCredentials(email: string, password: string): Promise<boolean> {
+  await migrateLegacyAuthOnce();
+  const user = await getUser(email);
+  if (!user?.passwordHash || !user?.salt) return false;
+  const calculated = hashPassword(password, user.salt);
+  return calculated === user.passwordHash;
+}
+
+export async function createSessionToken(email: string): Promise<string> {
+  await migrateLegacyAuthOnce();
+  const secret = await resolveSessionSecret();
   const exp = Date.now() + SESSION_DURATION_MS;
   const payloadObj = { email, exp };
   const payload = Buffer.from(JSON.stringify(payloadObj), 'utf-8').toString('base64url');
-  const sig = signPayload(payload, store.sessionSecret);
+  const sig = signPayload(payload, secret);
   return `${payload}.${sig}`;
 }
 
-export function verifySessionToken(token: string): { valid: boolean; email?: string } {
+export async function verifySessionToken(token: string): Promise<{ valid: boolean; email?: string }> {
+  await migrateLegacyAuthOnce();
   if (!token || !token.includes('.')) {
     return { valid: false };
   }
   const [payload, sig] = token.split('.');
-  const store = getAuthStore();
-  const expectedSig = signPayload(payload, store.sessionSecret);
+  const secret = await resolveSessionSecret();
+  const expectedSig = signPayload(payload, secret);
   if (sig !== expectedSig) {
     return { valid: false };
   }
@@ -146,30 +243,6 @@ export function verifySessionToken(token: string): { valid: boolean; email?: str
   } catch {
     return { valid: false };
   }
-}
-
-export function readAppSettings(email?: string) {
-  if (email) {
-    const user = getUser(email);
-    if (user?.settings) return user.settings;
-  }
-  return readJson(SETTINGS_PATH);
-}
-
-export function writeAppSettings(data: any, email?: string) {
-  if (email) {
-    const user = getUser(email);
-    if (user) {
-      updateUser(email, { settings: data });
-      return;
-    }
-  }
-  writeJson(SETTINGS_PATH, data);
-}
-
-export function getOpenClawToken(email?: string): string {
-  const settings = readAppSettings(email);
-  return String(settings?.openclawToken || '');
 }
 
 export function isValidEmail(email: string): boolean {

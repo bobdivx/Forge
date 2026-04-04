@@ -4,17 +4,22 @@ import {
   fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
   mapSessionToAgentRow,
+  getOpenClawClientDebugMeta,
 } from '../../lib/openclaw-gateway';
 
 export const GET: APIRoute = async () => {
-  const base = await getOpenClawGatewayBaseUrl();
-  const result = await fetchOpenClawSessionsPayload(undefined);
+  const [base, result, configMeta] = await Promise.all([
+    getOpenClawGatewayBaseUrl(),
+    fetchOpenClawSessionsPayload(undefined),
+    getOpenClawClientDebugMeta(),
+  ]);
 
   if (!result.ok) {
     return new Response(
       JSON.stringify({
         lines: [`[OPENCLAW] ${result.error || 'Erreur gateway'} (${base})`],
         ok: false,
+        openclawDebug: { ...configMeta, attempts: result.attempts, resolvedVia: result.via },
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
@@ -37,8 +42,20 @@ export const GET: APIRoute = async () => {
     );
   }
 
-  return new Response(JSON.stringify({ lines, ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return new Response(
+    JSON.stringify({
+      lines,
+      ok: true,
+      openclawDebug: {
+        ...configMeta,
+        attempts: result.attempts,
+        resolvedVia: result.via,
+        sessionCount: sessions.length,
+      },
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
 };

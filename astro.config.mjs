@@ -22,7 +22,8 @@ export default defineConfig({
   adapter: node({
     mode: 'standalone',
   }),
-  integrations: [tailwind(), preact(), db()],
+  // `db()` en premier : réduit les courses avec d’autres intégrations Vite.
+  integrations: [db(), tailwind(), preact()],
   db: {
     studio: false
   }

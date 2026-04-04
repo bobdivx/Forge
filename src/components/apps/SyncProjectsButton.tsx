@@ -12,8 +12,12 @@ export default function SyncProjectsButton() {
       const data = await r.json();
       if (data.ok) {
         const added = data.results?.filter((x: { status: string }) => x.status === 'added').length ?? 0;
+        const updated =
+          data.results?.filter((x: { status: string }) => x.status === 'path_updated').length ?? 0;
         const exists = data.results?.filter((x: { status: string }) => x.status === 'exists').length ?? 0;
-        setMsg(`${added} ajouté(s), ${exists} déjà présent(s). Rechargez la page.`);
+        setMsg(
+          `${added} ajouté(s), ${updated} chemin(s) mis à jour, ${exists} inchangé(s). Rechargez la page.`,
+        );
         setState('done');
       } else {
         setMsg(data.error ?? 'Erreur inconnue');

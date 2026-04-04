@@ -31,40 +31,61 @@ export default function MobileMenu({
 
   return (
     <>
-      <button type="button" onClick={() => setIsOpen(true)} class="btn btn-ghost btn-square btn-sm md:hidden text-slate-300 hover:text-white" aria-label="Toggle Menu">
+      <button type="button" onClick={() => setIsOpen(true)} class="btn btn-ghost btn-square btn-sm md:hidden border border-cyan-500/20 text-cyan-200/90 hover:bg-cyan-500/10" aria-label="Toggle Menu">
         <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
       </button>
 
       {isOpen && createPortal(
         <div class="fixed inset-0 z-[2147483647] md:hidden">
-          <button type="button" class="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-label="Fermer le menu" onClick={closeDrawer} />
-          <div class="relative z-10 flex h-full w-72 max-w-[85vw] flex-col bg-base-200 text-base-content shadow-2xl">
-            <div class="flex h-16 shrink-0 items-center justify-between px-6 border-b border-base-300">
+          <button type="button" class="absolute inset-0 bg-black/65 backdrop-blur-sm" aria-label="Fermer le menu" onClick={closeDrawer} />
+          <div class="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-cyan-500/20 bg-white/[0.06] backdrop-blur-2xl text-white shadow-neon-cyan">
+            <div class="flex h-16 shrink-0 items-center justify-between px-6 border-b border-cyan-500/15 shadow-glass-inset">
               <div class="flex items-center gap-2">
-                <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20">F</div>
-                <span class="text-xl font-bold tracking-tight">DevForge</span>
+                <div class="h-8 w-8 rounded-lg bg-cyan-500/15 border border-cyan-400/35 flex items-center justify-center font-bold text-sm text-cyan-200 shadow-neon-cyan">F</div>
+                <span class="text-xl font-bold tracking-tight forge-text-glow">DevForge</span>
               </div>
-              <button type="button" class="btn btn-ghost btn-square btn-sm" aria-label="Fermer le menu" onClick={closeDrawer}>
+              <button type="button" class="btn btn-ghost btn-square btn-sm border border-transparent hover:border-cyan-500/20 hover:bg-cyan-500/10" aria-label="Fermer le menu" onClick={closeDrawer}>
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <nav class="flex-1 overflow-y-auto py-4">
+            <nav class="flex-1 overflow-y-auto py-4 custom-scrollbar">
               <ul class="menu w-full px-3">
                 {navItems.map((item) => (
                   <li key={item.path}>
-                    <a href={item.path} onClick={closeDrawer} class={`flex items-center gap-3 ${navItemActive(item.path) ? 'active' : ''}`}>
-                      <svg class="h-5 w-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d={item.icon} /></svg>
+                    <a
+                      href={item.path}
+                      onClick={closeDrawer}
+                      class={`flex items-center gap-3 rounded-lg ${
+                        navItemActive(item.path)
+                          ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-400/35 shadow-[0_0_20px_rgba(34,211,238,0.12)]'
+                          : 'text-slate-400 border border-transparent hover:bg-white/[0.05] hover:text-cyan-100/90'
+                      }`}
+                    >
+                      <svg
+                        class={`h-5 w-5 flex-shrink-0 ${navItemActive(item.path) ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'text-slate-500'}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke-width="1.5"
+                        stroke="currentColor"
+                      >
+                        <path stroke-linecap="round" stroke-linejoin="round" d={item.icon} />
+                      </svg>
                       {item.name}
                     </a>
                   </li>
                 ))}
               </ul>
             </nav>
-            <div class="border-t border-base-300 p-4 flex items-center gap-3">
+            <div class="border-t border-cyan-500/15 p-4 flex items-center gap-3 bg-white/[0.02]">
               <div class="avatar placeholder">
-                <div class="bg-neutral text-neutral-content w-9 rounded-full"><span class="text-sm font-bold">M</span></div>
+                <div class="bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-100 w-9 rounded-full shadow-neon-fuchsia">
+                  <span class="text-sm font-bold">M</span>
+                </div>
               </div>
-              <div class="flex flex-col"><span class="text-sm font-semibold">Mathieu</span><span class="text-xs opacity-70">Admin</span></div>
+              <div class="flex flex-col">
+                <span class="text-sm font-semibold text-white">Mathieu</span>
+                <span class="text-xs text-cyan-500/50">Admin</span>
+              </div>
             </div>
           </div>
         </div>,

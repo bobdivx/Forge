@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
-import { db, AgentMemory, AgentTask, eq, desc } from 'astro:db';
 import { toolRegistry } from '../../lib/forge-tools';
 import { parseCommand, resolveCommand, FORGE_COMMANDS } from '../../lib/forge-commands';
+import { loadAstroDb } from '../../lib/load-astro-db';
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -124,6 +124,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // ── /memory ────────────────────────────────────────────────────────────────
   if (resolvedName === 'memory') {
+    const { db, AgentMemory, eq, desc } = await loadAstroDb();
     const sub = parsed.args[0] ?? 'list';
 
     if (sub === 'list') {
@@ -192,6 +193,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // ── /task ──────────────────────────────────────────────────────────────────
   if (resolvedName === 'task') {
+    const { db, AgentTask, desc } = await loadAstroDb();
     const sub = parsed.args[0] ?? 'list';
 
     if (sub === 'list') {

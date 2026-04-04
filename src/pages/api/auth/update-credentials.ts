@@ -1,6 +1,11 @@
-// @ts-nocheck
 import type { APIRoute } from 'astro';
-import { createSessionToken, isValidEmail, isValidPassword, registerOrReplaceUser, verifyCredentials } from '../../../lib/auth';
+import {
+  createSessionToken,
+  isValidEmail,
+  isValidPassword,
+  replaceAccountCredentials,
+  verifyCredentials,
+} from '../../../lib/auth';
 
 export const POST: APIRoute = async ({ request, cookies, locals }) => {
   const body = await request.json().catch(() => ({}));
@@ -9,7 +14,7 @@ export const POST: APIRoute = async ({ request, cookies, locals }) => {
   const newEmail = String(body?.newEmail ?? '').trim().toLowerCase();
   const newPassword = String(body?.newPassword ?? '');
 
-  if (!currentEmail || !verifyCredentials(currentEmail, currentPassword)) {
+  if (!currentEmail || !(await verifyCredentials(currentEmail, currentPassword))) {
     return new Response(JSON.stringify({ error: 'Mot de passe actuel invalide' }), { status: 401 });
   }
   if (!isValidEmail(newEmail)) {
@@ -19,8 +24,17 @@ export const POST: APIRoute = async ({ request, cookies, locals }) => {
     return new Response(JSON.stringify({ error: 'Nouveau mot de passe trop court (minimum 10 caracteres)' }), { status: 400 });
   }
 
-  registerOrReplaceUser(newEmail, newPassword);
-  const token = createSessionToken(newEmail);
+  try {
+    await replaceAccountCredentials(currentEmail, newEmail, newPassword);
+  } catch (e: unknown) {
+    const code = e && typeof e === 'object' && 'code' in e ? (e as { code?: string }).code : '';
+    if (code === 'EMAIL_TAKEN') {
+      return new Response(JSON.stringify({ error: 'Cet email est déjà utilisé' }), { status: 409 });
+    }
+    throw e;
+  }
+
+  const token = await createSessionToken(newEmail);
   const secure = process.env.NODE_ENV === 'production';
   cookies.set('forge_session', token, {
     path: '/',

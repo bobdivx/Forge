@@ -27,19 +27,21 @@ const navItems = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title} | DevForge SaaS</title>
   </head>
-  <body class="flex h-full bg-slate-950 text-white font-sans antialiased overflow-hidden selection:bg-blue-500/30">
-    <aside class="hidden md:flex w-64 flex-col bg-slate-900 border-r border-white/5 h-full relative z-20 shadow-2xl">
-      <div class="flex h-16 shrink-0 items-center px-6 border-b border-white/5">
+  <body class="flex h-full bg-slate-950 text-white font-sans antialiased overflow-hidden selection:bg-cyan-500/30">
+    <div class="forge-backdrop pointer-events-none" aria-hidden="true"></div>
+    <div class="forge-grid pointer-events-none" aria-hidden="true"></div>
+    <aside class="hidden md:flex w-64 flex-col h-full relative z-20 border-r border-cyan-500/20 bg-white/[0.04] backdrop-blur-2xl shadow-neon-cyan">
+      <div class="flex h-16 shrink-0 items-center px-6 border-b border-cyan-500/15 shadow-glass-inset">
         <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='/'">
-          <div class="h-8 w-8 rounded bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20">F</div>
-          <span class="text-xl font-bold tracking-tight text-white">DevForge</span>
+          <div class="h-8 w-8 rounded-lg bg-cyan-500/15 border border-cyan-400/35 flex items-center justify-center font-bold text-sm text-cyan-200 shadow-neon-cyan">F</div>
+          <span class="text-xl font-bold tracking-tight text-white forge-text-glow">DevForge</span>
         </div>
       </div>
-      <nav class="flex flex-1 flex-col px-4 py-6 overflow-y-auto">
+      <nav class="flex flex-1 flex-col px-4 py-6 overflow-y-auto custom-scrollbar">
         <div class="space-y-1">
           {navItems.map(item => (
-            <a href={item.path} class={`group flex items-center rounded-md px-3 py-2 text-sm font-medium transition ${currentPath === item.path ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-              <svg class={`mr-3 h-5 w-5 flex-shrink-0 ${currentPath === item.path ? 'text-blue-400' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <a href={item.path} class={`group flex items-center rounded-lg px-3 py-2 text-sm font-medium transition ${currentPath === item.path ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-400/35 shadow-[0_0_20px_rgba(34,211,238,0.12)]' : 'text-slate-400 border border-transparent hover:bg-white/[0.05] hover:text-cyan-100/90 hover:border-cyan-500/10'}`}>
+              <svg class={`mr-3 h-5 w-5 flex-shrink-0 ${currentPath === item.path ? 'text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'text-slate-500 group-hover:text-cyan-400/70'}`} fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d={item.icon} />
               </svg>
               {item.name}
@@ -50,27 +52,27 @@ const navItems = [
       <div class="mt-auto">
         <ServiceHealthMonitor client:load />
       </div>
-      <div class="border-t border-white/5 p-4 flex items-center gap-3">
-        <div class="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sm text-slate-300">{userInitial}</div>
+      <div class="border-t border-cyan-500/15 p-4 flex items-center gap-3 bg-white/[0.02]">
+        <div class="h-9 w-9 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center font-bold text-sm text-fuchsia-200 shadow-neon-fuchsia">{userInitial}</div>
         <div class="flex flex-col">
           <span class="text-sm font-semibold text-white truncate max-w-[11rem]">{userEmail}</span>
-          <span class="text-xs text-slate-500">Administrateur</span>
+          <span class="text-xs text-cyan-500/50">Administrateur</span>
         </div>
       </div>
     </aside>
-    <main class="flex-1 flex flex-col h-full bg-slate-950 relative overflow-hidden">
-      <div class="absolute inset-0 bg-gradient-to-br from-slate-900/40 via-transparent to-blue-950/30 pointer-events-none"></div>
-      <header class="navbar min-h-16 px-4 md:px-8 border-b border-white/5 bg-slate-950/50 backdrop-blur z-10">
+    <main class="flex-1 flex flex-col h-full relative overflow-hidden z-10">
+      <div class="absolute inset-0 bg-forge-mesh opacity-90 pointer-events-none"></div>
+      <header class="navbar min-h-16 px-4 md:px-8 border-b border-cyan-500/15 bg-white/[0.04] backdrop-blur-xl z-10 shadow-glass-inset">
         <div class="navbar-start gap-3">
           <MobileMenu client:load currentPath={currentPath} />
-          <h1 class="text-lg font-semibold text-white">{title}</h1>
+          <h1 class="text-lg font-semibold text-white tracking-tight">{title}</h1>
         </div>
         <div class="navbar-end gap-2">
           <OpenClawLayoutBadge client:load />
-          <a href="/api/auth/logout" class="btn btn-ghost btn-sm border border-slate-700">Deconnexion</a>
+          <a href="/api/auth/logout" class="btn btn-ghost btn-sm border border-cyan-500/25 text-cyan-100/90 hover:bg-cyan-500/10 hover:border-cyan-400/40">Déconnexion</a>
         </div>
       </header>
-      <div class="flex-1 overflow-y-auto p-8 z-10">
+      <div class="flex-1 overflow-y-auto p-8 z-10 custom-scrollbar">
         <slot />
       </div>
     </main>

@@ -1,10 +1,16 @@
-import { db, Project, AppData, Heartbeat, AgentMessage, AgentInstruction, Config } from 'astro:db';
 import {
   FORGE_AGENT_INSTRUCTION_ROWS,
   readInstructionMdFromRepo,
 } from '../src/lib/agent-instruction-defaults';
 
+/**
+ * Import dynamique obligatoire : un `import { … } from 'astro:db'` en tête de ce fichier
+ * s’exécute pendant le bootstrap de `@astrojs/db` avant l’enregistrement du seed handler,
+ * ce qui provoque « INTERNAL Seed handler not loaded yet ».
+ */
 export default async function seed() {
+  const { db, Project, AppData, Heartbeat, AgentMessage, AgentInstruction, Config } = await import('astro:db');
+
   // ── 1. Données de base (Project, AppData, Heartbeat, AgentMessage) ──────────
   try {
     const existingProjects = await db.select().from(Project);

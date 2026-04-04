@@ -1,21 +1,180 @@
 ---
-// @ts-nocheck
 import '../styles/global.css';
-import LoginForm from '../components/auth/LoginForm';
+import SurfaceCard from '../components/ui/SurfaceCard.astro';
+
+export const prerender = true;
 ---
-<html lang="fr" class="h-full bg-slate-950">
+
+<html lang="fr" class="h-full scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Connexion sécurisée au tableau de bord DevForge." />
     <title>Connexion | DevForge</title>
   </head>
-  <body class="min-h-screen bg-slate-950 text-white font-sans antialiased">
-    <main class="min-h-screen flex items-center justify-center p-6">
-      <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
-        <h1 class="text-2xl font-bold">Connexion Forge</h1>
-        <p class="text-sm text-slate-400 mt-1">Acces securise par email et mot de passe.</p>
-        <LoginForm client:load />
+  <body class="min-h-full antialiased bg-slate-950 text-slate-100 font-sans text-[15px]">
+    <div class="forge-backdrop" aria-hidden="true"></div>
+    <div class="forge-grid" aria-hidden="true"></div>
+
+    <main class="min-h-full flex flex-col justify-center px-5 py-16 sm:px-6 relative">
+      <div class="mx-auto w-full max-w-[420px]">
+        <header class="mb-10 text-center sm:text-left">
+          <div
+            class="mx-auto sm:mx-0 mb-6 flex h-12 w-12 items-center justify-center rounded-xl border border-cyan-400/40 bg-cyan-500/10 text-sm font-bold tracking-wide text-cyan-200 shadow-neon-cyan"
+          >
+            DF
+          </div>
+          <h1 class="text-[1.85rem] font-semibold tracking-tight text-white sm:text-3xl forge-text-glow">
+            DevForge
+          </h1>
+          <p class="mt-3 max-w-sm text-[0.9375rem] leading-relaxed text-cyan-100/55">
+            Tableau de bord — connexion sécurisée, effets glass & néon sur toute l’interface.
+          </p>
+        </header>
+
+        <SurfaceCard padding="lg" glow="strong">
+          <div class="mb-8 flex gap-0 border-b border-cyan-500/15" role="tablist">
+            <button
+              type="button"
+              id="tab-login"
+              role="tab"
+              aria-selected="true"
+              class="auth-tab -mb-px flex-1 pb-3 text-center text-sm font-semibold text-cyan-200 border-b-2 border-cyan-400 shadow-[0_0_16px_rgba(34,211,238,0.25)] transition-all"
+            >
+              Connexion
+            </button>
+            <button
+              type="button"
+              id="tab-register"
+              role="tab"
+              aria-selected="false"
+              class="auth-tab -mb-px flex-1 pb-3 text-center text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-fuchsia-200/90 transition-all"
+            >
+              Créer un compte
+            </button>
+          </div>
+
+          <form id="forge-auth-form" class="space-y-6">
+            <div class="space-y-2">
+              <label for="forge-email" class="text-sm font-medium text-cyan-200/70">Adresse e-mail</label>
+              <input
+                id="forge-email"
+                name="email"
+                type="email"
+                autocomplete="username"
+                required
+                class="w-full rounded-xl border border-cyan-500/20 bg-slate-950/60 px-4 py-3 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-cyan-400/50 focus:bg-slate-950/80 focus:ring-2 focus:ring-cyan-400/25 focus:shadow-[0_0_20px_rgba(34,211,238,0.12)]"
+                placeholder="nom@domaine.com"
+              />
+            </div>
+            <div class="space-y-2">
+              <label for="forge-password" class="text-sm font-medium text-cyan-200/70">Mot de passe</label>
+              <input
+                id="forge-password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                minlength="10"
+                class="w-full rounded-xl border border-cyan-500/20 bg-slate-950/60 px-4 py-3 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-fuchsia-400/45 focus:bg-slate-950/80 focus:ring-2 focus:ring-fuchsia-500/20 focus:shadow-[0_0_20px_rgba(217,70,239,0.12)]"
+                placeholder="Au moins 10 caractères"
+              />
+            </div>
+            <p
+              id="forge-auth-msg"
+              class="hidden rounded-xl border border-red-500/35 bg-red-950/40 px-3 py-2.5 text-sm text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.15)]"
+              role="alert"
+            >
+            </p>
+            <button
+              type="submit"
+              id="forge-submit"
+              class="w-full rounded-xl bg-gradient-to-r from-cyan-600 via-cyan-500 to-fuchsia-600 py-3.5 text-sm font-semibold text-white transition-all hover:brightness-110 hover:shadow-neon-cyan active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+            >
+              Se connecter
+            </button>
+          </form>
+        </SurfaceCard>
+
+        <p class="mt-8 text-center text-xs leading-relaxed text-slate-500 sm:text-left">
+          <span class="text-cyan-500/50">●</span> Environnement privé — ne partagez jamais vos identifiants.
+        </p>
       </div>
     </main>
+
+    <script is:inline>
+      (function () {
+        var mode = 'login';
+        var form = document.getElementById('forge-auth-form');
+        var msg = document.getElementById('forge-auth-msg');
+        var submit = document.getElementById('forge-submit');
+        var email = document.getElementById('forge-email');
+        var password = document.getElementById('forge-password');
+        var tabLogin = document.getElementById('tab-login');
+        var tabRegister = document.getElementById('tab-register');
+
+        var activeTab =
+          'auth-tab -mb-px flex-1 pb-3 text-center text-sm font-semibold text-cyan-200 border-b-2 border-cyan-400 shadow-[0_0_16px_rgba(34,211,238,0.25)] transition-all';
+        var idleTab =
+          'auth-tab -mb-px flex-1 pb-3 text-center text-sm font-medium text-slate-500 border-b-2 border-transparent hover:text-fuchsia-200/90 transition-all';
+
+        function setMode(next) {
+          mode = next;
+          var isLogin = mode === 'login';
+          tabLogin.setAttribute('aria-selected', isLogin ? 'true' : 'false');
+          tabRegister.setAttribute('aria-selected', isLogin ? 'false' : 'true');
+          tabLogin.className = isLogin ? activeTab : idleTab;
+          tabRegister.className = !isLogin ? activeTab : idleTab;
+          submit.textContent = isLogin ? 'Se connecter' : 'Créer le compte';
+          password.setAttribute('autocomplete', isLogin ? 'current-password' : 'new-password');
+          email.setAttribute('autocomplete', isLogin ? 'username' : 'email');
+          msg.classList.add('hidden');
+          msg.textContent = '';
+        }
+
+        tabLogin.addEventListener('click', function () {
+          setMode('login');
+        });
+        tabRegister.addEventListener('click', function () {
+          setMode('register');
+        });
+
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          msg.classList.add('hidden');
+          msg.textContent = '';
+          var em = email.value.trim();
+          var pw = password.value;
+          if (!em || !pw) return;
+          submit.disabled = true;
+          var endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+          fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: em, password: pw }),
+          })
+            .then(function (r) {
+              return r.json().then(function (data) {
+                return { ok: r.ok, data: data };
+              });
+            })
+            .then(function (res) {
+              if (res.ok) {
+                window.location.href = '/dashboard';
+                return;
+              }
+              msg.textContent = res.data && res.data.error ? res.data.error : 'Identifiants incorrects ou erreur serveur.';
+              msg.classList.remove('hidden');
+            })
+            .catch(function () {
+              msg.textContent = 'Impossible de joindre le serveur.';
+              msg.classList.remove('hidden');
+            })
+            .finally(function () {
+              submit.disabled = false;
+            });
+        });
+      })();
+    </script>
   </body>
 </html>

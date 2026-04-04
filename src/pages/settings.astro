@@ -2,9 +2,9 @@
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import SettingsForm from '../components/settings/SettingsForm';
 import OpenClawLayoutBadge from '../components/layout/OpenClawLayoutBadge';
-import { getReposRoot } from '../lib/forge-repos';
+import { getReposRootResolved } from '../lib/forge-repos';
 
-const reposRoot = getReposRoot();
+const reposRoot = await getReposRootResolved();
 ---
 <DashboardLayout title="Paramètres" currentPath="/settings">
   <div class="max-w-4xl mx-auto space-y-12">

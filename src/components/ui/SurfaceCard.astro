@@ -1,0 +1,26 @@
+---
+/**
+ * Carte glass + ombre néon (système DevForge).
+ */
+interface Props {
+  class?: string;
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  glow?: 'subtle' | 'strong';
+}
+const { class: className = '', padding = 'md', glow = 'subtle' } = Astro.props;
+
+const pad =
+  padding === 'none'
+    ? ''
+    : padding === 'sm'
+      ? 'p-5 sm:p-6'
+      : padding === 'lg'
+        ? 'p-8 sm:p-9'
+        : 'p-6 sm:p-7';
+
+const shadowClass = glow === 'strong' ? 'shadow-neon-card-lg' : 'shadow-neon-card';
+---
+
+<div class:list={['forge-glass-panel rounded-2xl', shadowClass, pad, className]}>
+  <slot />
+</div>

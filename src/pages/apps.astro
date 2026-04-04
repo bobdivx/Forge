@@ -5,7 +5,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AppLauncher from '../components/apps/AppLauncher';
 import WireLogs from '../components/openclaw/WireLogs';
 import SyncProjectsButton from '../components/apps/SyncProjectsButton';
-import { db, Project } from 'astro:db';
+import { loadAstroDb } from '../lib/load-astro-db';
+import { getReposRootResolved } from '../lib/forge-repos';
+
+const reposRootDisplay = await getReposRootResolved();
+const { db, Project } = await loadAstroDb();
 // Fetch apps from Astro DB
 let deployedApps = [];
 
@@ -70,7 +74,7 @@ try {
         ) : (
           <div class="bg-slate-900 border border-slate-800 rounded-xl p-8 flex flex-col items-center gap-4 text-center">
             <p class="text-slate-400 text-sm">Aucune application en base de données.</p>
-            <p class="text-slate-500 text-xs">Clique sur <strong class="text-blue-400">⟳ Synchroniser les dépôts Git</strong> en haut pour scanner <code class="font-mono text-orange-400">/media/Github</code> et importer tous tes dépôts.</p>
+            <p class="text-slate-500 text-xs">Clique sur <strong class="text-blue-400">⟳ Synchroniser les dépôts Git</strong> en haut pour scanner <code class="font-mono text-orange-400 break-all">{reposRootDisplay}</code> (Paramètres → Infrastructure) et importer ou mettre à jour les dépôts.</p>
             <SyncProjectsButton client:load />
           </div>
         )}

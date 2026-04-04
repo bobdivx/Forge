@@ -22,7 +22,7 @@
  * }
  */
 import type { APIRoute } from 'astro';
-import { db, AgentTask, AgentMessage, AgentMemory } from 'astro:db';
+import { loadAstroDb } from '../../lib/load-astro-db';
 
 const ALLOWED_TYPES = ['bug', 'task', 'completion', 'memory', 'message', 'request'] as const;
 type HookType = (typeof ALLOWED_TYPES)[number];
@@ -72,6 +72,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
   const now = new Date();
   const projectTag = project ? ` [${project}]` : '';
+
+  const { db, AgentTask, AgentMessage, AgentMemory } = await loadAstroDb();
 
   try {
     // ── bug / task / request / completion → AgentTask ─────────────────────
