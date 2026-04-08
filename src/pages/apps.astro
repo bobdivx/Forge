@@ -5,11 +5,11 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AppLauncher from '../components/apps/AppLauncher';
 import WireLogs from '../components/openclaw/WireLogs';
 import SyncProjectsButton from '../components/apps/SyncProjectsButton';
-import { db, Project } from 'astro:db';
 // Fetch apps from Astro DB
 let deployedApps = [];
 
 try {
+  const { db, Project } = await import('astro:db');
   deployedApps = await db.select().from(Project);
   
   // Format for display if needed

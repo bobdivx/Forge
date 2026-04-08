@@ -6,7 +6,6 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import ProjectDemandesForm from '../../components/apps/ProjectDemandesForm';
 import AppProjectOps from '../../components/apps/AppProjectOps';
 import path from 'path';
-import { db, Project, Request, eq, desc } from 'astro:db';
 import {
   resolveProjectPathVariants,
   resolveProjectPathFromDbProject,
@@ -29,6 +28,7 @@ let projectRow = null;
 let requests = [];
 
 try {
+  const { db, Project, Request, eq, desc } = await import('astro:db');
   const rows = await db.select().from(Project);
   const rowMatch = (p) => {
     const slug = repoSlugFromProject(p);

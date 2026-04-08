@@ -6,7 +6,6 @@ import DashboardLayout from '../../../layouts/DashboardLayout.astro';
 import ProjectDemandesForm from '../../../components/apps/ProjectDemandesForm';
 import AppProjectOps from '../../../components/apps/AppProjectOps';
 import path from 'path';
-import { db, Project, Request, eq, desc } from 'astro:db';
 import { resolveProjectPathFromDbProject, isSafeRepoDirName } from '../../../lib/forge-repos';
 import { getGitCommits, getGitSummary } from '../../../lib/project-git';
 import { mapDbRequestToUi } from '../../../lib/forge-request-mapper';
@@ -19,6 +18,7 @@ if (!Number.isInteger(projectId) || projectId < 1) {
 
 let row;
 try {
+  const { db, Project } = await import('astro:db');
   const rows = await db.select().from(Project);
   row = rows.find((r) => Number(r.id) === projectId);
 } catch {
@@ -46,6 +46,7 @@ const gitSummary = getGitSummary(projectPath);
 
 let requests = [];
 try {
+  const { db, Request, eq, desc } = await import('astro:db');
   const dbReq = await db
     .select()
     .from(Request)

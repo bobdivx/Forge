@@ -4,7 +4,6 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import AgentSteerForm from '../../components/agents/AgentSteerForm';
 import AgentDirectiveForm from '../../components/agents/AgentDirectiveForm';
-import { db, AgentTask, eq, desc } from 'astro:db';
 import {
   fetchOpenClawJson,
   normalizeOpenClawSessions,
@@ -27,8 +26,14 @@ try {
   /* session info indisponible */
 }
 
-// 2. On récupère les tâches de la DB pour cet agent
-const tasks = await db.select().from(AgentTask).where(eq(AgentTask.agentId, id || '')).orderBy(desc(AgentTask.createdAt));
+// 2. On récupère les tâches de la DB pour cet agent (tolérant au cold start Astro DB)
+let tasks = [];
+try {
+  const { db, AgentTask, eq, desc } = await import('astro:db');
+  tasks = await db.select().from(AgentTask).where(eq(AgentTask.agentId, id || '')).orderBy(desc(AgentTask.createdAt));
+} catch {
+  tasks = [];
+}
 
 const displayName = agentInfo ? agentInfo.name.replace('telegram:g-agent-', '').replace('agent:', '').toUpperCase() : id;
 ---

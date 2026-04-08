@@ -7,10 +7,10 @@ import AgentStats from '../components/agents/AgentStats';
 import WireLogs from '../components/openclaw/WireLogs';
 import ForgeEconomics from '../components/system/ForgeEconomics';
 import DashboardKpis from '../components/system/DashboardKpis';
-import { db, Project } from 'astro:db';
 
 let deployedApps = [];
 try {
+  const { db, Project } = await import('astro:db');
   const rows = await db.select().from(Project);
   deployedApps = rows.map((app) => ({
     ...app,
