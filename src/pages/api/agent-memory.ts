@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { db, AgentMemory, eq, desc } from 'astro:db';
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -14,6 +13,7 @@ export const GET: APIRoute = async ({ url }) => {
   if (!agentId) return json({ error: 'Paramètre agentId requis' }, 400);
 
   try {
+    const { db, AgentMemory, eq, desc } = await import('astro:db');
     const memories = await db
       .select()
       .from(AgentMemory)
@@ -40,6 +40,7 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ error: 'agentId et content sont requis' }, 400);
 
   try {
+    const { db, AgentMemory } = await import('astro:db');
     const [inserted] = await db
       .insert(AgentMemory)
       .values({
@@ -63,6 +64,7 @@ export const DELETE: APIRoute = async ({ url }) => {
   const agentId = url.searchParams.get('agentId');
 
   try {
+    const { db, AgentMemory, eq } = await import('astro:db');
     if (id) {
       const numId = parseInt(id, 10);
       if (isNaN(numId)) return json({ error: 'ID invalide' }, 400);

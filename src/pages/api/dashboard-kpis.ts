@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
-import { db, Project, AgentTask, Request, eq } from 'astro:db';
 
 export const GET: APIRoute = async () => {
   try {
+    const { db, Project, AgentTask, Request, eq } = await import('astro:db');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 

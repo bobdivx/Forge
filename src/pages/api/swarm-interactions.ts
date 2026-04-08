@@ -1,6 +1,5 @@
 // @ts-nocheck
 import type { APIRoute } from 'astro';
-import { db, AgentMessage, AgentTask, desc } from 'astro:db';
 import {
   fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
@@ -23,6 +22,7 @@ function fmt(d: Date | number | null | undefined): string {
 
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email;
+  const { db, AgentMessage, AgentTask, desc } = await import('astro:db');
 
   let sessions: unknown[] = [];
   let gatewayError: string | null = null;

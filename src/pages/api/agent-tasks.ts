@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { db, AgentTask, desc, eq } from 'astro:db';
 import {
   fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
@@ -25,6 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
   try {
+    const { db, AgentTask } = await import('astro:db');
     const now = new Date();
     const [inserted] = await db
       .insert(AgentTask)
@@ -57,6 +57,7 @@ export const GET: APIRoute = async ({ locals }) => {
 
   let dbTasks: TaskRow[] = [];
   try {
+    const { db, AgentTask, desc } = await import('astro:db');
     const rows = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(50);
     dbTasks = rows.map((t) => ({
       id: t.id,
@@ -139,6 +140,7 @@ export const PUT: APIRoute = async ({ request }) => {
     );
   }
   try {
+    const { db, AgentTask, eq } = await import('astro:db');
     await db
       .update(AgentTask)
       .set({

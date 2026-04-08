@@ -18,6 +18,10 @@ function err(output: string) {
   return json({ ok: false, output, type: 'error' });
 }
 
+async function getDbModule() {
+  return await import('astro:db');
+}
+
 /**
  * POST { command: string, agentId: string }
  * Exécute une commande slash dans le REPL Forge.
@@ -128,6 +132,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (sub === 'list') {
       try {
+        const { db, AgentMemory, eq, desc } = await getDbModule();
         const memories = await db
           .select()
           .from(AgentMemory)
@@ -154,6 +159,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (!content)
         return err('Contenu requis — usage: /memory add <texte>');
       try {
+        const { db, AgentMemory } = await getDbModule();
         await db
           .insert(AgentMemory)
           .values({ agentId, content, createdAt: new Date() });
@@ -167,6 +173,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const numId = parseInt(parsed.args[1], 10);
       if (isNaN(numId)) return err('ID invalide');
       try {
+        const { db, AgentMemory, eq } = await getDbModule();
         await db.delete(AgentMemory).where(eq(AgentMemory.id, numId));
         return ok(`Mémoire #${numId} supprimée.`);
       } catch (e: any) {
@@ -176,6 +183,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (sub === 'clear') {
       try {
+        const { db, AgentMemory, eq } = await getDbModule();
         await db
           .delete(AgentMemory)
           .where(eq(AgentMemory.agentId, agentId));
@@ -196,6 +204,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (sub === 'list') {
       try {
+        const { db, AgentTask, desc } = await getDbModule();
         const tasks = await db
           .select()
           .from(AgentTask)
@@ -223,6 +232,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         );
       try {
         const now = new Date();
+        const { db, AgentTask } = await getDbModule();
         await db
           .insert(AgentTask)
           .values({ agentId: taskAgentId, task, status: 'pending', createdAt: now, updatedAt: now });

@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { db, AgentTask, desc } from 'astro:db';
 import {
   fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
@@ -21,6 +20,7 @@ export const GET: APIRoute = async ({ locals }) => {
   // Task stats from DB (group by agentId)
   let taskStats: Record<string, { total: number; completed: number; failed: number; running: number; pending: number }> = {};
   try {
+    const { db, AgentTask, desc } = await import('astro:db');
     const tasks = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(500);
     for (const t of tasks) {
       const id = t.agentId;
