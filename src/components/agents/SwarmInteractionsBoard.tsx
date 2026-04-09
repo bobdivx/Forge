@@ -13,9 +13,9 @@ const FILTERS: { id: 'all' | 'topology' | 'message' | 'task'; label: string }[] 
 ];
 
 function kindBadge(kind: Event['kind']) {
-  if (kind === 'topology') return 'bg-violet-500/15 text-violet-300 border-violet-500/30';
-  if (kind === 'message') return 'bg-sky-500/15 text-sky-300 border-sky-500/30';
-  return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
+  if (kind === 'topology') return 'bg-purple-50 text-purple-600';
+  if (kind === 'message') return 'bg-sky-50 text-sky-600';
+  return 'bg-yellow-50 text-yellow-600';
 }
 function kindLabel(kind: Event['kind']) {
   if (kind === 'topology') return 'Session';
@@ -38,7 +38,12 @@ export default function SwarmInteractionsBoard() {
       .then((r) => r.json())
       .then((d: Payload & { error?: string }) => {
         if (d.error) setError(String(d.error));
-        setData({ gatewayError: d.gatewayError ?? null, stats: d.stats ?? { totalSessions: 0, activeCount: 0, idleCount: 0, uniqueAgents: 0, edgeCount: 0, messageCount: 0, taskCount: 0 }, edges: Array.isArray(d.edges) ? d.edges : [], timeline: Array.isArray(d.timeline) ? d.timeline : [] });
+        setData({
+          gatewayError: d.gatewayError ?? null,
+          stats: d.stats ?? { totalSessions: 0, activeCount: 0, idleCount: 0, uniqueAgents: 0, edgeCount: 0, messageCount: 0, taskCount: 0 },
+          edges: Array.isArray(d.edges) ? d.edges : [],
+          timeline: Array.isArray(d.timeline) ? d.timeline : [],
+        });
       })
       .catch(() => setError('Chargement impossible'))
       .finally(() => setLoading(false));
@@ -50,77 +55,99 @@ export default function SwarmInteractionsBoard() {
     return data.timeline.filter((e) => e.kind === filter);
   }, [data, filter]);
 
-  if (loading) return <div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-10 text-center text-slate-500 animate-pulse">Chargement des interactions…</div>;
-  if (error && !data) return <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">{error}</div>;
+  if (loading) return (
+    <div class="bg-white rounded-[1.5rem] border border-gray-100 p-10 text-center text-gray-400 animate-pulse shadow-sm">
+      Chargement des interactions…
+    </div>
+  );
+  if (error && !data) return (
+    <div class="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-600">{error}</div>
+  );
 
   const s = data!.stats;
 
   return (
-    <div class="space-y-8">
+    <div class="space-y-6">
       {data!.gatewayError && (
-        <div class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <div class="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
           OpenClaw : {data!.gatewayError} — vérifiez le jeton et l'URL du gateway dans les paramètres.
         </div>
       )}
 
+      {/* Stats */}
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: 'Sessions', val: s.totalSessions, cls: 'text-white' },
-          { label: 'Actives', val: s.activeCount, cls: 'text-emerald-400' },
-          { label: 'Liens parent→sub', val: s.edgeCount, cls: 'text-violet-400' },
-          { label: 'Messages (DB)', val: s.messageCount, cls: 'text-sky-400' },
-          { label: 'Tâches (DB)', val: s.taskCount, cls: 'text-amber-400' },
-          { label: 'Agents (noms)', val: s.uniqueAgents, cls: 'text-white' },
-        ].map(({ label, val, cls }) => (
-          <div key={label} class="rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
-            <p class={`text-2xl font-bold mt-1 ${cls}`}>{val}</p>
+          { label: 'Sessions',      val: s.totalSessions, color: '#1F2937' },
+          { label: 'Actives',       val: s.activeCount,   color: '#3BAE61' },
+          { label: 'Liens',         val: s.edgeCount,     color: '#8B5CF6' },
+          { label: 'Messages (DB)', val: s.messageCount,  color: '#0EA5E9' },
+          { label: 'Tâches (DB)',   val: s.taskCount,     color: '#F59E0B' },
+          { label: 'Agents',        val: s.uniqueAgents,  color: '#1F2937' },
+        ].map(({ label, val, color }) => (
+          <div key={label} class="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-4">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
+            <p class="text-2xl font-bold mt-1" style={{ color }}>{val}</p>
           </div>
         ))}
       </div>
 
-      <section class="rounded-2xl border border-slate-800 bg-slate-900/80 overflow-hidden shadow-xl">
-        <div class="border-b border-slate-800 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Timeline */}
+      <section class="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm overflow-hidden">
+        <div class="border-b border-gray-100 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h3 class="text-lg font-bold text-white">Interactions entre agents</h3>
-            <p class="text-xs text-slate-500 mt-1 max-w-2xl">Fil unifié : sessions, messages <span class="font-mono text-slate-600">AgentMessage</span>, et tâches <span class="font-mono text-slate-600">AgentTask</span>.</p>
+            <h3 class="text-base font-bold text-gray-900">Interactions entre agents</h3>
+            <p class="text-xs text-gray-400 mt-0.5 max-w-2xl">
+              Fil unifié : sessions, messages <span class="font-mono text-gray-500">AgentMessage</span>, et tâches <span class="font-mono text-gray-500">AgentTask</span>.
+            </p>
           </div>
           <div class="flex flex-wrap gap-2">
             {FILTERS.map((f) => (
-              <button key={f.id} type="button" onClick={() => setFilter(f.id)} class={'btn btn-xs border ' + (filter === f.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:text-white')}>
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                class="text-xs px-3 py-1.5 rounded-full font-medium border transition-colors"
+                style={filter === f.id
+                  ? 'background:#175B37;color:white;border-color:#175B37'
+                  : 'background:white;color:#6B7280;border-color:#E5E7EB'}
+              >
                 {f.label}
               </button>
             ))}
           </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="table table-zebra w-full text-sm">
+          <table class="w-full text-sm">
             <thead>
-              <tr class="text-[10px] uppercase tracking-widest text-slate-500 border-b border-slate-800 bg-slate-950/80">
-                <th class="px-4 py-3 text-left">Type</th>
-                <th class="px-4 py-3 text-left">De</th>
-                <th class="px-4 py-3 text-left">Vers</th>
-                <th class="px-4 py-3 text-left">Résumé</th>
-                <th class="px-4 py-3 text-left whitespace-nowrap">Quand</th>
+              <tr class="border-b border-gray-100">
+                <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
+                <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">De</th>
+                <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Vers</th>
+                <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Résumé</th>
+                <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left whitespace-nowrap">Quand</th>
               </tr>
             </thead>
             <tbody>
               {filteredTimeline.length === 0 ? (
-                <tr><td colSpan={5} class="px-4 py-12 text-center text-slate-500 text-sm">Aucune entrée pour ce filtre.</td></tr>
+                <tr><td colSpan={5} class="px-5 py-10 text-center text-gray-400 text-sm italic">Aucune entrée pour ce filtre.</td></tr>
               ) : (
                 filteredTimeline.map((e) => (
-                  <tr key={e.id} class="border-slate-800/60 hover:bg-slate-800/20">
-                    <td class="px-4 py-3 align-top">
-                      <span class={'text-[10px] font-bold uppercase px-2 py-1 rounded border ' + kindBadge(e.kind)}>{kindLabel(e.kind)}</span>
+                  <tr key={e.id} class="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <td class="px-5 py-3 align-top">
+                      <span class={`text-[10px] font-bold uppercase px-2 py-1 rounded ${kindBadge(e.kind)}`}>{kindLabel(e.kind)}</span>
                     </td>
-                    <td class="px-4 py-3 align-top">
-                      {swarmHref(e.from) ? <a href={swarmHref(e.from)!} class="font-mono text-xs text-blue-400 hover:text-blue-300 break-all max-w-[10rem] inline-block">{e.fromLabel}</a> : <span class="font-mono text-xs text-slate-400">{e.fromLabel}</span>}
+                    <td class="px-5 py-3 align-top">
+                      {swarmHref(e.from)
+                        ? <a href={swarmHref(e.from)!} class="font-mono text-xs text-blue-500 hover:underline break-all max-w-[10rem] inline-block">{e.fromLabel}</a>
+                        : <span class="font-mono text-xs text-gray-400">{e.fromLabel}</span>}
                     </td>
-                    <td class="px-4 py-3 align-top">
-                      {e.to !== '—' && swarmHref(e.to) ? <a href={swarmHref(e.to)!} class="font-mono text-xs text-emerald-400/90 hover:text-emerald-300 break-all max-w-[10rem] inline-block">{e.toLabel}</a> : <span class="text-slate-600 text-xs">{e.to === '—' ? '—' : e.toLabel}</span>}
+                    <td class="px-5 py-3 align-top">
+                      {e.to !== '—' && swarmHref(e.to)
+                        ? <a href={swarmHref(e.to)!} class="font-mono text-xs hover:underline break-all max-w-[10rem] inline-block" style="color:#3BAE61">{e.toLabel}</a>
+                        : <span class="text-gray-400 text-xs">{e.to === '—' ? '—' : e.toLabel}</span>}
                     </td>
-                    <td class="px-4 py-3 align-top text-slate-300 text-xs leading-relaxed max-w-md">{e.summary}</td>
-                    <td class="px-4 py-3 align-top text-[10px] text-slate-500 font-mono whitespace-nowrap">{e.atLabel}</td>
+                    <td class="px-5 py-3 align-top text-gray-700 text-xs leading-relaxed max-w-md">{e.summary}</td>
+                    <td class="px-5 py-3 align-top text-[10px] text-gray-400 font-mono whitespace-nowrap">{e.atLabel}</td>
                   </tr>
                 ))
               )}
@@ -130,15 +157,15 @@ export default function SwarmInteractionsBoard() {
       </section>
 
       {data!.edges.length > 0 && (
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h4 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Arêtes (vue rapide)</h4>
+        <section class="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-6">
+          <h4 class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Arêtes (vue rapide)</h4>
           <ul class="flex flex-col gap-3">
             {data!.edges.map((e, i) => (
-              <li key={e.from + e.to + i} class="flex flex-wrap items-center gap-2 text-xs text-slate-300 font-mono">
-                <a href={swarmHref(e.from) || '#'} class="text-blue-400 hover:underline">{e.fromLabel}</a>
-                <span class="text-slate-600">→</span>
-                <a href={swarmHref(e.to) || '#'} class="text-emerald-400/90 hover:underline">{e.toLabel}</a>
-                <span class="text-slate-600 ml-auto text-[10px]">{e.atLabel}</span>
+              <li key={e.from + e.to + i} class="flex flex-wrap items-center gap-2 text-xs font-mono text-gray-600">
+                <a href={swarmHref(e.from) || '#'} class="text-blue-500 hover:underline">{e.fromLabel}</a>
+                <span class="text-gray-300">→</span>
+                <a href={swarmHref(e.to) || '#'} class="hover:underline" style="color:#3BAE61">{e.toLabel}</a>
+                <span class="text-gray-400 ml-auto text-[10px]">{e.atLabel}</span>
               </li>
             ))}
           </ul>

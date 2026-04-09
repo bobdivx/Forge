@@ -7,9 +7,17 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "postinstall": "node scripts/ensure-rollup-win32.cjs",
+    "fix:rollup": "node scripts/ensure-rollup-win32.cjs",
+    "reinstall": "node scripts/clean-install.mjs",
     "dev": "astro dev",
+    "install:unc": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prep-npm-unc.ps1",
+    "dev:unc": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prep-npm-unc.ps1 -RunDev",
     "build": "astro build",
     "preview": "astro preview"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "4.60.1"
   },
   "dependencies": {
     "@astrojs/db": "^0.20.1",

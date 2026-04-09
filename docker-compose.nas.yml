@@ -1,0 +1,26 @@
+services:
+  forge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: forge
+    restart: unless-stopped
+    ports:
+      - "${FORGE_PORT:-4330}:4321"
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 4321
+      NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4321/login >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    volumes:
+      - /media/Docker/AppData/forge/forge/.astro:/app/.astro
+      - /media/Docker/AppData/forge/forge/.data:/app/.data

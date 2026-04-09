@@ -42,6 +42,21 @@ curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
   }"
 ```
 
+### 2b. Demande de dépendance (`dependency_request`) — à traiter en autonomie
+Lorsqu’un agent (ex. `DEV_FRONTEND`) crée une `dependency_request`, tu **prends** la ligne (`dependency_status` → `in_progress`), tu installes le paquet dans le bon repo, puis tu **fermes** la demande :
+```bash
+curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"agentId\": \"DEV_BACKEND\",
+    \"type\": \"dependency_status\",
+    \"requestId\": 1,
+    \"status\": \"installed\",
+    \"content\": \"pnpm add preact-router ; build OK\"
+  }"
+```
+En cas de refus : `status`: `rejected` et raison dans `content`. Toujours prévenir le demandeur via `message`.
+
 ### 3. Tâche terminée
 ```bash
 curl -s -X POST http://127.0.0.1:4321/api/forge-hook \

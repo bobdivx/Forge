@@ -11,13 +11,15 @@ import { mapDbRequestToUi } from '../../../../lib/forge-request-mapper';
 
 async function findProjectRowForApp(folderKey: string) {
   const projects = await db.select().from(Project);
+  // Premier essai : par slug (synchrone)
   let row = projects.find((p) => repoSlugFromProject(p) === folderKey);
   if (row) return row;
-  row = projects.find((p) => {
-    const rpath = resolveProjectPathFromDbProject(p);
-    return rpath && path.basename(rpath) === folderKey;
-  });
-  return row ?? null;
+  // Deuxième essai : résolution async du path pour chaque projet
+  for (const p of projects) {
+    const rpath = await resolveProjectPathFromDbProject(p);
+    if (rpath && path.basename(rpath) === folderKey) return p;
+  }
+  return null;
 }
 
 export const GET: APIRoute = async ({ params }) => {
@@ -26,7 +28,7 @@ export const GET: APIRoute = async ({ params }) => {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
   const folderKey = String(app);
-  const projectPath = resolveProjectPathVariants(folderKey);
+  const projectPath = await resolveProjectPathVariants(folderKey);
   if (!projectPath) {
     return new Response(JSON.stringify({ error: 'Projet introuvable' }), { status: 404 });
   }
@@ -38,7 +40,7 @@ export const GET: APIRoute = async ({ params }) => {
         items: [],
         noProjectInDb: true,
         message:
-          'Ce dépôt n’est pas lié à un projet en base. Ajoutez-le depuis Applications pour enregistrer des demandes.',
+          "Ce dépôt n'est pas lié à un projet en base. Ajoutez-le depuis Applications pour enregistrer des demandes.",
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
@@ -65,7 +67,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
   const folderKey = String(app);
-  const projectPath = resolveProjectPathVariants(folderKey);
+  const projectPath = await resolveProjectPathVariants(folderKey);
   if (!projectPath) {
     return new Response(JSON.stringify({ error: 'Projet introuvable' }), { status: 404 });
   }
@@ -75,7 +77,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return new Response(
       JSON.stringify({
         error:
-          'Projet absent de la base : ajoutez ce dépôt depuis Applications avant d’enregistrer une demande.',
+          "Projet absent de la base : ajoutez ce dépôt depuis Applications avant d'enregistrer une demande.",
       }),
       { status: 409 },
     );

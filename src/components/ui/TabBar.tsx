@@ -9,16 +9,16 @@ type Props = {
 
 export default function TabBar({ tabs, active, onChange, className = '' }: Props) {
   return (
-    <div class={`flex flex-wrap gap-1 p-1 bg-slate-900 border border-slate-800 rounded-lg w-fit ${className}`}>
+    <div class={`flex flex-wrap gap-1 p-1 bg-gray-100 rounded-xl w-fit ${className}`}>
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onChange(tab.id)}
-          class={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+          class={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
             active === tab.id
-              ? 'bg-blue-600 text-white'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           {tab.label}

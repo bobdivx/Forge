@@ -12,11 +12,21 @@ type AgentTask = {
 
 function StatusBadge({ status }: { status: string }) {
   const s = (status || '').toLowerCase();
-  if (s === 'pending') return <span class="badge badge-warning badge-sm font-bold uppercase tracking-tighter py-2.5 px-3">En attente</span>;
-  if (s === 'running') return <span class="badge badge-info badge-sm font-bold uppercase tracking-tighter py-2.5 px-3 animate-pulse text-white">En cours</span>;
-  if (s === 'success' || s === 'completed') return <span class="badge badge-success badge-sm font-bold uppercase tracking-tighter py-2.5 px-3 text-white">Succès</span>;
-  if (s === 'error' || s === 'failed') return <span class="badge badge-error badge-sm font-bold uppercase tracking-tighter py-2.5 px-3 text-white">Erreur</span>;
-  return <span class="badge badge-ghost badge-sm font-bold uppercase tracking-tighter py-2.5 px-3 border border-slate-700">{status}</span>;
+  if (s === 'pending') return (
+    <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-yellow-50 text-yellow-600">En attente</span>
+  );
+  if (s === 'running') return (
+    <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-blue-50 text-blue-600 animate-pulse">En cours</span>
+  );
+  if (s === 'success' || s === 'completed') return (
+    <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-green-50 text-green-600">Succès</span>
+  );
+  if (s === 'error' || s === 'failed') return (
+    <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-red-50 text-red-500">Erreur</span>
+  );
+  return (
+    <span class="text-[10px] font-semibold uppercase px-2 py-1 rounded bg-gray-100 text-gray-500">{status}</span>
+  );
 }
 
 export default function AgentTaskTable() {
@@ -42,43 +52,61 @@ export default function AgentTaskTable() {
     return () => clearInterval(t);
   }, []);
 
-  if (loading && tasks.length === 0) return <div class="flex justify-center p-8"><span class="loading loading-spinner text-blue-500" /></div>;
-  if (error && tasks.length === 0) return <div class="p-6 text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl m-4 text-sm"><span class="font-bold">Information :</span> {error}.</div>;
-  if (tasks.length === 0) return <div class="p-8 text-center text-slate-500 italic">Aucune session gateway ni tâche persistée à afficher. Vérifiez le token OpenClaw dans les paramètres.</div>;
+  if (loading && tasks.length === 0) return (
+    <div class="flex justify-center p-8">
+      <div class="w-6 h-6 border-2 border-gray-200 border-t-[#175B37] rounded-full animate-spin" />
+    </div>
+  );
+  if (error && tasks.length === 0) return (
+    <div class="p-6 text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-xl m-4 text-sm">
+      <span class="font-bold">Information :</span> {error}.
+    </div>
+  );
+  if (tasks.length === 0) return (
+    <div class="p-8 text-center text-gray-400 italic text-sm">
+      Aucune session gateway ni tâche persistée. Vérifiez le token OpenClaw dans les paramètres.
+    </div>
+  );
 
   return (
-    <div class="overflow-x-auto p-4">
-      <table class="table table-zebra w-full text-slate-300">
-        <thead class="bg-slate-800/50 text-[11px] uppercase tracking-widest text-slate-500 border-b border-slate-800">
-          <tr>
-            <th class="px-6 py-4">ID</th>
-            <th class="px-6 py-4">Agent</th>
-            <th class="px-6 py-4">Tâche</th>
-            <th class="px-6 py-4 text-center">Statut</th>
-            <th class="px-6 py-4 text-right">Date</th>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-100">
+            <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">ID</th>
+            <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Agent</th>
+            <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Tâche</th>
+            <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-center">Statut</th>
+            <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-right">Date</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-800/30">
+        <tbody>
           {tasks.map((task) => (
-            <tr key={String(task.id)} class="hover:bg-slate-800/20 transition-all border-slate-800/30 group">
-              <td class="px-6 py-4">
-                <span class={`font-mono text-xs px-2 py-0.5 rounded border ${task.source === 'gateway' ? 'text-violet-300 bg-violet-500/10 border-violet-500/20' : 'text-blue-400 bg-blue-500/10 border-blue-500/10'}`}>
+            <tr key={String(task.id)} class="border-b border-gray-50 hover:bg-gray-50 transition-colors group">
+              <td class="px-5 py-3">
+                <span class={`font-mono text-[10px] px-2 py-1 rounded font-semibold ${
+                  task.source === 'gateway'
+                    ? 'bg-purple-50 text-purple-600'
+                    : 'bg-blue-50 text-blue-600'
+                }`}>
                   {task.source === 'gateway' ? 'GW' : `#${task.id}`}
                 </span>
               </td>
-              <td class="px-6 py-4">
+              <td class="px-5 py-3">
                 <div class="flex items-center gap-2">
-                  <div class="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-[10px] text-indigo-400 font-bold uppercase">
+                  <div class="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] text-indigo-600 font-bold uppercase">
                     {task.agentId?.charAt(0) || 'A'}
                   </div>
-                  <span class="text-slate-200 font-medium text-xs truncate max-w-[100px]">{task.agentId}</span>
+                  <span class="text-gray-700 font-medium text-xs truncate max-w-[100px]">{task.agentId}</span>
                 </div>
               </td>
-              <td class="px-6 py-4 text-sm text-slate-400 max-w-xs group-hover:max-w-none transition-all">
+              <td class="px-5 py-3 text-xs text-gray-600 max-w-xs">
                 <div class="truncate group-hover:whitespace-normal group-hover:break-words">{task.task}</div>
               </td>
-              <td class="px-6 py-4 text-center"><StatusBadge status={task.status} /></td>
-              <td class="px-6 py-4 text-right whitespace-nowrap text-[10px] text-slate-500 font-mono">
+              <td class="px-5 py-3 text-center">
+                <StatusBadge status={task.status} />
+              </td>
+              <td class="px-5 py-3 text-right whitespace-nowrap text-[10px] text-gray-400 font-mono">
                 {new Date(task.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
               </td>
             </tr>

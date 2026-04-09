@@ -10,6 +10,8 @@ export type ForgeConfig = {
   openclawToken: string;
   githubToken: string;
   vercelToken: string;
+  /** Secret HMAC du webhook GitHub (PR Jules) — même valeur que dans les réglages du dépôt GitHub. */
+  githubWebhookSecret: string;
   forgeReposRoot: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
@@ -20,6 +22,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   openclawToken: '',
   githubToken: '',
   vercelToken: '',
+  githubWebhookSecret: '',
   forgeReposRoot: '/media/Github',
   dockerYamlDir: '/DATA/AppData',
   dockerAppDataDir: '/DATA/AppData',

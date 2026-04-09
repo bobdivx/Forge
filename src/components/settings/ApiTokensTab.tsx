@@ -21,6 +21,9 @@ type Props = {
   message: string;
 };
 
+const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition';
+const monoInputCls = `${inputCls} font-mono`;
+
 export default function ApiTokensTab({
   settings,
   setSettings,
@@ -47,11 +50,15 @@ export default function ApiTokensTab({
   return (
     <div class="p-6 space-y-6">
       <div>
-        <p class="text-xs text-slate-400 mb-4">
-          GitHub et Vercel sont lus par les outils Forge. Les jetons personnalisés sont exposés aux{' '}
-          <strong class="text-slate-300">agents sur le réseau local</strong> via{' '}
-          <code class="text-slate-500">GET /api/agent-api-secrets</code> (réponse JSON :{' '}
-          <code class="text-slate-500">custom</code>, plus les jetons GitHub / Vercel / OpenClaw).
+        <p class="text-xs text-gray-500 mb-4">
+          Les champs GitHub et Vercel alimentent la réponse JSON{' '}
+          <code class="text-gray-500">githubToken</code> et{' '}
+          <code class="text-gray-500">vercelToken</code>. Chaque ligne des jetons personnalisés devient une entrée dans{' '}
+          <code class="text-gray-500">custom</code> (clé normalisée en MAJUSCULES, ex.{' '}
+          <code class="text-gray-500">ma_cle</code> → <code class="text-gray-500">MA_CLE</code>). Les agents sur le réseau
+          local récupèrent le tout via{' '}
+          <code class="text-gray-500">GET /api/agent-api-secrets</code> (y compris OpenClaw, voir la doc agents /
+          FORGE_API_CONTRACT).
         </p>
         <div class="space-y-4">
           <FormField label="GitHub (PAT)">
@@ -62,7 +69,7 @@ export default function ApiTokensTab({
               onInput={(e) =>
                 setSettings({ ...settings, githubToken: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={monoInputCls}
             />
           </FormField>
           <FormField label="Vercel Token">
@@ -73,33 +80,56 @@ export default function ApiTokensTab({
               onInput={(e) =>
                 setSettings({ ...settings, vercelToken: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={monoInputCls}
             />
+          </FormField>
+          <FormField label="Secret webhook GitHub (PR Jules)">
+            <input
+              type="password"
+              placeholder="identique au secret du webhook sur GitHub.com"
+              value={settings.githubWebhookSecret}
+              onInput={(e) =>
+                setSettings({
+                  ...settings,
+                  githubWebhookSecret: (e.target as HTMLInputElement).value,
+                })
+              }
+              class={monoInputCls}
+            />
+            <p class="text-[11px] text-gray-400 mt-1">
+              Vérification HMAC des POST vers{' '}
+              <code class="text-gray-500">/api/webhooks/github-jules</code>. Stocké en base (Config). En secours :{' '}
+              <code class="text-gray-500">GITHUB_WEBHOOK_SECRET</code>. Si tu enregistres un autre onglet (OpenClaw,
+              Infra) sans retaper ce champ, la valeur en base est conservée.
+            </p>
           </FormField>
         </div>
       </div>
 
-      <div class="border-t border-slate-800 pt-6">
+      <div class="border-t border-gray-200 pt-6">
         <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <h3 class="text-sm font-semibold text-white">Jetons personnalisés</h3>
-          <button type="button" class="btn btn-sm btn-outline border-slate-600 text-slate-300" onClick={addRow}>
+          <h3 class="text-sm font-semibold text-gray-900">Jetons personnalisés</h3>
+          <button
+            type="button"
+            class="border border-gray-300 text-gray-600 text-sm px-4 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
+            onClick={addRow}
+          >
             + Ajouter un jeton
           </button>
         </div>
-        <p class="text-[11px] text-slate-500 mb-4">
-          <strong class="text-slate-400">Clé</strong> : identifiant stable pour les scripts (ex.{' '}
-          <code class="text-slate-600">STRIPE_SECRET</code>), normalisé en MAJUSCULES.{' '}
-          <strong class="text-slate-400">Nom</strong> : libellé libre. Laisser le champ secret vide sur une ligne
-          existante pour ne pas le modifier.
+        <p class="text-[11px] text-gray-400 mb-4">
+          <strong class="text-gray-500">Clé</strong> : identifiant stable pour les scripts (ex.{' '}
+          <code class="text-gray-500">STRIPE_SECRET</code>), normalisé en MAJUSCULES.{' '}
+          <strong class="text-gray-500">Nom</strong> : libellé libre. Laisser le champ secret vide sur une ligne existante pour ne pas le modifier.
         </p>
         <div class="space-y-4">
           {customTokens.length === 0 && (
-            <p class="text-xs text-slate-600 italic">Aucun jeton personnalisé. Ajoutez-en pour les exposer aux agents.</p>
+            <p class="text-xs text-gray-400 italic">Aucun jeton personnalisé. Ajoutez-en pour les exposer aux agents.</p>
           )}
           {customTokens.map((row, index) => (
             <div
               key={row.id != null ? `id-${row.id}` : `new-${index}`}
-              class="rounded-lg border border-slate-800 bg-slate-950/50 p-4 space-y-3"
+              class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3"
             >
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <FormField label="Clé (ex. ANTHROPIC_API_KEY)">
@@ -108,7 +138,7 @@ export default function ApiTokensTab({
                     placeholder="MA_CLÉ_API"
                     value={row.key}
                     onInput={(e) => updateRow(index, { key: (e.target as HTMLInputElement).value })}
-                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
+                    class={monoInputCls}
                   />
                 </FormField>
                 <FormField label="Nom affiché (optionnel)">
@@ -117,29 +147,25 @@ export default function ApiTokensTab({
                     placeholder="Anthropic production"
                     value={row.label}
                     onInput={(e) => updateRow(index, { label: (e.target as HTMLInputElement).value })}
-                    class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none"
+                    class={inputCls}
                   />
                 </FormField>
               </div>
               <FormField
-                label={
-                  row.hasSecret
-                    ? 'Secret (laisser vide pour garder la valeur actuelle)'
-                    : 'Secret'
-                }
+                label={row.hasSecret ? 'Secret (laisser vide pour garder la valeur actuelle)' : 'Secret'}
               >
                 <input
                   type="password"
                   placeholder={row.hasSecret ? '•••••••• (inchangé si vide)' : 'coller le jeton'}
                   value={row.secret}
                   onInput={(e) => updateRow(index, { secret: (e.target as HTMLInputElement).value })}
-                  class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none font-mono"
+                  class={monoInputCls}
                 />
               </FormField>
               <div class="flex justify-end">
                 <button
                   type="button"
-                  class="btn btn-ghost btn-xs text-red-400 hover:bg-red-950/30"
+                  class="text-xs text-red-500 hover:text-red-600 hover:underline transition-colors"
                   onClick={() => removeRow(index)}
                 >
                   Retirer

@@ -1,0 +1,302 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import { loadAstroDb } from '../lib/load-astro-db';
+import WorkModals from '../components/work/WorkModals';
+
+let requests = [];
+let issues = [];
+let deps = [];
+let projects: Record<number, string> = {};
+let projectOptions: { id: number; name: string }[] = [];
+
+try {
+  const { db, Request, AgentAppIssue, AgentDependencyRequest, Project, desc } = await loadAstroDb();
+  const projectRows = await db.select().from(Project);
+  for (const p of projectRows) {
+    projects[p.id] = p.name;
+    projectOptions.push({ id: p.id, name: p.name });
+  }
+  requests = await db.select().from(Request).orderBy(desc(Request.createdAt));
+  issues   = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt));
+  deps     = await db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt));
+} catch { /* DB unavailable */ }
+
+const openIssues       = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
+const openDeps         = deps.filter(d => d.status === 'open' || d.status === 'in_progress');
+const pendingRequests  = requests.filter(r => r.status === 'pending' || r.status === 'in_progress');
+
+function statusBadge(status: string) {
+  const s = String(status ?? '').toLowerCase();
+  if (s === 'completed' || s === 'resolved' || s === 'installed') return 'bg-green-50 text-green-600';
+  if (s === 'in_progress') return 'bg-yellow-50 text-yellow-600';
+  if (s === 'rejected' || s === 'wont_fix') return 'bg-red-50 text-red-500';
+  return 'bg-orange-50 text-orange-600';
+}
+
+// Sérialise les données pour le registre global JS
+const requestsJson  = JSON.stringify(requests.map(r => ({ ...r, _type: 'request', createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null })));
+const issuesJson    = JSON.stringify(issues.map(i => ({ ...i, _type: 'issue', createdAt: i.createdAt ? new Date(i.createdAt).toISOString() : null })));
+const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null })));
+---
+
+<DashboardLayout title="Carnet de bord" currentPath="/work">
+
+  <!-- Registre global des données (pour les modals détail) -->
+  <script define:vars={{ requestsJson, issuesJson, depsJson }}>
+    window.__workData = {
+      requests: JSON.parse(requestsJson),
+      issues:   JSON.parse(issuesJson),
+      deps:     JSON.parse(depsJson),
+    };
+    window.__openWorkDetail = function(type, id) {
+      const item = window.__workData[type + 's']?.find(x => x.id === id)
+                ?? window.__workData[type]?.find(x => x.id === id);
+      if (item && window.__openWorkDetailModal) window.__openWorkDetailModal(item);
+    };
+  </script>
+
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- En-tête -->
+    <div>
+      <h1 class="text-4xl font-bold mb-2 text-gray-900">Carnet de bord</h1>
+      <p class="text-gray-500 text-sm">
+        Toutes les demandes, bugs, propositions et dépendances. Cliquez sur une ligne pour voir le détail.
+      </p>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Demandes</span>
+        <span class="text-5xl font-bold text-gray-900">{requests.length}</span>
+        <span class={`text-xs block mt-2 ${pendingRequests.length > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>
+          {pendingRequests.length} en attente
+        </span>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Bugs</span>
+        <span class="text-5xl font-bold" style={`color:${openIssues.length > 0 ? '#EF4444' : '#9CA3AF'}`}>{issues.length}</span>
+        <span class={`text-xs block mt-2 ${openIssues.length > 0 ? 'text-red-500' : 'text-gray-400'}`}>
+          {openIssues.length} ouverts
+        </span>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Propositions</span>
+        <span class="text-5xl font-bold" style="color:#8B5CF6">
+          {requests.filter(r => r.requestType === 'feature_proposal' || r.requestType === 'Fonctionnalite').length}
+        </span>
+        <span class="text-xs text-gray-400 block mt-2">fonctionnalités suggérées</span>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Dépendances</span>
+        <span class="text-5xl font-bold" style={`color:${openDeps.length > 0 ? '#3B82F6' : '#9CA3AF'}`}>{deps.length}</span>
+        <span class={`text-xs block mt-2 ${openDeps.length > 0 ? 'text-blue-500' : 'text-gray-400'}`}>
+          {openDeps.length} à installer
+        </span>
+      </div>
+    </div>
+
+    <!-- ── Demandes & Fonctionnalités ──────────────────────────────────── -->
+    <section>
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-1 h-6 rounded-full bg-yellow-400"></div>
+        <h3 class="text-base font-bold text-gray-900">Demandes & Fonctionnalités</h3>
+        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{requests.length}</span>
+        <div class="flex-1"></div>
+        <button
+          type="button"
+          onclick="window.__openWorkModal && window.__openWorkModal('request')"
+          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all hover:scale-110 shadow-sm"
+          style="background:#175B37"
+          title="Nouvelle demande"
+        >+</button>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
+        {requests.length === 0 ? (
+          <div class="py-12 text-center text-gray-400 text-sm">Aucune demande en base.</div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Statut</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Projet</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Titre</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Priorité</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Auteur</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map(r => (
+                  <tr
+                    class="border-b border-gray-50 hover:bg-amber-50/40 transition-colors cursor-pointer group"
+                    onclick={`window.__openWorkDetail && window.__openWorkDetail('request', ${r.id})`}
+                    title="Cliquer pour voir le détail"
+                  >
+                    <td class="px-5 py-3">
+                      <span class={`text-[10px] font-semibold px-2 py-1 rounded ${statusBadge(r.status)}`}>{r.status}</span>
+                    </td>
+                    <td class="px-5 py-3 text-xs text-gray-500">{projects[r.projectId] ?? '—'}</td>
+                    <td class="px-5 py-3 text-xs text-gray-800 max-w-xs">
+                      <div class="truncate max-w-[280px] group-hover:text-[#175B37] transition-colors" title={r.title}>{r.title}</div>
+                      {r.content && <div class="text-[10px] text-gray-400 truncate max-w-[280px]">{r.content.slice(0, 80)}</div>}
+                    </td>
+                    <td class="px-5 py-3">
+                      <span class="text-[10px] bg-purple-50 text-purple-600 font-medium px-2 py-0.5 rounded">{r.requestType || 'demande'}</span>
+                    </td>
+                    <td class="px-5 py-3">
+                      <span class={`text-[10px] font-medium px-2 py-0.5 rounded ${r.priority === 'high' ? 'bg-red-50 text-red-500' : r.priority === 'low' ? 'bg-gray-100 text-gray-500' : 'bg-orange-50 text-orange-500'}`}>{r.priority || 'medium'}</span>
+                    </td>
+                    <td class="px-5 py-3 text-[11px] text-gray-400 font-mono">{r.author || '—'}</td>
+                    <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
+                      {r.createdAt ? new Date(r.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- ── Bugs / Anomalies ────────────────────────────────────────────── -->
+    <section>
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-1 h-6 rounded-full bg-red-400"></div>
+        <h3 class="text-base font-bold text-gray-900">Bugs & Anomalies</h3>
+        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{issues.length}</span>
+        {openIssues.length > 0 && (
+          <span class="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">{openIssues.length} ouverts</span>
+        )}
+        <div class="flex-1"></div>
+        <button
+          type="button"
+          onclick="window.__openWorkModal && window.__openWorkModal('issue')"
+          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all hover:scale-110 shadow-sm"
+          style="background:#EF4444"
+          title="Signaler un bug"
+        >+</button>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
+        {issues.length === 0 ? (
+          <div class="py-12 text-center text-gray-400 text-sm">Aucun bug signalé.</div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Statut</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Projet</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Titre</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Rapporté par</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {issues.map(i => (
+                  <tr
+                    class="border-b border-gray-50 hover:bg-red-50/30 transition-colors cursor-pointer group"
+                    onclick={`window.__openWorkDetail && window.__openWorkDetail('issue', ${i.id})`}
+                    title="Cliquer pour voir le détail"
+                  >
+                    <td class="px-5 py-3">
+                      <span class={`text-[10px] font-semibold px-2 py-1 rounded ${statusBadge(i.status)}`}>{i.status}</span>
+                    </td>
+                    <td class="px-5 py-3 text-xs text-gray-500">{projects[i.projectId] ?? '—'}</td>
+                    <td class="px-5 py-3 text-xs text-gray-800 max-w-xs">
+                      <div class="truncate max-w-[260px] group-hover:text-red-500 transition-colors" title={i.title}>{i.title}</div>
+                      <div class="text-[10px] text-gray-400 font-mono truncate">{i.url}</div>
+                    </td>
+                    <td class="px-5 py-3 text-[11px] font-mono text-gray-500">{i.errorType}</td>
+                    <td class="px-5 py-3 text-[11px] font-mono" style="color:#175B37">{i.reportedByAgentId}</td>
+                    <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
+                      {i.createdAt ? new Date(i.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- ── Dépendances ─────────────────────────────────────────────────── -->
+    <section>
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-1 h-6 rounded-full bg-blue-400"></div>
+        <h3 class="text-base font-bold text-gray-900">Demandes de dépendances</h3>
+        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{deps.length}</span>
+        {openDeps.length > 0 && (
+          <span class="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">{openDeps.length} à traiter</span>
+        )}
+        <div class="flex-1"></div>
+        <button
+          type="button"
+          onclick="window.__openWorkModal && window.__openWorkModal('dep')"
+          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all hover:scale-110 shadow-sm"
+          style="background:#3B82F6"
+          title="Nouvelle dépendance"
+        >+</button>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
+        {deps.length === 0 ? (
+          <div class="py-12 text-center text-gray-400 text-sm">Aucune demande de dépendance.</div>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-100">
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Statut</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Projet</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Paquet</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Raison</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Demandé par</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deps.map(d => (
+                  <tr
+                    class="border-b border-gray-50 hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                    onclick={`window.__openWorkDetail && window.__openWorkDetail('dep', ${d.id})`}
+                    title="Cliquer pour voir le détail"
+                  >
+                    <td class="px-5 py-3">
+                      <span class={`text-[10px] font-semibold px-2 py-1 rounded ${statusBadge(d.status)}`}>{d.status}</span>
+                    </td>
+                    <td class="px-5 py-3 text-xs text-gray-500">{projects[d.projectId] ?? '—'}</td>
+                    <td class="px-5 py-3 font-mono text-xs text-blue-600 group-hover:text-blue-700 transition-colors">
+                      {d.packageName}{d.versionSpec ? `@${d.versionSpec}` : ''}
+                    </td>
+                    <td class="px-5 py-3">
+                      <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{d.isDev ? 'devDep' : 'dep'}</span>
+                    </td>
+                    <td class="px-5 py-3 text-[11px] text-gray-400 max-w-[200px] truncate">{d.reason || '—'}</td>
+                    <td class="px-5 py-3 text-[11px] font-mono" style="color:#175B37">{d.requestedByAgentId}</td>
+                    <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
+                      {d.createdAt ? new Date(d.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Modals Preact island -->
+  <WorkModals projects={projectOptions} client:load />
+
+</DashboardLayout>

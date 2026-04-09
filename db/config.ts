@@ -148,6 +148,46 @@ const CustomApiToken = defineTable({
   },
 });
 
+/**
+ * Anomalies pages / build / 404 remontées par les agents (ex. DEV_FRONTEND).
+ * Statuts : open | in_progress | resolved | wont_fix
+ */
+const AgentAppIssue = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    projectId: column.number({ optional: true, references: () => Project.columns.id }),
+    url: column.text(),
+    errorType: column.text(),
+    title: column.text(),
+    detail: column.text({ optional: true }),
+    status: column.text({ default: 'open' }),
+    reportedByAgentId: column.text(),
+    assigneeAgentId: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Demandes d’installation de dépendances (npm/pnpm) entre agents.
+ * Statuts : open | in_progress | installed | rejected
+ */
+const AgentDependencyRequest = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    projectId: column.number({ optional: true, references: () => Project.columns.id }),
+    packageName: column.text(),
+    versionSpec: column.text({ optional: true }),
+    isDev: column.number({ default: 0 }),
+    reason: column.text({ optional: true }),
+    status: column.text({ default: 'open' }),
+    requestedByAgentId: column.text(),
+    assigneeAgentId: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
   tables: {
     Project,
@@ -161,5 +201,7 @@ export default defineDb({
     AgentMemory,
     AgentInstruction,
     CustomApiToken,
+    AgentAppIssue,
+    AgentDependencyRequest,
   },
 });

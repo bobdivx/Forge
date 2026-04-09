@@ -4,9 +4,6 @@
 			"path": "."
 		},
 		{
-			"path": "../../Docker/AppData/openclaw"
-		},
-		{
 			"path": "../../Docker/AppData/ollama-nvidia"
 		},
 		{

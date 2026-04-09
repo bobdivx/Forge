@@ -10,6 +10,14 @@ export const GET: APIRoute = async () => {
   });
 };
 
+/** Ne pas écraser en base si le client envoie une chaîne vide (onglet Infra / OpenClaw envoie tout le state ; champs secrets souvent vides côté UI). */
+const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
+  'githubWebhookSecret',
+  'githubToken',
+  'vercelToken',
+  'openclawToken',
+];
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const data = await request.json();
@@ -17,11 +25,14 @@ export const POST: APIRoute = async ({ request }) => {
     const payload: Partial<ForgeConfig> = {};
     const allowed: (keyof ForgeConfig)[] = [
       'openclawGatewayUrl', 'openclawToken',
-      'githubToken', 'vercelToken',
+      'githubToken', 'vercelToken', 'githubWebhookSecret',
       'forgeReposRoot', 'dockerYamlDir', 'dockerAppDataDir',
     ];
     for (const key of allowed) {
-      if (key in data) payload[key] = String(data[key] ?? '').trim();
+      if (!(key in data)) continue;
+      const val = String(data[key] ?? '').trim();
+      if (SECRET_KEYS_NO_EMPTY_OVERWRITE.includes(key) && val === '') continue;
+      payload[key] = val;
     }
 
     await setConfig(payload);

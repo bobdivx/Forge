@@ -17,9 +17,9 @@ export default function SaveRow({
 }: Props) {
   const isError = message?.toLowerCase().includes('erreur');
   return (
-    <div class="pt-4 flex items-center justify-between gap-4 border-t border-slate-800 flex-wrap">
+    <div class="pt-4 flex items-center justify-between gap-4 border-t border-gray-200 flex-wrap">
       {message ? (
-        <span class={`text-sm ${isError ? 'text-red-400' : 'text-emerald-400'}`}>{message}</span>
+        <span class={`text-sm font-medium ${isError ? 'text-red-500' : 'text-green-600'}`}>{message}</span>
       ) : (
         <span />
       )}
@@ -29,9 +29,10 @@ export default function SaveRow({
           type="button"
           onClick={onSave}
           disabled={saving}
-          class={`btn btn-primary text-xs h-9 min-h-0 ${saving ? 'loading' : ''}`}
+          class="px-5 py-2 rounded-full text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          style="background:#175B37"
         >
-          {label}
+          {saving ? 'Sauvegarde…' : label}
         </button>
       </div>
     </div>

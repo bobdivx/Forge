@@ -11,14 +11,17 @@ type Props = {
   message: string;
 };
 
+const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition font-mono';
+
 export default function OpenClawTab({ settings, setSettings, onSave, saving, message }: Props) {
   return (
     <div class="p-6 space-y-6">
       <div>
-        <p class="text-xs text-slate-400 mb-6">
+        <p class="text-xs text-gray-500 mb-6">
           Configurez la liaison entre ce dashboard et votre instance OpenClaw. Les vérifications passent par le{' '}
-          <strong class="text-slate-300">serveur Forge</strong> (API <code class="text-slate-500">/api/openclaw-health</code>), pas par votre navigateur : utilisez une URL joignable depuis l’hôte qui exécute Astro (hostname LAN, tunnel, ou variable{' '}
-          <code class="text-slate-500">OPENCLAW_GATEWAY_URL</code> en production).           <code class="text-slate-500">localhost</code> ne fonctionne pas si Forge tourne sur Vercel ou un autre serveur distant.
+          <strong class="text-gray-700">serveur Forge</strong> (API <code class="text-gray-500">/api/openclaw-health</code>), pas par votre navigateur : utilisez une URL joignable depuis l'hôte qui exécute Astro (hostname LAN, tunnel, ou variable{' '}
+          <code class="text-gray-500">OPENCLAW_GATEWAY_URL</code> en production).{' '}
+          <code class="text-gray-500">localhost</code> ne fonctionne pas si Forge tourne sur Vercel ou un autre serveur distant.
         </p>
         <div class="space-y-4">
           <FormField
@@ -32,7 +35,7 @@ export default function OpenClawTab({ settings, setSettings, onSave, saving, mes
               onInput={(e) =>
                 setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={inputCls}
             />
           </FormField>
           <FormField label="Token d'accès (Gateway Token)">
@@ -43,7 +46,7 @@ export default function OpenClawTab({ settings, setSettings, onSave, saving, mes
               onInput={(e) =>
                 setSettings({ ...settings, openclawToken: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={inputCls}
             />
           </FormField>
         </div>

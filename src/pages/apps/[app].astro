@@ -5,6 +5,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import ProjectDemandesForm from '../../components/apps/ProjectDemandesForm';
 import AppProjectOps from '../../components/apps/AppProjectOps';
+import AuditLauncher from '../../components/apps/AuditLauncher';
 import path from 'path';
 import { db, Project, Request, eq, desc } from 'astro:db';
 import {
@@ -23,7 +24,7 @@ if (!isSafeRepoDirName(appName)) {
   return Astro.redirect('/apps');
 }
 
-let projectPath = resolveProjectPathVariants(appName);
+let projectPath = await resolveProjectPathVariants(appName);
 let displayName = appName;
 let projectRow = null;
 let requests = [];
@@ -43,7 +44,7 @@ try {
   if (!projectPath) {
     const row = rows.find(rowMatch);
     if (row) {
-      projectPath = resolveProjectPathFromDbProject(row);
+      projectPath = await resolveProjectPathFromDbProject(row);
       if (row.name) displayName = row.name;
       projectRow = row;
     }
@@ -68,7 +69,6 @@ if (!projectPath) {
   return Astro.redirect('/apps');
 }
 
-/** Nom du dossier sur disque (clé API / chemins) — peut différer du segment URL */
 const folderKey = path.basename(projectPath);
 if (!isSafeRepoDirName(folderKey)) {
   return Astro.redirect('/apps');
@@ -95,26 +95,30 @@ const app = {
 
 <DashboardLayout title={`Application: ${displayName}`} currentPath="/apps">
   <div class="max-w-7xl mx-auto space-y-6">
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+
+    <!-- Header projet -->
+    <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
       <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <a href="/apps" class="text-xs uppercase tracking-widest text-slate-400 hover:text-blue-400 transition">Retour aux applications</a>
-          <h2 class="mt-2 text-2xl font-bold text-white">{displayName}</h2>
+          <a href="/apps" class="text-xs uppercase tracking-widest text-gray-400 hover:text-[#175B37] transition-colors">
+            ← Retour aux projets
+          </a>
+          <h1 class="mt-2 text-2xl font-bold text-gray-900">{displayName}</h1>
           {displayName !== folderKey && (
-            <p class="mt-1 text-[10px] font-mono text-slate-600">Dépôt : {folderKey}</p>
+            <p class="mt-1 text-[10px] font-mono text-gray-400">Dépôt : {folderKey}</p>
           )}
-          <p class="mt-1 text-[11px] font-mono text-slate-500 break-all">{projectPath}</p>
+          <p class="mt-1 text-[11px] font-mono text-gray-400 break-all">{projectPath}</p>
         </div>
         <div class="flex flex-col items-end gap-2">
-          <span class="badge badge-success badge-outline py-3 px-3 text-xs uppercase">{app.status}</span>
+          <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-50 text-green-600">{app.status}</span>
           {gitSummary.isRepo && (
-            <div class="text-right text-[11px] text-slate-500 font-mono space-y-0.5">
+            <div class="text-right text-[11px] font-mono space-y-0.5 text-gray-400">
               <div>
-                branche <span class="text-blue-400">{gitSummary.branch || '—'}</span>
-                {gitSummary.dirty && <span class="text-amber-400 ml-2">● non commité</span>}
+                branche <span class="text-blue-500">{gitSummary.branch || '—'}</span>
+                {gitSummary.dirty && <span class="text-yellow-500 ml-2">● non commité</span>}
               </div>
-              {gitSummary.aheadBehind && <div class="text-slate-400">{gitSummary.aheadBehind} vs upstream</div>}
-              {gitSummary.error && <div class="text-amber-500">{gitSummary.error}</div>}
+              {gitSummary.aheadBehind && <div>{gitSummary.aheadBehind} vs upstream</div>}
+              {gitSummary.error && <div class="text-yellow-500">{gitSummary.error}</div>}
             </div>
           )}
         </div>
@@ -122,7 +126,7 @@ const app = {
     </div>
 
     {gitLogError && (
-      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-sm text-amber-200">
+      <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-sm text-yellow-700">
         Git : {gitLogError}
       </div>
     )}
@@ -130,83 +134,92 @@ const app = {
     <AppProjectOps client:load appName={folderKey} forgeVirtualHost={app.url} />
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      <section class="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-6">
+
+      <!-- Historique Git -->
+      <section class="xl:col-span-2 bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
         <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
-          <h3 class="text-lg font-semibold text-white">Historique Git</h3>
-          <a href={`http://${app.url}`} target="_blank" rel="noopener noreferrer" class="text-xs text-blue-400 hover:text-blue-300 transition font-mono">http://{app.url}</a>
+          <h3 class="text-base font-semibold text-gray-900">Historique Git</h3>
+          <a href={`http://${app.url}`} target="_blank" rel="noopener noreferrer"
+            class="text-xs text-blue-500 hover:underline font-mono">
+            http://{app.url}
+          </a>
         </div>
         {changes.length > 0 ? (
-          <div class="space-y-4">
+          <div class="space-y-3">
             {changes.map((change) => (
-              <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
+              <article class="border border-gray-100 rounded-xl p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
                 <div class="flex items-start justify-between gap-4">
-                  <h4 class="font-medium text-white break-words">{change.title}</h4>
-                  <span class="text-xs text-slate-500 shrink-0">{change.date}</span>
+                  <h4 class="font-medium text-gray-900 break-words text-sm">{change.title}</h4>
+                  <span class="text-xs text-gray-400 shrink-0">{change.date}</span>
                 </div>
-                <p class="text-sm text-slate-400 mt-2 font-mono text-[11px]">{change.detail}</p>
-                <p class="text-xs text-slate-500 mt-3">
-                  Auteur : <span class="text-blue-400 font-mono">{change.by}</span>
+                <p class="text-gray-500 mt-1.5 font-mono text-[11px]">{change.detail}</p>
+                <p class="text-xs text-gray-400 mt-2">
+                  Auteur : <span class="font-mono" style="color:#175B37">{change.by}</span>
                 </p>
               </article>
             ))}
           </div>
         ) : (
-          <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
+          <div class="border border-gray-100 rounded-xl p-4 bg-gray-50 text-sm text-gray-400">
             {gitSummary.isRepo
               ? 'Aucun commit lisible (dépôt vide ou erreur git log).'
-              : 'Initialisez un dépôt Git dans ce dossier pour afficher l’historique.'}
+              : "Initialisez un dépôt Git dans ce dossier pour afficher l'historique."}
           </div>
         )}
       </section>
 
-      <aside class="space-y-6">
+      <!-- Colonne latérale -->
+      <aside class="space-y-5">
+        <AuditLauncher client:load projectName={displayName} projectPath={projectPath} />
+
         <ProjectDemandesForm client:load appName={folderKey} />
 
-        <section class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h3 class="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4">File de demandes</h3>
+        <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-5">
+          <h3 class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">File de demandes</h3>
           {requests.length > 0 ? (
-            <div class="space-y-4">
+            <div class="space-y-3">
               {requests.map((request) => (
-                <article class="border border-slate-800 rounded-lg p-4 bg-slate-950/60">
+                <article class="border border-gray-100 rounded-xl p-4 bg-gray-50">
                   <div class="flex items-center justify-between gap-3">
-                    <p class="text-xs text-slate-500 font-mono">{request.id}</p>
+                    <p class="text-[10px] text-gray-400 font-mono">{request.id}</p>
                     <span
-                      class={`text-[10px] uppercase font-semibold px-2 py-1 rounded border ${
+                      class={`text-[10px] uppercase font-semibold px-2 py-1 rounded ${
                         request.status === 'Traite'
-                          ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10'
+                          ? 'bg-green-50 text-green-600'
                           : request.status === 'En cours'
-                            ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'
+                            ? 'bg-blue-50 text-blue-600'
                             : request.status === 'Rejetée'
-                              ? 'text-rose-400 border-rose-500/20 bg-rose-500/10'
-                              : 'text-amber-400 border-amber-500/20 bg-amber-500/10'
+                              ? 'bg-red-50 text-red-500'
+                              : 'bg-yellow-50 text-yellow-600'
                       }`}
                     >
                       {request.status}
                     </span>
                   </div>
-                  <p class="mt-2 text-sm text-white">{request.title}</p>
-                  {request.detail && <p class="mt-2 text-xs text-slate-500">{request.detail}</p>}
-                  <p class="mt-2 text-xs text-slate-400">
-                    Type : <span class="text-slate-300">{request.type}</span>
+                  <p class="mt-2 text-sm text-gray-800 font-medium">{request.title}</p>
+                  {request.detail && <p class="mt-1.5 text-xs text-gray-400">{request.detail}</p>}
+                  <p class="mt-2 text-xs text-gray-400">
+                    Type : <span class="text-gray-600">{request.type}</span>
                   </p>
-                  <p class="text-xs text-slate-400">
-                    Agent : <span class="text-blue-400 font-mono">{request.agent}</span>
+                  <p class="text-xs text-gray-400">
+                    Agent : <span class="font-mono" style="color:#175B37">{request.agent}</span>
                   </p>
-                  <p class="text-xs text-slate-500 mt-2">
+                  <p class="text-xs text-gray-400 mt-2">
                     {new Date(request.updatedAt).toLocaleString('fr-FR')}
                   </p>
                 </article>
               ))}
             </div>
           ) : (
-            <div class="border border-slate-800 rounded-lg p-4 bg-slate-950/60 text-sm text-slate-400">
+            <div class="border border-gray-100 rounded-xl p-4 bg-gray-50 text-sm text-gray-400">
               {projectRow
-                ? 'Aucune demande enregistrée pour ce projet. Utilisez le formulaire ci-dessus.'
-                : 'Ce dépôt n’est pas lié à un projet en base Astro. Ajoutez-le depuis Applications pour enregistrer des demandes.'}
+                ? 'Aucune demande enregistrée. Utilisez le formulaire ci-dessus.'
+                : "Ce dépôt n'est pas lié à un projet en base. Ajoutez-le depuis Applications."}
             </div>
           )}
         </section>
       </aside>
+
     </div>
   </div>
 </DashboardLayout>

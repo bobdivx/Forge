@@ -6,78 +6,121 @@ import AgentsGrid from '../components/agents/AgentsGrid';
 import SwarmInteractionsBoard from '../components/agents/SwarmInteractionsBoard';
 import AgentTaskTable from '../components/agents/AgentTaskTable';
 import AgentRepl from '../components/agents/AgentRepl';
+import { loadAstroDb } from '../lib/load-astro-db';
+
+let agentStats = { total: 0, withTasks: 0, totalTasks: 0, pendingIssues: 0 };
+try {
+  const { db, AgentTask, AgentInstruction, AgentAppIssue } = await loadAstroDb();
+  const instructions = await db.select().from(AgentInstruction);
+  const tasks = await db.select().from(AgentTask);
+  const issues = await db.select().from(AgentAppIssue);
+  agentStats.total = instructions.filter(i => i.enabled).length;
+  agentStats.totalTasks = tasks.length;
+  agentStats.pendingIssues = issues.filter(i => i.status === 'open' || i.status === 'pending').length;
+  const agentsWithTasks = new Set(tasks.map(t => t.agentId));
+  agentStats.withTasks = agentsWithTasks.size;
+} catch { /* DB unavailable */ }
 ---
 
-<DashboardLayout title="Agents" currentPath="/agents">
-  <div class="max-w-7xl mx-auto space-y-12">
+<DashboardLayout title="L'Équipe" currentPath="/agents">
+  <div class="max-w-7xl mx-auto space-y-6">
 
     <!-- En-tête -->
     <div class="flex items-end justify-between flex-wrap gap-4">
       <div>
-        <h2 class="text-3xl font-bold text-white tracking-tight">Agents</h2>
-        <p class="mt-2 text-slate-400 max-w-2xl text-sm">
-          Sessions actives sur le gateway OpenClaw, statistiques de tâches et interactions inter-agents.
-          Rafraîchissement automatique toutes les 15 secondes.
+        <h1 class="text-4xl font-bold mb-2 text-gray-900">L'Équipe</h1>
+        <p class="text-gray-500 text-sm max-w-2xl">
+          Les agents OpenClaw sont les membres de l'équipe de développement. Chacun a un rôle précis et communique exclusivement via la base de données Forge.
         </p>
       </div>
       <div class="flex gap-3">
         <a
           href="/agents/instructions"
-          class="btn btn-sm btn-outline border-orange-800 text-orange-300 hover:bg-orange-900/30 hover:border-orange-600"
+          class="flex items-center gap-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
         >
-          ⚙ Instructions agents
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+          </svg>
+          Instructions
         </a>
         <a
-          href="/orchestration"
-          class="btn btn-sm btn-outline border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-600"
+          href="/work"
+          class="flex items-center gap-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
         >
-          Journal d'orchestration
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          Carnet de bord
         </a>
       </div>
     </div>
 
-    <!-- Cartes agents + charts -->
-    <AgentsGrid client:load />
-
-    <!-- Suivi des tâches -->
-    <section>
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-1 h-6 bg-violet-500 rounded-full"></div>
-        <h3 class="text-lg font-bold text-white">Suivi des Tâches</h3>
-        <span class="text-[10px] uppercase tracking-widest text-slate-500">
-          Historique persistant (Astro DB) · Auto-refresh 10s
-        </span>
+    <!-- KPIs équipe -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Agents actifs</span>
+        <span class="text-5xl font-bold text-gray-900">{agentStats.total}</span>
+        <span class="text-xs text-gray-400 block mt-2">membres de l'équipe</span>
       </div>
-      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">En mission</span>
+        <span class="text-5xl font-bold" style="color:#3BAE61">{agentStats.withTasks}</span>
+        <span class="text-xs text-gray-400 block mt-2">agents avec tâches</span>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Total tâches</span>
+        <span class="text-5xl font-bold text-gray-900">{agentStats.totalTasks}</span>
+        <span class="text-xs text-gray-400 block mt-2">en base Forge</span>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Bugs ouverts</span>
+        <span class="text-5xl font-bold" style={`color:${agentStats.pendingIssues > 0 ? '#EAB308' : '#9CA3AF'}`}>{agentStats.pendingIssues}</span>
+        <span class="text-xs text-gray-400 block mt-2">anomalies non résolues</span>
+      </div>
+    </div>
+
+    <!-- Grille des membres -->
+    <section>
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-6 rounded-full" style="background:#175B37"></div>
+        <h3 class="text-base font-bold text-gray-900">Membres de l'équipe</h3>
+        <span class="text-[10px] uppercase tracking-widest text-gray-400">Sessions OpenClaw · Auto-refresh 15s</span>
+      </div>
+      <AgentsGrid client:load />
+    </section>
+
+    <!-- Journal des tâches -->
+    <section>
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-6 rounded-full" style="background:#3BAE61"></div>
+        <h3 class="text-base font-bold text-gray-900">Journal des missions</h3>
+        <span class="text-[10px] uppercase tracking-widest text-gray-400">Historique · Astro DB · Auto-refresh 10s</span>
+        <a href="/work?tab=tasks" class="ml-auto text-xs hover:underline transition" style="color:#175B37">Voir tout →</a>
+      </div>
+      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
         <AgentTaskTable client:load />
       </div>
     </section>
 
-    <!-- Forge REPL -->
+    <!-- Communications inter-agents -->
     <section>
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-1 h-6 bg-emerald-500 rounded-full"></div>
-        <h3 class="text-lg font-bold text-white">Forge REPL</h3>
-        <span class="text-[10px] uppercase tracking-widest text-slate-500">
-          Commandes slash · Outils git/docker/file · Mémoire persistante
-        </span>
-        <span class="ml-auto text-[10px] font-mono text-slate-600">
-          /help · /tools · /memory · /task
-        </span>
-      </div>
-      <AgentRepl client:load />
-    </section>
-
-    <!-- Interactions inter-agents -->
-    <section>
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-1 h-6 bg-blue-500 rounded-full"></div>
-        <h3 class="text-lg font-bold text-white">Interactions inter-agents</h3>
-        <span class="text-[10px] uppercase tracking-widest text-slate-500">
-          Messages AgentMessage en base Forge
-        </span>
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-6 rounded-full bg-blue-400"></div>
+        <h3 class="text-base font-bold text-gray-900">Communications inter-agents</h3>
+        <span class="text-[10px] uppercase tracking-widest text-gray-400">Messages AgentMessage · Astro DB</span>
       </div>
       <SwarmInteractionsBoard client:load />
+    </section>
+
+    <!-- Console REPL -->
+    <section>
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-6 rounded-full" style="background:#3BAE61"></div>
+        <h3 class="text-base font-bold text-gray-900">Console Forge</h3>
+        <span class="text-[10px] uppercase tracking-widest text-gray-400">Commandes slash · Git · Docker · Mémoire</span>
+        <span class="ml-auto text-[10px] font-mono text-gray-400">/help · /tools · /memory · /task</span>
+      </div>
+      <AgentRepl client:load />
     </section>
 
   </div>

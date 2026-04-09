@@ -141,6 +141,55 @@ curl -X POST http://127.0.0.1:4321/api/agent-repl \
   -d '{"command": "/tools run git_status project=Forge", "agentId": "DEV_BACKEND"}'
 ```
 
+### Récupérer les jetons API (GitHub, Vercel, OpenClaw, jetons personnalisés)
+
+Même règle réseau : **requête depuis une IP locale** (127.0.0.1, LAN, Docker bridge 172.x typique) — pas de cookie de session.
+
+```bash
+curl -s http://127.0.0.1:4321/api/agent-api-secrets
+```
+
+#### Deux sources dans le dashboard (Paramètres → Jetons API)
+
+1. **Champs dédiés** GitHub / Vercel → champs JSON **racine** ci-dessous.  
+2. **Jetons personnalisés** (« + Ajouter un jeton ») → objet **`custom`**. La **clé** saisie par l’utilisateur est **normalisée** en `MAJUSCULES` et caractères `[A-Z0-9_]` (ex. `stripe-secret` → `STRIPE_SECRET`). Chaque entrée devient `.custom.NOM_DE_LA_CLÉ` = secret.
+
+Tu dois **toujours** considérer `custom` : l’utilisateur peut n’y mettre que des secrets (ex. `GITHUB_TOKEN`, `VERCEL_TOKEN`, `CLOUDFLARE_API_TOKEN`, clés LLM, registry Docker, etc.) même si les champs dédiés existent.
+
+Réponse JSON :
+
+| Champ | Source Forge | Usage typique |
+|-------|----------------|---------------|
+| `githubToken` | Champ GitHub | `GH_TOKEN` / `GITHUB_TOKEN` pour **GitHub CLI** |
+| `vercelToken` | Champ Vercel | `VERCEL_TOKEN` pour la **CLI Vercel** |
+| `openclawToken` | Connexion OpenClaw | Intégrations gateway OpenClaw |
+| `custom` | Lignes « jetons personnalisés » | Toute variable d’environnement métier (clé = nom normalisé) |
+
+**Résolution de secours** : si un outil attend `GITHUB_TOKEN` mais que seul le champ GitHub est rempli, utilise `.githubToken`. Si l’utilisateur a défini **aussi** `GITHUB_TOKEN` dans `custom`, les deux peuvent coexister : pour `gh`, privilégie `.githubToken` puis, si vide, `.custom.GITHUB_TOKEN`. Même logique pour Vercel : `.vercelToken` puis `.custom.VERCEL_TOKEN`.
+
+#### Exporter les champs dédiés (sans afficher les secrets)
+
+```bash
+eval "$(curl -sf http://127.0.0.1:4321/api/agent-api-secrets | jq -r '
+  "export GH_TOKEN=" + ((.githubToken // "") | @sh),
+  "export GITHUB_TOKEN=" + ((.githubToken // "") | @sh),
+  "export VERCEL_TOKEN=" + ((.vercelToken // "") | @sh)
+')"
+```
+
+#### Exporter **tous** les jetons personnalisés comme variables d’environnement
+
+Les clés de `custom` sont déjà des identifiants shell valides (après normalisation Forge).
+
+```bash
+SECRETS_JSON="$(curl -sf http://127.0.0.1:4321/api/agent-api-secrets)"
+eval "$(printf '%s' "$SECRETS_JSON" | jq -r '(.custom // {}) | to_entries[] | "export \(.key)=" + (.value | @sh)')"
+```
+
+Tu peux enchaîner : d’abord les exports dédiés (`GH_TOKEN`, `VERCEL_TOKEN`), **puis** le bloc `custom` — ainsi un jeton perso peut compléger ou fournir des clés absentes des champs dédiés.
+
+**Interdit** : copier cette sortie dans un rapport, une issue ou un hook — données sensibles.
+
 ---
 
 ## Règles d'autonomie obligatoires

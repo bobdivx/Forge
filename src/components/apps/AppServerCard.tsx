@@ -8,6 +8,7 @@ type DashboardServerDef = {
 type ServerStatus = {
   running: boolean;
   pid: number | null;
+  externalProcess?: boolean;
   port: number;
   npmScript: string;
 };
@@ -29,6 +30,8 @@ function localDevUrl(base: string | undefined, port: number): string {
   return b ? `${b}:${port}` : `http://localhost:${port}`;
 }
 
+const inputCls = 'mt-1 w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition';
+
 export default function AppServerCard({
   server,
   status,
@@ -44,36 +47,36 @@ export default function AppServerCard({
   const url = localDevUrl(devLocalBaseUrl, server.port);
 
   return (
-    <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 space-y-3">
+    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
       <div class="flex flex-col lg:flex-row lg:items-end gap-3">
         <div class="flex-1 grid sm:grid-cols-2 gap-3">
           <div>
-            <label class="text-[10px] uppercase text-slate-500 font-bold">Libellé</label>
+            <label class="text-[10px] uppercase text-gray-400 font-bold">Libellé</label>
             <input
               type="text"
               value={server.label}
               onInput={(e) => onUpdate({ label: (e.target as HTMLInputElement).value })}
-              class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+              class={inputCls}
             />
           </div>
           <div>
-            <label class="text-[10px] uppercase text-slate-500 font-bold">Port affiché / accès</label>
+            <label class="text-[10px] uppercase text-gray-400 font-bold">Port affiché / accès</label>
             <input
               type="number"
               min={1}
               max={65535}
               value={server.port}
               onInput={(e) => onUpdate({ port: parseInt((e.target as HTMLInputElement).value, 10) || 0 })}
-              class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono"
+              class={`${inputCls} font-mono`}
             />
           </div>
           <div class="sm:col-span-2">
-            <label class="text-[10px] uppercase text-slate-500 font-bold">Script npm</label>
+            <label class="text-[10px] uppercase text-gray-400 font-bold">Script npm</label>
             {npmScripts.length > 0 ? (
               <select
                 value={server.npmScript}
                 onChange={(e) => onUpdate({ npmScript: (e.target as HTMLSelectElement).value })}
-                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono"
+                class={`${inputCls} font-mono`}
               >
                 {!npmScripts.includes(server.npmScript) && (
                   <option value={server.npmScript}>{server.npmScript} (hors package.json)</option>
@@ -87,7 +90,7 @@ export default function AppServerCard({
                 type="text"
                 value={server.npmScript}
                 onInput={(e) => onUpdate({ npmScript: (e.target as HTMLInputElement).value })}
-                class="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono"
+                class={`${inputCls} font-mono`}
               />
             )}
           </div>
@@ -97,7 +100,8 @@ export default function AppServerCard({
             type="button"
             disabled={busy || running}
             onClick={() => onAction('start')}
-            class="btn btn-sm bg-emerald-600/90 hover:bg-emerald-600 text-white border-0 disabled:opacity-40"
+            class="px-4 py-2 rounded-full text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            style="background:#3BAE61"
           >
             Démarrer
           </button>
@@ -105,22 +109,36 @@ export default function AppServerCard({
             type="button"
             disabled={busy || !running}
             onClick={() => onAction('stop')}
-            class="btn btn-sm bg-slate-700 hover:bg-slate-600 text-white border-0 disabled:opacity-40"
+            class="px-4 py-2 rounded-full text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-40"
           >
             Arrêter
           </button>
           {canRemove && (
-            <button type="button" onClick={onRemove} class="btn btn-sm btn-ghost text-red-400">
+            <button
+              type="button"
+              onClick={onRemove}
+              class="px-4 py-2 rounded-full text-sm font-medium text-red-500 hover:text-red-600 hover:underline transition-colors"
+            >
               Retirer
             </button>
           )}
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-        <span class={running ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
-          {running ? `● En cours (PID ${status?.pid})` : '○ Arrêté'}
-        </span>
-        <a href={url} target="_blank" rel="noopener noreferrer" class="font-mono text-blue-400 hover:text-blue-300">
+        {running ? (
+          <span class="font-semibold flex items-center gap-1.5" style="color:#3BAE61">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            {status?.externalProcess
+              ? `En cours · port ${server.port} (processus externe)`
+              : `En cours · PID ${status?.pid}`}
+          </span>
+        ) : (
+          <span class="text-gray-400 flex items-center gap-1.5">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-gray-300" />
+            Arrêté
+          </span>
+        )}
+        <a href={url} target="_blank" rel="noopener noreferrer" class="font-mono text-blue-500 hover:underline">
           {url}
         </a>
       </div>

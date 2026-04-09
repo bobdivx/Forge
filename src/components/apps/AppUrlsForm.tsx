@@ -15,46 +15,51 @@ type Props = {
   message: { type: 'ok' | 'err'; text: string } | null;
 };
 
+const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition font-mono';
+
 export default function AppUrlsForm({ config, forgeVirtualHost, onChange, saving, onSave, message }: Props) {
   const forgeUrl = `http://${forgeVirtualHost}`;
 
   return (
     <div class="space-y-4">
       <div class="grid gap-4 md:grid-cols-2">
-        <div class="rounded-lg border border-slate-800 bg-slate-950/50 p-4 space-y-2">
-          <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Hôte Forge (local)</h4>
+        {/* Hôte Forge */}
+        <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-1.5">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-gray-400">Hôte Forge (local)</p>
           <a
             href={forgeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            class="text-sm text-blue-400 hover:text-blue-300 font-mono break-all"
+            class="text-sm text-blue-500 hover:text-blue-600 hover:underline font-mono break-all block"
           >
             {forgeUrl}
           </a>
-          <p class="text-[11px] text-slate-500">Nom DNS interne ZimaOS / reverse proxy.</p>
+          <p class="text-[11px] text-gray-400">Nom DNS interne ZimaOS / reverse proxy.</p>
         </div>
+
+        {/* Base URL dev */}
         <FormField
           label="Base URL dev (optionnel)"
-          hint="Les URL dev par serveur seront base:port (ex. http://127.0.0.1:4321 si vide)."
+          hint="Préfixe utilisé pour construire les URLs serveurs (ex. http://127.0.0.1)."
         >
           <input
             type="text"
             value={config.devLocalBaseUrl || ''}
             onInput={(e) => onChange({ devLocalBaseUrl: (e.target as HTMLInputElement).value })}
             placeholder="http://localhost"
-            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-blue-500 outline-none font-mono"
+            class={inputCls}
           />
         </FormField>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
-        <FormField label="URL site de test (staging / preview)">
+        <FormField label="URL de test / staging">
           <input
             type="url"
             value={config.testUrl || ''}
             onInput={(e) => onChange({ testUrl: (e.target as HTMLInputElement).value })}
             placeholder="https://preview.vercel.app"
-            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+            class={inputCls}
           />
         </FormField>
         <FormField label="URL production">
@@ -63,29 +68,50 @@ export default function AppUrlsForm({ config, forgeVirtualHost, onChange, saving
             value={config.prodUrl || ''}
             onInput={(e) => onChange({ prodUrl: (e.target as HTMLInputElement).value })}
             placeholder="https://www.example.com"
-            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-blue-500 outline-none"
+            class={inputCls}
           />
         </FormField>
       </div>
 
-      <div class="flex flex-wrap gap-3 items-center">
+      {/* Actions */}
+      <div class="flex flex-wrap gap-2 items-center pt-1">
         {(config.testUrl || '').trim() && (
-          <a href={(config.testUrl || '').trim()} target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline border-slate-600 text-slate-200">
-            Ouvrir test
+          <a
+            href={(config.testUrl || '').trim()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-xs px-4 py-2 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            ↗ Ouvrir test
           </a>
         )}
         {(config.prodUrl || '').trim() && (
-          <a href={(config.prodUrl || '').trim()} target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline border-emerald-500/30 text-emerald-300">
-            Ouvrir prod
+          <a
+            href={(config.prodUrl || '').trim()}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-xs px-4 py-2 rounded-full border border-green-200 text-green-700 hover:bg-green-50 transition-colors"
+          >
+            ↗ Ouvrir prod
           </a>
         )}
-        <button type="button" onClick={onSave} disabled={saving} class="btn btn-sm bg-blue-600 hover:bg-blue-500 text-white border-0">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          class="text-xs px-4 py-2 rounded-full text-white font-medium transition-opacity hover:opacity-90 disabled:opacity-50 ml-auto"
+          style="background:#175B37"
+        >
           {saving ? 'Enregistrement…' : 'Enregistrer URLs & serveurs'}
         </button>
       </div>
 
       {message && (
-        <div class={`text-xs p-3 rounded-lg border ${message.type === 'ok' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200' : 'bg-red-500/10 border-red-500/30 text-red-200'}`}>
+        <div class={`text-xs px-4 py-2.5 rounded-xl border ${
+          message.type === 'ok'
+            ? 'bg-green-50 border-green-200 text-green-700'
+            : 'bg-red-50 border-red-200 text-red-600'
+        }`}>
           {message.text}
         </div>
       )}

@@ -11,11 +11,13 @@ type Props = {
   message: string;
 };
 
+const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition font-mono';
+
 export default function InfraTab({ settings, setSettings, onSave, saving, message }: Props) {
   return (
     <div class="p-6 space-y-6">
       <div>
-        <p class="text-xs text-slate-400 mb-6">
+        <p class="text-xs text-gray-500 mb-6">
           Définissez les dossiers racines pour les dépôts et les données Docker (recommandé : /mnt/).
         </p>
         <div class="space-y-4">
@@ -26,7 +28,7 @@ export default function InfraTab({ settings, setSettings, onSave, saving, messag
               onInput={(e) =>
                 setSettings({ ...settings, forgeReposRoot: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={inputCls}
             />
           </FormField>
           <FormField label="Dossier Docker YAML">
@@ -36,7 +38,7 @@ export default function InfraTab({ settings, setSettings, onSave, saving, messag
               onInput={(e) =>
                 setSettings({ ...settings, dockerYamlDir: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={inputCls}
             />
           </FormField>
           <FormField label="Dossier AppData Docker">
@@ -46,7 +48,7 @@ export default function InfraTab({ settings, setSettings, onSave, saving, messag
               onInput={(e) =>
                 setSettings({ ...settings, dockerAppDataDir: (e.target as HTMLInputElement).value })
               }
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition font-mono"
+              class={inputCls}
             />
           </FormField>
         </div>

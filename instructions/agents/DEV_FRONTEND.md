@@ -42,6 +42,39 @@ curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
   }"
 ```
 
+### 2b. Anomalie page / Astro / 404 (table **AgentAppIssue**, visible sur le dashboard Forge)
+Utiliser `app_issue` pour chaque URL défaillante (une ligne = une page à corriger). `errorType` : `astro_error` | `http_404` | `build` | `runtime` | `visual` | `other`.
+```bash
+curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"agentId\": \"DEV_FRONTEND\",
+    \"type\": \"app_issue\",
+    \"title\": \"Page /pricing rend une erreur Astro\",
+    \"content\": \"Stack / message build ou capture console.\",
+    \"url\": \"https://app.example/pricing\",
+    \"errorType\": \"astro_error\",
+    \"assigneeAgentId\": \"DEV_FRONTEND\"
+  }"
+```
+Quand c’est corrigé : `app_issue_status` avec `issueId` (numéro retourné) et `status`: `resolved`.
+
+### 2c. Besoin d’un paquet npm (file **AgentDependencyRequest**)
+```bash
+curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"agentId\": \"DEV_FRONTEND\",
+    \"type\": \"dependency_request\",
+    \"title\": \"preact-router\",
+    \"content\": \"Nécessaire pour la navigation SPA sur le module X.\",
+    \"packageName\": \"preact-router\",
+    \"versionSpec\": \"^4.1.0\",
+    \"isDev\": 0,
+    \"assigneeAgentId\": \"DEV_BACKEND\"
+  }"
+```
+
 ### 3. Tâche terminée
 ```bash
 curl -s -X POST http://127.0.0.1:4321/api/forge-hook \

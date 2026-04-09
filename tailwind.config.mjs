@@ -23,6 +23,28 @@ export default {
   },
   plugins: [daisyui],
   daisyui: {
-    themes: ['dark'],
+    themes: [
+      {
+        forge: {
+          primary: '#175B37',
+          'primary-content': '#ffffff',
+          secondary: '#3BAE61',
+          accent: '#0B2717',
+          neutral: '#374151',
+          'base-100': '#F4F7F5',
+          'base-200': '#ffffff',
+          'base-300': '#E5E7EB',
+          'base-content': '#1F2937',
+          info: '#0EA5E9',
+          success: '#3BAE61',
+          warning: '#F59E0B',
+          error: '#EF4444',
+          'info-content': '#ffffff',
+          'success-content': '#ffffff',
+          'warning-content': '#ffffff',
+          'error-content': '#ffffff',
+        },
+      },
+    ],
   },
 };

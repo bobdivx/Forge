@@ -17,20 +17,22 @@ type Props = {
   message: string;
 };
 
+const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition';
+
 export default function AccountTab({ auth, setAuth, onUpdate, onLogout, saving, message }: Props) {
   const canSubmit = !saving && !!auth.currentPassword && !!auth.newPassword && !!auth.newEmail;
 
   return (
     <div class="p-6 space-y-6">
       <div>
-        <p class="text-xs text-slate-400 mb-6">Gérez vos identifiants d'accès au dashboard Forge.</p>
+        <p class="text-xs text-gray-500 mb-6">Gérez vos identifiants d'accès au dashboard Forge.</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField label="Email actuel">
             <input
               type="email"
               value={auth.currentEmail}
               disabled
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-400 cursor-not-allowed opacity-60"
+              class={`${inputCls} opacity-60 cursor-not-allowed`}
             />
           </FormField>
           <FormField label="Nouvel email">
@@ -38,7 +40,7 @@ export default function AccountTab({ auth, setAuth, onUpdate, onLogout, saving, 
               type="email"
               value={auth.newEmail}
               onInput={(e) => setAuth({ ...auth, newEmail: (e.target as HTMLInputElement).value })}
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition"
+              class={inputCls}
             />
           </FormField>
           <FormField label="Mot de passe actuel">
@@ -46,7 +48,7 @@ export default function AccountTab({ auth, setAuth, onUpdate, onLogout, saving, 
               type="password"
               value={auth.currentPassword}
               onInput={(e) => setAuth({ ...auth, currentPassword: (e.target as HTMLInputElement).value })}
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition"
+              class={inputCls}
             />
           </FormField>
           <FormField label="Nouveau mot de passe">
@@ -54,7 +56,7 @@ export default function AccountTab({ auth, setAuth, onUpdate, onLogout, saving, 
               type="password"
               value={auth.newPassword}
               onInput={(e) => setAuth({ ...auth, newPassword: (e.target as HTMLInputElement).value })}
-              class="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:border-blue-500 outline-none transition"
+              class={inputCls}
             />
           </FormField>
         </div>
@@ -65,7 +67,11 @@ export default function AccountTab({ auth, setAuth, onUpdate, onLogout, saving, 
         onSave={onUpdate}
         label="Mettre à jour"
         extraActions={
-          <button type="button" onClick={onLogout} class="btn btn-ghost border border-slate-700 text-xs h-9 min-h-0">
+          <button
+            type="button"
+            onClick={onLogout}
+            class="border border-gray-300 text-gray-600 text-sm px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
+          >
             Déconnexion
           </button>
         }

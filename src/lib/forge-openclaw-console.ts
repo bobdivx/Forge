@@ -1,14 +1,8 @@
 /**
- * Logs côté navigateur (Chrome DevTools) pour diagnostiquer OpenClaw.
- * Aucun secret n’est passé ici : uniquement URL, sources, compteurs, statuts HTTP.
+ * Stub de diagnostic OpenClaw — les logs navigateur ont été désactivés.
+ * Conservé pour compatibilité d'import avec les composants existants.
  */
-const PREFIX = '[DevForge OpenClaw]';
-
-export function logForgeOpenClaw(context: string, payload: Record<string, unknown>): void {
-  if (typeof globalThis === 'undefined' || !globalThis.console?.info) return;
-  try {
-    globalThis.console.info(`${PREFIX} ${context}`, payload);
-  } catch {
-    /* ignore */
-  }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function logForgeOpenClaw(_context: string, _payload: Record<string, unknown>): void {
+  // intentionally empty — pas de console.* dans le frontend
 }

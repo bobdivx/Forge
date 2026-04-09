@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { spawn } from 'child_process';
 import fs from 'fs';
+import net from 'net';
 import path from 'path';
 import { resolveProjectPathVariants, isSafeRepoDirName } from '../../../../lib/forge-repos';
 import { readAppDashboardConfig, devPidsDir } from '../../../../lib/project-app-config';
@@ -33,12 +34,25 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+/** Vérifie si un port TCP est déjà occupé (serveur externe non tracé par PID). */
+function isPortListening(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timeout = 300;
+    socket.setTimeout(timeout);
+    socket.once('connect', () => { socket.destroy(); resolve(true); });
+    socket.once('timeout', () => { socket.destroy(); resolve(false); });
+    socket.once('error', () => { socket.destroy(); resolve(false); });
+    socket.connect(port, '127.0.0.1');
+  });
+}
+
 export const POST: APIRoute = async ({ params, request }) => {
   const app = params.app;
   if (!isSafeRepoDirName(String(app))) {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
-  const projectPath = resolveProjectPathVariants(String(app));
+  const projectPath = await resolveProjectPathVariants(String(app));
   if (!projectPath) {
     return new Response(JSON.stringify({ error: 'Projet introuvable' }), { status: 404 });
   }
@@ -67,12 +81,16 @@ export const POST: APIRoute = async ({ params, request }) => {
 
   if (action === 'status') {
     const pid = readPid(projectPath, serverId);
-    const running = pid != null && isProcessAlive(pid);
+    const pidAlive = pid != null && isProcessAlive(pid);
+    // Fallback : si pas de PID tracé, vérifie si le port répond (ex. serveur démarré manuellement)
+    const portBusy = !pidAlive ? await isPortListening(server.port) : false;
+    const running = pidAlive || portBusy;
     return new Response(
       JSON.stringify({
         serverId,
         running,
-        pid: running ? pid : null,
+        pid: pidAlive ? pid : null,
+        externalProcess: portBusy && !pidAlive,
         port: server.port,
         npmScript: server.npmScript,
       }),

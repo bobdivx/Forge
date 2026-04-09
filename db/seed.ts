@@ -53,6 +53,7 @@ export default async function seed() {
         { key: 'openclawToken',      value: '',                        updatedAt: new Date() },
         { key: 'githubToken',        value: '',                        updatedAt: new Date() },
         { key: 'vercelToken',        value: '',                        updatedAt: new Date() },
+        { key: 'githubWebhookSecret', value: '',                       updatedAt: new Date() },
         { key: 'forgeReposRoot',     value: '/media/Github',           updatedAt: new Date() },
         { key: 'dockerYamlDir',      value: '/DATA/AppData',           updatedAt: new Date() },
         { key: 'dockerAppDataDir',   value: '/DATA/AppData',           updatedAt: new Date() },

@@ -41,16 +41,29 @@ export default function OpenClawLayoutBadge() {
     return () => clearInterval(t);
   }, []);
 
-  if (ok === null) return <span class="badge badge-ghost badge-outline gap-2 py-3 px-3 text-xs border-slate-700 text-slate-400">OpenClaw…</span>;
+  const badgeBase =
+    'badge badge-outline inline-flex max-w-full items-center gap-1.5 border-slate-600/80 py-1.5 px-2 sm:py-2 sm:px-3 text-[10px] sm:text-xs leading-tight';
+
+  if (ok === null) {
+    return <span class={`${badgeBase} badge-ghost text-slate-400`}>OpenClaw…</span>;
+  }
   if (!ok) {
     return (
       <span
-        class="badge badge-warning badge-outline gap-2 py-3 px-3 text-xs max-w-[min(100%,20rem)] truncate"
+        class={`${badgeBase} badge-warning min-w-0 max-w-[11rem] sm:max-w-[min(100%,20rem)] truncate`}
         title={detail || 'Vérifiez URL + token (Paramètres) et accessibilité depuis le serveur Forge.'}
       >
-        OpenClaw indisponible
+        <span class="sm:hidden">HS</span>
+        <span class="hidden sm:inline">OpenClaw indispo</span>
       </span>
     );
   }
-  return <span class="badge badge-success badge-outline gap-2 py-3 px-3 text-xs"><span class="status status-success animate-pulse" />OpenClaw connecté</span>;
+  return (
+    <span class={`${badgeBase} badge-success text-emerald-100/95`} title="Gateway OpenClaw joignable">
+      <span class="status status-success shrink-0 scale-90 animate-pulse" />
+      <span class="truncate whitespace-nowrap">
+        <span class="hidden min-[400px]:inline">OpenClaw </span>OK
+      </span>
+    </span>
+  );
 }

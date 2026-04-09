@@ -31,11 +31,20 @@ const SESSION_LIST_PATHS = [
   '/sessions',
 ] as const;
 
-const SESSIONS_LIST_INVOKE_BODY = JSON.stringify({
-  tool: 'sessions_list',
-  action: 'json',
-  args: {},
-});
+export function buildSessionsListInvokeBody(args?: Record<string, unknown>): string {
+  return JSON.stringify({
+    tool: 'sessions_list',
+    action: 'json',
+    args: args && typeof args === 'object' ? args : {},
+  });
+}
+
+/** Options pour enrichir sessions_list (ex. messageLimit) ou forcer l’invoke HTTP. */
+export type FetchOpenClawSessionsOptions = {
+  sessionsListArgs?: Record<string, unknown>;
+  /** Uniquement POST /tools/invoke — utile pour récupérer messages / transcriptions (page Agents). */
+  invokeOnly?: boolean;
+};
 
 const AGENTS_LIST_INVOKE_BODY = JSON.stringify({
   tool: 'agents_list',
@@ -100,10 +109,37 @@ export async function getOpenClawClientDebugMeta(): Promise<{
 /**
  * Récupère les sessions : essaie plusieurs GET, garde la réponse qui contient le plus de sessions,
  * puis POST /tools/invoke, puis /health. Évite de s’arrêter sur un GET 200 vide (ex. /api/v1/status).
+ *
+ * `options.invokeOnly` + `sessionsListArgs` (ex. messageLimit) : pour la page Agents / stats liées aux messages.
  */
 export async function fetchOpenClawSessionsPayload(
-  _email: string | undefined
+  _email: string | undefined,
+  options?: FetchOpenClawSessionsOptions,
 ): Promise<OpenClawSessionsPayloadResult> {
+  const invokeBody = buildSessionsListInvokeBody(options?.sessionsListArgs);
+  const invokeVia = '/tools/invoke?sessions_list';
+
+  if (options?.invokeOnly) {
+    const attempts: OpenClawSessionFetchAttempt[] = [];
+    const invoke = await fetchOpenClawJson(_email, '/tools/invoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: invokeBody,
+    });
+    const parsedCount = invoke.ok ? normalizeOpenClawSessions(invoke.data).length : 0;
+    attempts.push({ via: invokeVia, ok: invoke.ok, status: invoke.status, parsedCount });
+    if (invoke.ok && parsedCount > 0) {
+      return { ok: true, status: invoke.status, data: invoke.data, via: invokeVia, attempts };
+    }
+    return {
+      ok: false,
+      status: invoke.status,
+      data: invoke.data,
+      error: invoke.error || 'sessions_list (invokeOnly) vide ou refusé',
+      attempts,
+    };
+  }
+
   const attempts: OpenClawSessionFetchAttempt[] = [];
   let best: BestPayload | null = null;
   let lastFail: { status: number; error?: string; data: unknown } = {
@@ -136,9 +172,8 @@ export async function fetchOpenClawSessionsPayload(
   const invoke = await fetchOpenClawJson(_email, '/tools/invoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: SESSIONS_LIST_INVOKE_BODY,
+    body: invokeBody,
   });
-  const invokeVia = '/tools/invoke?sessions_list';
   const invokeN = pushAttempt(invokeVia, invoke);
   if (invoke.ok && invokeN > 0) {
     return { ok: true, status: invoke.status, data: invoke.data, via: invokeVia, attempts };
@@ -165,6 +200,118 @@ export function getGatewayAuthHeaders(token: string): Record<string, string> {
     'X-Gateway-Token': token,
     Authorization: `Bearer ${token}`,
   };
+}
+
+const MAX_SESSIONS_SEND_MESSAGE = 120_000;
+
+export type InvokeSessionsSendResult = {
+  ok: boolean;
+  error?: string;
+  detail?: unknown;
+  httpStatus?: number;
+};
+
+/**
+ * POST /tools/invoke — outil `sessions_send` (même charge utile que /api/openclaw-directive).
+ * `asyncDelivery: false` par défaut : timeout 120 s, sans `args.async` (compat gateway maximale).
+ */
+export async function invokeOpenClawSessionsSend(params: {
+  sessionKey: string;
+  message: string;
+  timeoutSeconds?: number;
+  /** Variante audit Forge : timeout court + args.async (si le mode standard échoue). */
+  asyncDelivery?: boolean;
+}): Promise<InvokeSessionsSendResult> {
+  const token = (await getOpenClawToken()).trim();
+  if (!token) {
+    return { ok: false, error: 'Token OpenClaw manquant (OPENCLAW_GATEWAY_TOKEN ou table Config).' };
+  }
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const url = `${base}/tools/invoke`;
+  const message = params.message.slice(0, MAX_SESSIONS_SEND_MESSAGE);
+
+  let args: Record<string, unknown>;
+  if (params.asyncDelivery) {
+    args = {
+      sessionKey: params.sessionKey,
+      message,
+      timeoutSeconds: 30,
+      async: true,
+    };
+  } else {
+    const ts =
+      typeof params.timeoutSeconds === 'number' &&
+      params.timeoutSeconds >= 0 &&
+      params.timeoutSeconds <= 600
+        ? Math.floor(params.timeoutSeconds)
+        : 120;
+    args = { sessionKey: params.sessionKey, message, timeoutSeconds: ts };
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getGatewayAuthHeaders(token),
+      },
+      body: JSON.stringify({
+        tool: 'sessions_send',
+        action: 'json',
+        args,
+        sessionKey: params.sessionKey,
+        dryRun: false,
+      }),
+    });
+
+    const text = await res.text();
+    let data: Record<string, unknown> = {};
+    try {
+      data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (res.status === 404) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error:
+          'Outil sessions_send indisponible via HTTP (souvent bloqué par défaut). Dans la config OpenClaw gateway, ajoutez par exemple : gateway.tools.allow: ["sessions_send"] — voir https://openclaws.io/docs/gateway/tools-invoke-http-api',
+        detail: data,
+      };
+    }
+
+    if (!res.ok) {
+      const errMsg =
+        (data.error as { message?: string } | undefined)?.message ||
+        (typeof data.error === 'string' ? data.error : '') ||
+        (typeof data.message === 'string' ? data.message : '') ||
+        (typeof data.raw === 'string' ? String(data.raw).slice(0, 600) : '') ||
+        `Gateway HTTP ${res.status}`;
+      return { ok: false, httpStatus: res.status, error: errMsg, detail: data };
+    }
+
+    if (data.ok === false) {
+      const errMsg =
+        (data.error as { message?: string } | undefined)?.message ||
+        (typeof data.error === 'string' ? data.error : '') ||
+        (typeof data.message === 'string' ? data.message : '') ||
+        'Gateway a refusé la directive';
+      return { ok: false, httpStatus: 400, error: errMsg, detail: data };
+    }
+
+    return { ok: true, detail: data };
+  } catch (e: unknown) {
+    const baseUrl = await getOpenClawGatewayBaseUrl();
+    const hostOnly = baseUrl.replace(/^(https?:\/\/[^/?#]+).*/i, '$1');
+    const msg = e instanceof Error ? e.message : 'Erreur réseau';
+    return {
+      ok: false,
+      error: `${msg} — gateway configuré : ${hostOnly}. Si Forge tourne ailleurs que le gateway, définissez OPENCLAW_GATEWAY_URL.`,
+    };
+  }
 }
 
 export async function fetchOpenClawJson(
@@ -426,4 +573,35 @@ export function mapSessionToAgentRow(s: Record<string, unknown>) {
     lastSeen: new Date(Number.isFinite(updated) ? updated : Date.now()).toLocaleString('fr-FR'),
     raw: s,
   };
+}
+
+/**
+ * Clé à passer à `sessions_send` (souvent `telegram:…` / `sessionKey`), pas seulement l’id métier URL.
+ * Compare chaque indice aux sessions listées par le gateway.
+ */
+export async function resolveSessionsSendKey(
+  email: string | undefined,
+  hints: string[],
+): Promise<string | null> {
+  const unique = [...new Set(hints.map((h) => String(h || '').trim()).filter(Boolean))];
+  if (!unique.length) return null;
+
+  const res = await fetchOpenClawSessionsPayload(email, {
+    invokeOnly: true,
+    sessionsListArgs: { limit: 100 },
+  });
+  if (!res.ok) return null;
+
+  const sessions = normalizeOpenClawSessions(res.data) as Record<string, unknown>[];
+  for (const hint of unique) {
+    const want = hint.toUpperCase();
+    const session = sessions.find((s) => {
+      const keys = [s.sessionKey, s.key, s.id, s.agentId, s.agent_id].map((x) =>
+        String(x ?? '').toUpperCase(),
+      );
+      return keys.some((k) => k && (k === want || k.includes(want)));
+    });
+    if (session) return mapSessionToAgentRow(session).id;
+  }
+  return null;
 }

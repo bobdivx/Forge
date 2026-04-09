@@ -19,6 +19,7 @@ type ForgeAppDashboardConfig = {
 type ServerStatus = {
   running: boolean;
   pid: number | null;
+  externalProcess?: boolean;
   port: number;
   npmScript: string;
 };
@@ -34,13 +35,13 @@ type Props = {
 
 export default function AppProjectOps({ appName, forgeVirtualHost }: Props) {
   const apiBase = `/api/projects/${encodeURIComponent(appName)}`;
-  const [config, setConfig] = useState<ForgeAppDashboardConfig | null>(null);
+  const [config, setConfig]       = useState<ForgeAppDashboardConfig | null>(null);
   const [npmScripts, setNpmScripts] = useState<string[]>([]);
   const [packageName, setPackageName] = useState<string | undefined>();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  const [statuses, setStatuses] = useState<Record<string, ServerStatus | null>>({});
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [msg, setMsg]             = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [statuses, setStatuses]   = useState<Record<string, ServerStatus | null>>({});
   const [busyServer, setBusyServer] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -74,7 +75,13 @@ export default function AppProjectOps({ appName, forgeVirtualHost }: Props) {
             body: JSON.stringify({ action: 'status', serverId: s.id }),
           });
           const data = await res.json();
-          next[s.id] = res.ok ? { running: Boolean(data.running), pid: data.pid ?? null, port: data.port, npmScript: data.npmScript } : null;
+          next[s.id] = res.ok ? {
+            running: Boolean(data.running),
+            pid: data.pid ?? null,
+            externalProcess: Boolean(data.externalProcess),
+            port: data.port,
+            npmScript: data.npmScript,
+          } : null;
         } catch {
           next[s.id] = null;
         }
@@ -149,34 +156,54 @@ export default function AppProjectOps({ appName, forgeVirtualHost }: Props) {
     setConfig((c) => !c?.servers || c.servers.length <= 1 ? c : { ...c, servers: c.servers.filter((s) => s.id !== id) });
   };
 
+  // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading && !config) {
     return (
-      <section class="bg-slate-900 border border-slate-800 rounded-xl p-6 animate-pulse">
-        <div class="h-4 bg-slate-800 rounded w-1/3 mb-4" />
-        <div class="h-24 bg-slate-800/80 rounded" />
+      <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6 animate-pulse">
+        <div class="h-4 bg-gray-100 rounded w-1/3 mb-4" />
+        <div class="h-24 bg-gray-100 rounded" />
       </section>
     );
   }
 
   if (!config) {
-    return <section class="bg-slate-900 border border-red-500/20 rounded-xl p-6 text-sm text-red-300">Impossible de charger la configuration projet.</section>;
+    return (
+      <section class="bg-white rounded-[1.5rem] shadow-sm border border-red-100 p-6 text-sm text-red-500">
+        Impossible de charger la configuration projet.
+      </section>
+    );
   }
 
   const servers = config.servers || [];
+  const anyRunning = servers.some((s) => statuses[s.id]?.running);
 
   return (
-    <section class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
-      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+    <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6 space-y-6">
+
+      {/* ── En-tête ─────────────────────────────────────────────────────── */}
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h3 class="text-lg font-semibold text-white">Projet &amp; déploiements</h3>
-          <p class="text-xs text-slate-500 mt-1">
-            Identifiant route : <span class="font-mono text-slate-400">{encodeURIComponent(appName)}</span>
-            {packageName && <> · package <span class="font-mono text-blue-400/90">{packageName}</span></>}
+          <div class="flex items-center gap-2 mb-1">
+            <h3 class="text-base font-bold text-gray-900">Projet &amp; déploiements</h3>
+            {anyRunning && (
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">● Actif</span>
+            )}
+          </div>
+          <p class="text-[11px] text-gray-400 font-mono">
+            {encodeURIComponent(appName)}
+            {packageName && <> · <span class="text-[#175B37]">{packageName}</span></>}
           </p>
         </div>
-        <button type="button" onClick={() => load()} class="btn btn-ghost btn-sm text-slate-400 hover:text-white shrink-0">Recharger</button>
+        <button
+          type="button"
+          onClick={() => load()}
+          class="self-start sm:self-auto text-xs text-gray-400 hover:text-gray-700 border border-gray-200 rounded-full px-3 py-1 transition-colors"
+        >
+          ↻ Recharger
+        </button>
       </div>
 
+      {/* ── URLs ────────────────────────────────────────────────────────── */}
       <AppUrlsForm
         config={config}
         forgeVirtualHost={forgeVirtualHost}
@@ -186,17 +213,26 @@ export default function AppProjectOps({ appName, forgeVirtualHost }: Props) {
         message={msg}
       />
 
-      <div class="border-t border-slate-800 pt-6 space-y-4">
+      {/* ── Serveurs de développement ────────────────────────────────────── */}
+      <div class="border-t border-gray-100 pt-5 space-y-4">
         <div class="flex items-center justify-between flex-wrap gap-2">
-          <h4 class="text-sm font-semibold text-white">Serveurs de développement</h4>
-          <button type="button" onClick={addServer} disabled={servers.length >= 8} class="btn btn-ghost btn-xs text-blue-400">
+          <div>
+            <h4 class="text-sm font-bold text-gray-800">Serveurs de développement</h4>
+            <p class="text-[11px] text-gray-400 mt-0.5">
+              Lance <span class="font-mono bg-gray-100 px-1 rounded">npm run &lt;script&gt;</span> dans le dossier du projet.
+              Logs : <span class="font-mono">.forge/dev-pids/*.log</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={addServer}
+            disabled={servers.length >= 8}
+            class="text-xs font-medium px-3 py-1.5 rounded-full border border-[#175B37] text-[#175B37] hover:bg-green-50 transition-colors disabled:opacity-40"
+          >
             + Ajouter un serveur
           </button>
         </div>
-        <p class="text-xs text-slate-500">
-          Lance <span class="font-mono text-slate-400">npm run &lt;script&gt;</span> sur le disque du projet. Journaux : <span class="font-mono text-slate-600">.forge/dev-pids/*.log</span>.
-        </p>
-        <div class="space-y-4">
+        <div class="space-y-3">
           {servers.map((s) => (
             <AppServerCard
               key={s.id}

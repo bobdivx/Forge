@@ -12,7 +12,7 @@ export const GET: APIRoute = async ({ params }) => {
   if (!isSafeRepoDirName(String(app))) {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
-  const projectPath = resolveProjectPathVariants(String(app));
+  const projectPath = await resolveProjectPathVariants(String(app));
   if (!projectPath) {
     return new Response(JSON.stringify({ error: 'Projet introuvable' }), { status: 404 });
   }
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ params, request }) => {
   if (!isSafeRepoDirName(String(app))) {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
-  const projectPath = resolveProjectPathVariants(String(app));
+  const projectPath = await resolveProjectPathVariants(String(app));
   if (!projectPath) {
     return new Response(JSON.stringify({ error: 'Projet introuvable' }), { status: 404 });
   }

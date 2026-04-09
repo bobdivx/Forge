@@ -12,6 +12,7 @@ type Config = {
   dockerAppDataDir: string;
   githubToken: string;
   vercelToken: string;
+  githubWebhookSecret: string;
   openclawToken: string;
   openclawGatewayUrl: string;
 };
@@ -39,6 +40,7 @@ export default function SettingsForm() {
     dockerAppDataDir:  '/DATA/AppData',
     githubToken:       '',
     vercelToken:       '',
+    githubWebhookSecret: '',
     openclawToken:     '',
     openclawGatewayUrl: 'http://127.0.0.1:24190',
   });
@@ -67,6 +69,7 @@ export default function SettingsForm() {
           dockerAppDataDir: s.dockerAppDataDir || prev.dockerAppDataDir,
           githubToken: s.githubToken || '',
           vercelToken: s.vercelToken || '',
+          githubWebhookSecret: s.githubWebhookSecret || '',
           openclawToken: s.openclawToken || '',
           openclawGatewayUrl:
             String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
@@ -88,6 +91,22 @@ export default function SettingsForm() {
       .finally(() => setLoading(false));
   }, []);
 
+  const mergeSettingsFromServer = (s: Record<string, unknown>) => {
+    setSettings((prev) => ({
+      ...prev,
+      forgeReposRoot: String(s.forgeReposRoot || prev.forgeReposRoot),
+      dockerYamlDir: String(s.dockerYamlDir || prev.dockerYamlDir),
+      dockerAppDataDir: String(s.dockerAppDataDir || prev.dockerAppDataDir),
+      githubToken: typeof s.githubToken === 'string' ? s.githubToken : prev.githubToken,
+      vercelToken: typeof s.vercelToken === 'string' ? s.vercelToken : prev.vercelToken,
+      githubWebhookSecret:
+        typeof s.githubWebhookSecret === 'string' ? s.githubWebhookSecret : prev.githubWebhookSecret,
+      openclawToken: typeof s.openclawToken === 'string' ? s.openclawToken : prev.openclawToken,
+      openclawGatewayUrl:
+        String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+    }));
+  };
+
   const save = async () => {
     setSaving(true);
     setMessage('');
@@ -97,6 +116,10 @@ export default function SettingsForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
+      if (res.ok) {
+        const s = await fetch('/api/settings').then((r) => r.json());
+        mergeSettingsFromServer(s);
+      }
       setMessage(res.ok ? 'Configurations sauvegardées !' : 'Erreur lors de la sauvegarde.');
     } catch {
       setMessage('Erreur réseau.');
@@ -116,6 +139,7 @@ export default function SettingsForm() {
         body: JSON.stringify({
           githubToken: settings.githubToken,
           vercelToken: settings.vercelToken,
+          githubWebhookSecret: settings.githubWebhookSecret,
         }),
       });
       const resTokens = await fetch('/api/custom-api-tokens', {
@@ -130,6 +154,8 @@ export default function SettingsForm() {
         setMessage(dataErr.error || 'Erreur lors de la sauvegarde des jetons.');
       } else {
         setMessage('Jetons enregistrés.');
+        const s = await fetch('/api/settings').then((r) => r.json());
+        mergeSettingsFromServer(s);
         const t = await fetch('/api/custom-api-tokens').then((r) => r.json());
         const items = Array.isArray(t.items) ? t.items : [];
         setCustomTokens(
@@ -197,13 +223,13 @@ export default function SettingsForm() {
     window.location.href = '/login';
   };
 
-  if (loading) return <div class="animate-pulse text-slate-500 py-4">Chargement…</div>;
+  if (loading) return <div class="animate-pulse text-gray-400 py-4">Chargement…</div>;
 
   return (
     <div class="space-y-6">
       <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
-      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl min-h-[400px]">
+      <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden shadow-sm min-h-[400px]">
         {activeTab === 'account' && (
           <AccountTab
             auth={auth}

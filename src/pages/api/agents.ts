@@ -31,6 +31,23 @@ function normAgentKey(s: string): string {
   return String(s).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+const CANONICAL_AGENT_ID_SET = new Set(FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId));
+
+/**
+ * Rattache les lignes AgentTask / forge-hook (github, Expert GitHub…) à l’id canonique Forge.
+ */
+function mapTaskAgentIdToCanonical(agentId: string): string {
+  const t = String(agentId).trim();
+  if (CANONICAL_AGENT_ID_SET.has(t)) return t;
+  const n = normAgentKey(t);
+  for (const row of FORGE_AGENT_INSTRUCTION_ROWS) {
+    if (normAgentKey(row.agentId) === n) return row.agentId;
+  }
+  const lower = t.toLowerCase();
+  if (lower === 'github' || lower === 'expert-github' || lower === 'expert_github') return 'EXPERT_GITHUB';
+  return t;
+}
+
 function resolveStatsFromDb(
   db: Record<string, TaskStats>,
   agentId: string,
@@ -54,9 +71,22 @@ function resolveStatsFromDb(
   return emptyTaskStats();
 }
 
+function countUserMessagesInSession(raw: Record<string, unknown>): number {
+  const msgs = raw.messages;
+  if (!Array.isArray(msgs)) return 0;
+  let n = 0;
+  for (const m of msgs) {
+    if (m == null || typeof m !== 'object') continue;
+    const o = m as Record<string, unknown>;
+    const role = String(o.role ?? o.type ?? '').toLowerCase();
+    if (role === 'user' || role === 'human') n++;
+  }
+  return n;
+}
+
 /**
- * Tâches persistées + 1 « activité session » par session OpenClaw rattachée à l’agent
- * (sinon graphes et cartes restent à 0 si la table AgentTask est vide).
+ * Tâches persistées + activité OpenClaw : messages utilisateur dans la session rattachée,
+ * ou +1 session si pas de transcriptions (invoke sans messageLimit).
  */
 function buildDisplayTaskStats(
   agents: { id: string; name: string }[],
@@ -72,11 +102,23 @@ function buildDisplayTaskStats(
       const idx = bestSessionIndexForAgent(rawSessions, a.id, used);
       if (idx >= 0) {
         used.add(idx);
-        const mapped = mapSessionToAgentRow(rawSessions[idx]);
+        const raw = rawSessions[idx];
+        const mapped = mapSessionToAgentRow(raw);
+        const userMsgs = countUserMessagesInSession(raw);
         s = { ...s };
-        s.total += 1;
-        if (mapped.status === 'actif') s.running += 1;
-        else s.completed += 1;
+        if (userMsgs > 0) {
+          s.total += userMsgs;
+          if (mapped.status === 'actif') {
+            s.running += 1;
+            s.pending += userMsgs;
+          } else {
+            s.completed += userMsgs;
+          }
+        } else {
+          s.total += 1;
+          if (mapped.status === 'actif') s.running += 1;
+          else s.completed += 1;
+        }
       }
     }
     out[a.id] = s;
@@ -102,6 +144,16 @@ function sessionMatchScore(raw: Record<string, unknown>, agentId: string): numbe
   }
   const mapped = mapSessionToAgentRow(raw);
   if (String(mapped.name).toUpperCase() === want) return 60;
+  const blob = [
+    keyStr,
+    String(raw.label),
+    String(raw.name),
+    String(raw.title),
+    String(mapped.name),
+  ]
+    .join(' ')
+    .toUpperCase();
+  if (want === 'EXPERT_GITHUB' && /\bGITHUB\b/.test(blob)) return 58;
   return 0;
 }
 
@@ -210,7 +262,10 @@ export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
 
   const [result, configMeta, openclawRegistry] = await Promise.all([
-    fetchOpenClawSessionsPayload(email),
+    fetchOpenClawSessionsPayload(email, {
+      invokeOnly: true,
+      sessionsListArgs: { limit: 120, messageLimit: 24 },
+    }),
     getOpenClawClientDebugMeta(),
     fetchOpenClawAgentsList(email),
   ]);
@@ -229,7 +284,7 @@ export const GET: APIRoute = async ({ locals }) => {
 
     const tasks = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(500);
     for (const t of tasks) {
-      const id = t.agentId;
+      const id = mapTaskAgentIdToCanonical(t.agentId);
       if (!taskStatsDb[id]) taskStatsDb[id] = emptyTaskStats();
       taskStatsDb[id].total++;
       const s = String(t.status).toLowerCase();
@@ -326,7 +381,7 @@ export const GET: APIRoute = async ({ locals }) => {
         taskStatsMergedWithSessions: true,
         dbTaskAgentKeyCount: Object.keys(taskStatsDb).length,
         note:
-          'taskStats = tâches Astro DB (agentId normalisé) + 1 activité par session OpenClaw rattachée (actif → running, sinon completed). Table AgentTask vide ⇒ les graphes utilisaient 0 avant cette fusion.',
+          'taskStats = AgentTask (agentId → id canonique Forge) + sessions OpenClaw via sessions_list (messageLimit) : comptage messages user par session rattachée ; sans messages, +1 total comme avant.',
       },
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
