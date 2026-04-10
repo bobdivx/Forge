@@ -12,7 +12,7 @@ export default defineConfig({
   },
   vite: {
     server: {
-      allowedHosts: ['forge.briseteia.me', 'oc.briseteia.me', 'localhost', '127.0.0.1'],
+      allowedHosts: ['forge.briseteia.me', 'oc.briseteia.me', 'localhost', '127.0.0.1', 'zimacube.local'],
       strictPort: true,
     },
     optimizeDeps: {
