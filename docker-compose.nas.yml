@@ -1,8 +1,7 @@
+version: "3.9"
 services:
   forge:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: forge-forge:latest
     container_name: forge
     restart: unless-stopped
     ports:
@@ -21,6 +20,3 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
-    volumes:
-      - /media/Docker/AppData/forge/forge/.astro:/app/.astro
-      - /media/Docker/AppData/forge/forge/.data:/app/.data
