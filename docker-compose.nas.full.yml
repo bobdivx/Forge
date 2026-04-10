@@ -1,14 +1,20 @@
+name: forge
 services:
   forge:
+    cpu_shares: 90
+    command: []
     build:
       context: .
       dockerfile: Dockerfile
     container_name: forge
+    deploy:
+      resources:
+        reservations:
+          memory: "134217728"
     restart: unless-stopped
     ports:
       - "${FORGE_PORT:-4321}:4321"
-    env_file:
-      - .env
+    # CasaOS/ZimaOS : le compose est exécuté sous /tmp sans copie de .env — variables dans l’UI de l’app ou ci-dessous.
     environment:
       HOST: 0.0.0.0
       PORT: 4321
@@ -27,23 +33,33 @@ services:
       retries: 5
       start_period: 40s
     volumes:
-      # Astro DB (SQLite) vit ici par défaut — on le rend persistant sur NAS.
-      - forge-astro:/app/.astro
-      # Espace “données” générique si tu en as besoin côté serveur.
-      - forge-data:/app/.data
+      - type: bind
+        source: /DATA/AppData/forge/astro
+        target: /app/.astro
+      - type: bind
+        source: /DATA/AppData/forge/data
+        target: /app/.data
     networks:
       - forge-net
 
   postgres:
+    cpu_shares: 90
+    command: []
     image: postgres:16-alpine
     container_name: forge-postgres
+    deploy:
+      resources:
+        reservations:
+          memory: "134217728"
     restart: unless-stopped
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-forge}"
       POSTGRES_USER: "${POSTGRES_USER:-forge}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-forge_change_me}"
     volumes:
-      - forge-postgres:/var/lib/postgresql/data
+      - type: bind
+        source: /DATA/AppData/forge/postgres
+        target: /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forge} -d ${POSTGRES_DB:-forge}"]
       interval: 10s
@@ -53,12 +69,19 @@ services:
       - forge-net
 
   redis:
+    cpu_shares: 90
     image: redis:7-alpine
     container_name: forge-redis
+    deploy:
+      resources:
+        reservations:
+          memory: "134217728"
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - forge-redis:/data
+      - type: bind
+        source: /DATA/AppData/forge/redis
+        target: /data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -85,11 +108,23 @@ services:
   #   networks:
   #     - forge-net
 
-volumes:
-  forge-astro:
-  forge-data:
-  forge-postgres:
-  forge-redis:
-
 networks:
   forge-net:
+    name: forge-net
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  author: Forge
+  category: Development
+  hostname: zimaos.local
+  icon: https://raw.githubusercontent.com/withastro/astro/main/assets/astro-icon-light-gradient.svg
+  index: /
+  is_uncontrolled: false
+  port_map: "${FORGE_PORT:-4321}"
+  scheme: http
+  store_app_id: forge-full
+  title:
+    custom: Forge (NAS Full)
+    en_us: Forge (NAS Full)

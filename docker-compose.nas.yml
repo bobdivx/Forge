@@ -1,13 +1,20 @@
-version: "3.9"
+name: forge
 services:
   forge:
-    image: forge-forge:latest
+    cpu_shares: 90
+    command: []
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: forge
+    deploy:
+      resources:
+        reservations:
+          memory: "134217728"
     restart: unless-stopped
     ports:
-      - "${FORGE_PORT:-4330}:4321"
-    env_file:
-      - .env
+      - "${FORGE_PORT:-4331}:4321"
+    # CasaOS/ZimaOS : le compose est exécuté sous /tmp sans copie de .env — variables dans l’UI de l’app ou ci-dessous.
     environment:
       HOST: 0.0.0.0
       PORT: 4321
@@ -20,3 +27,33 @@ services:
       timeout: 10s
       retries: 5
       start_period: 40s
+    volumes:
+      - type: bind
+        source: /DATA/AppData/forge/astro
+        target: /app/.astro
+      - type: bind
+        source: /DATA/AppData/forge/data
+        target: /app/.data
+    networks:
+      - forge-net
+
+networks:
+  forge-net:
+    name: forge-net
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  author: Forge
+  category: Development
+  hostname: zimaos.local
+  icon: https://raw.githubusercontent.com/withastro/astro/main/assets/astro-icon-light-gradient.svg
+  index: /
+  is_uncontrolled: false
+  port_map: "${FORGE_PORT:-4331}"
+  scheme: http
+  store_app_id: forge
+  title:
+    custom: Forge (NAS)
+    en_us: Forge (NAS)
