@@ -3,9 +3,7 @@ services:
   forge:
     cpu_shares: 90
     command: []
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: "${FORGE_IMAGE:-bobdivx/forge:latest}"
     container_name: forge
     deploy:
       resources:
