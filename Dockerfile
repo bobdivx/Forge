@@ -18,6 +18,9 @@ ENV HOST=0.0.0.0
 ENV PORT=4321
 ENV ASTRO_DATABASE_FILE=file:/app/.astro/content.db
 
+# Git est requis pour execFileSync('git', …) (historique / résumé dépôt côté serveur).
+RUN apk add --no-cache git
+
 COPY package.json package-lock.json .npmrc ./
 RUN npm install --omit=dev --ignore-scripts --no-fund --no-audit
 

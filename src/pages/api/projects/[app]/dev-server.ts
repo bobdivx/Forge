@@ -165,7 +165,12 @@ export const POST: APIRoute = async ({ params, request }) => {
     detached: true,
     stdio: ['ignore', fd, fd],
     shell: false,
-    env: { ...process.env, FORCE_COLOR: '0' },
+    env: {
+      ...process.env,
+      FORCE_COLOR: '0',
+      // Permet plusieurs serveurs (Next, Vite, etc.) sans dupliquer les scripts npm.
+      PORT: String(server.port),
+    },
   });
 
   try {

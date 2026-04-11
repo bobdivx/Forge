@@ -219,7 +219,8 @@ export default function AppProjectOps({ appName, forgeVirtualHost }: Props) {
           <div>
             <h4 class="text-sm font-bold text-gray-800">Serveurs de développement</h4>
             <p class="text-[11px] text-gray-400 mt-0.5">
-              Lance <span class="font-mono bg-gray-100 px-1 rounded">npm run &lt;script&gt;</span> dans le dossier du projet.
+              Lance <span class="font-mono bg-gray-100 px-1 rounded">npm run &lt;script&gt;</span> dans le dossier du projet
+              (variable <span class="font-mono">PORT</span> = port configuré ci-dessous pour chaque entrée).
               Logs : <span class="font-mono">.forge/dev-pids/*.log</span>
             </p>
           </div>

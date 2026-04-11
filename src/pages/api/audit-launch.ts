@@ -320,50 +320,216 @@ async function invokeViaGatewayAgentsInvoke(
   }
 }
 
+/** Base Ollama pour le fallback audit (désactivable avec FORGE_AUDIT_DISABLE_OLLAMA_FALLBACK=1). */
+function getOllamaAuditBaseUrl(): string | null {
+  if (String(process.env.FORGE_AUDIT_DISABLE_OLLAMA_FALLBACK || '').trim() === '1') return null;
+  const raw =
+    process.env.OLLAMA_HOST?.trim() ||
+    process.env.OLLAMA_ORIGIN?.trim() ||
+    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : '');
+  if (!raw) return null;
+  return raw.replace(/\/$/, '');
+}
+
+/**
+ * Appel minimal POST /v1/chat/completions (gateway OpenAI-compatible).
+ */
+async function postGatewayV1Chat(params: {
+  base: string;
+  token: string;
+  openAiModel: string;
+  backendHeader?: string;
+  message: string;
+  maxTokens: number;
+}): Promise<{ ok: boolean; status: number; error?: string }> {
+  try {
+    const res = await fetch(`${params.base}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getGatewayAuthHeaders(params.token),
+        ...(params.backendHeader?.trim() ? { 'x-openclaw-model': params.backendHeader.trim() } : {}),
+      },
+      body: JSON.stringify({
+        model: params.openAiModel,
+        max_tokens: params.maxTokens,
+        stream: false,
+        messages: [{ role: 'user', content: params.message }],
+      }),
+    });
+    const txt = await res.text().catch(() => '');
+    let data: Record<string, unknown> = {};
+    try {
+      data = txt ? JSON.parse(txt) : {};
+    } catch {
+      data = { raw: txt };
+    }
+    if (!res.ok) {
+      const errObj = data.error as Record<string, unknown> | string | undefined;
+      const nested =
+        typeof errObj === 'object' && errObj && errObj.message != null ? String(errObj.message) : null;
+      const errMsg =
+        nested ||
+        (typeof errObj === 'string' ? errObj : null) ||
+        (data.message != null ? String(data.message) : null) ||
+        `HTTP ${res.status}`;
+      return { ok: false, status: res.status, error: errMsg };
+    }
+    return { ok: true, status: res.status };
+  } catch (e: unknown) {
+    return { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Dispatch via POST /v1/chat/completions (surface OpenAI du gateway).
- * Utilise model: `openclaw/<agentId>` pour router vers le bon agent/modèle.
- * La requête est fire-and-forget (maxTokens=1 pour minimiser le temps de blocage).
+ * 1) `openclaw/<agentId>` + `x-openclaw-model` (routage agent).
+ * 2) `openclaw/default` + `x-openclaw-model` (gateways sans entrée par rôle — aligné sur pingOpenClawChatCompletion).
+ * 3) Modèle brut (ex. llama3.1:8b) sans préfixe openclaw (reverse-proxy / gateway générique).
+ * maxTokens réduit : déclenchement rapide ; le travail complet repose sur la session agent ou le fallback Ollama.
  */
 async function invokeViaV1ChatCompletions(
   agentId: string,
   backendModel: string,
   message: string,
+): Promise<{ ok: boolean; method: string; error?: string; logLines: string[] }> {
+  const logLines: string[] = [];
+  const token = (await getOpenClawToken()).trim();
+  if (!token) {
+    logLines.push('token manquant');
+    return { ok: false, method: 'v1-chat', error: 'Token manquant', logLines };
+  }
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const backend = String(backendModel || '').trim();
+  const maxTok = 1;
+
+  const openAiModel = /^openclaw\//i.test(agentId) ? agentId : `openclaw/${agentId}`;
+  const r1 = await postGatewayV1Chat({
+    base,
+    token,
+    openAiModel,
+    backendHeader: backend || undefined,
+    message,
+    maxTokens: maxTok,
+  });
+  logLines.push(`${openAiModel}${backend ? `+x-oc:${backend}` : ''}: ${r1.ok ? 'OK' : r1.error || `HTTP ${r1.status}`}`);
+  if (r1.ok) {
+    return { ok: true, method: `v1-chat(${openAiModel}→${backend || 'auto'})`, logLines };
+  }
+
+  const m = openAiModel.trim();
+  const afterPrefix = m.replace(/^openclaw\//i, '').toLowerCase();
+  const canTryDefault =
+    /^openclaw\//i.test(m) &&
+    afterPrefix !== '' &&
+    afterPrefix !== 'default' &&
+    afterPrefix !== 'openclaw' &&
+    Boolean(backend);
+
+  if (canTryDefault) {
+    const r2 = await postGatewayV1Chat({
+      base,
+      token,
+      openAiModel: 'openclaw/default',
+      backendHeader: backend,
+      message,
+      maxTokens: maxTok,
+    });
+    logLines.push(`openclaw/default+x-oc:${backend}: ${r2.ok ? 'OK' : r2.error || `HTTP ${r2.status}`}`);
+    if (r2.ok) {
+      return { ok: true, method: `v1-chat(openclaw/default→${backend})`, logLines };
+    }
+  }
+
+  if (backend) {
+    const r3 = await postGatewayV1Chat({
+      base,
+      token,
+      openAiModel: backend,
+      message,
+      maxTokens: maxTok,
+    });
+    logLines.push(`${backend} (sans préfixe): ${r3.ok ? 'OK' : r3.error || `HTTP ${r3.status}`}`);
+    if (r3.ok) {
+      return { ok: true, method: `v1-chat(${backend})`, logLines };
+    }
+  }
+
+  const lastErr = logLines[logLines.length - 1] || 'échec';
+  return { ok: false, method: 'v1-chat', error: lastErr, logLines };
+}
+
+/**
+ * Fallback : appel direct Ollama /api/chat (conteneur Forge avec OLLAMA_HOST=host.docker.internal:11434, etc.).
+ * FORGE_AUDIT_OLLAMA_TIMEOUT_MS (défaut 90000), FORGE_AUDIT_OLLAMA_NUM_PREDICT (défaut 4096).
+ */
+async function invokeViaOllamaChat(
+  agentId: string,
+  model: string,
+  message: string,
 ): Promise<{ ok: boolean; method: string; error?: string }> {
-  const token = await getOpenClawToken();
-  if (!token) return { ok: false, method: 'v1-chat', error: 'Token manquant' };
-  const base = await getOpenClawGatewayBaseUrl();
-  const openAiModel = `openclaw/${agentId}`;
+  const ollamaBase = getOllamaAuditBaseUrl();
+  if (!ollamaBase) {
+    return { ok: false, method: 'ollama-chat', error: 'OLLAMA_HOST absent ou fallback désactivé' };
+  }
+  const m = String(model || '').trim();
+  if (!m) return { ok: false, method: 'ollama-chat', error: 'Modèle vide' };
+
+  const timeoutMs = Math.min(
+    Math.max(parseInt(String(process.env.FORGE_AUDIT_OLLAMA_TIMEOUT_MS || '90000'), 10) || 90000, 5000),
+    600000,
+  );
+  const numPredict = Math.min(
+    Math.max(parseInt(String(process.env.FORGE_AUDIT_OLLAMA_NUM_PREDICT || '4096'), 10) || 4096, 256),
+    131072,
+  );
+
+  const system =
+    `Tu es l'agent Forge « ${agentId} ». Réponds en français. ` +
+    `Exécute l'audit demandé dans le message utilisateur. ` +
+    `À la fin, résume les actions et conclusions. ` +
+    `Si tu n'as pas accès au système de fichiers ou aux API, l'indique clairement dans le résumé.`;
+
   try {
-    const res = await fetch(`${base}/v1/chat/completions`, {
+    const res = await fetch(`${ollamaBase}/api/chat`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...getGatewayAuthHeaders(token),
-        // Header propriétaire OpenClaw pour forcer le modèle backend
-        ...(backendModel ? { 'x-openclaw-model': backendModel } : {}),
-      },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      signal: AbortSignal.timeout(timeoutMs),
       body: JSON.stringify({
-        model: openAiModel,
-        // max_tokens réduit → on veut juste déclencher l'agent, pas attendre la réponse complète
-        max_tokens: 1,
+        model: m,
         stream: false,
-        messages: [{ role: 'user', content: message }],
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: message },
+        ],
+        options: { num_predict: numPredict },
       }),
     });
     const txt = await res.text().catch(() => '');
     let data: Record<string, unknown> = {};
-    try { data = txt ? JSON.parse(txt) : {}; } catch { data = { raw: txt }; }
-    if (!res.ok) {
-      const errMsg = (typeof (data.error as any)?.message === 'string' ? (data.error as any).message : null)
-        || (typeof data.error === 'string' ? data.error : null)
-        || `HTTP ${res.status}`;
-      return { ok: false, method: 'v1-chat', error: `${errMsg} (model: ${openAiModel})` };
+    try {
+      data = txt ? JSON.parse(txt) : {};
+    } catch {
+      data = {};
     }
-    return { ok: true, method: `v1-chat(${openAiModel}→${backendModel || 'auto'})` };
+    if (!res.ok) {
+      const errMsg =
+        (data.error as string) ||
+        (typeof (data as { message?: string }).message === 'string'
+          ? (data as { message: string }).message
+          : null) ||
+        txt.slice(0, 280) ||
+        `HTTP ${res.status}`;
+      return { ok: false, method: 'ollama-chat', error: `${errMsg} (model: ${m})` };
+    }
+    return { ok: true, method: `ollama-chat(${m})` };
   } catch (e: unknown) {
-    return { ok: false, method: 'v1-chat', error: e instanceof Error ? e.message : String(e) };
+    const name = e && typeof e === 'object' && 'name' in e ? String((e as Error).name) : '';
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      return { ok: false, method: 'ollama-chat', error: `Timeout après ${timeoutMs}ms (model: ${m})` };
+    }
+    return { ok: false, method: 'ollama-chat', error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -515,7 +681,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     {
       const r = await invokeViaV1ChatCompletions(role.agentId, agentModel, promptToSend);
-      attempts.push(`v1-chat(${agentModel}): ${r.ok ? 'OK' : r.error}`);
+      for (const line of r.logLines || []) attempts.push(`v1-chat: ${line}`);
+      if (!r.logLines?.length) attempts.push(`v1-chat(${agentModel}): ${r.ok ? 'OK' : r.error}`);
       if (r.ok) { dispatched = true; dispatchMethod = r.method; }
     }
 
@@ -547,6 +714,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (r.ok) { dispatched = true; dispatchMethod = r.method; }
     }
 
+    // ── 6. Ollama direct (OLLAMA_HOST) si la gateway / CLI Docker sont indisponibles ──
+    if (!dispatched) {
+      const r = await invokeViaOllamaChat(role.agentId, agentModel, promptToSend);
+      attempts.push(`ollama-chat(${agentModel}): ${r.ok ? 'OK' : r.error}`);
+      if (r.ok) { dispatched = true; dispatchMethod = r.method; }
+    }
+
     results.push({
       agentId: role.agentId,
       label: role.label,
@@ -562,6 +736,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const dispatchedCount = results.filter((r) => r.dispatched).length;
   const queuedCount = results.filter((r) => r.queued).length;
+  const ollamaCount = results.filter(
+    (r) => r.dispatched && String(r.method || '').startsWith('ollama-chat'),
+  ).length;
+  const gatewayCount = dispatchedCount - ollamaCount;
+
+  let note = '';
+  if (dispatchedCount > 0) {
+    const parts: string[] = [];
+    if (gatewayCount > 0) parts.push(`${gatewayCount} via gateway OpenClaw / session / CLI`);
+    if (ollamaCount > 0) parts.push(`${ollamaCount} via Ollama direct (OLLAMA_HOST)`);
+    note = `${dispatchedCount} agent(s) lancé(s) : ${parts.join(' ; ')}.`;
+    if (queuedCount > 0) note += ` ${queuedCount} en file DB (non joignables sur d'autres canaux).`;
+  } else {
+    note = `Aucun canal joignable (gateway OpenClaw, sessions, CLI hôte, Docker, Ollama). ${queuedCount} tâche(s) enregistrée(s) en DB — traitement à la prochaine connexion agent si applicable.`;
+  }
 
   return json({
     ok: true,
@@ -570,10 +759,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     queuedCount,
     total: results.length,
     results,
-    note:
-      dispatchedCount > 0
-        ? `${dispatchedCount} agent(s) notifié(s) via OpenClaw. ${queuedCount > 0 ? `${queuedCount} en file d'attente DB (session inactive).` : ''}`
-        : `Aucune session OpenClaw active trouvée. ${queuedCount} tâche(s) enregistrée(s) en DB — les agents les traiteront à leur prochaine connexion.`,
+    note,
   });
 };
 
