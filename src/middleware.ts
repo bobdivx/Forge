@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { defineMiddleware } from 'astro:middleware';
 import { verifySessionToken } from './lib/auth';
+import { ensureAstroLocalDbSchemaOnce } from './lib/forge-astro-db-bootstrap';
 import { getForgeSetupRedirect } from './lib/forge-setup';
 
 const PUBLIC_PATHS = [
@@ -81,6 +82,12 @@ function isPublic(pathname: string) {
 }
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  try {
+    await ensureAstroLocalDbSchemaOnce();
+  } catch (e) {
+    console.error('[forge] ensureAstroLocalDbSchemaOnce (schéma Astro DB)', e);
+  }
+
   const { pathname } = context.url;
   const clientIp = getClientAddressSafe(context);
   console.log(`[Middleware] ${pathname} from ${clientIp || '(prerender)'}`);
