@@ -12,8 +12,23 @@ import {
   collectOpenClawV1ModelEntries,
   fetchOllamaTagNames,
   measureOpenClawHealthRoundTrip,
+  mergeOpenClawV1ModelEntries,
   syntheticOpenClawTargetsFromAgents,
+  syntheticOpenClawTargetsFromForgeAgentIds,
 } from '../../lib/openclaw-openai-surface';
+
+/** Correspondance registre gateway ↔ ids métier Forge (casse + préfixe openclaw/). */
+function gatewayRegistryKeySet(agents: { id: string }[]): Set<string> {
+  const s = new Set<string>();
+  for (const a of agents) {
+    const raw = String(a.id || '').trim();
+    if (!raw) continue;
+    s.add(raw.toLowerCase());
+    const bare = raw.replace(/^openclaw\//i, '').trim();
+    if (bare) s.add(bare.toLowerCase());
+  }
+  return s;
+}
 
 async function ensureAgentInstructionsFromDisk() {
   const { db, AgentInstruction } = await loadAstroDb();
@@ -76,25 +91,42 @@ export const GET: APIRoute = async ({ locals }) => {
   let v1Entries = v1disc.entries;
   const httpParsedCount = v1Entries.length;
   let supplementedFromAgents = false;
-  if (v1Entries.length === 0 && agentsRes.ok && agentsRes.agents.length > 0) {
-    v1Entries = syntheticOpenClawTargetsFromAgents(agentsRes.agents);
-    supplementedFromAgents = true;
+  let supplementedFromForge = false;
+  if (v1Entries.length === 0) {
+    const fromAgents =
+      agentsRes.ok && agentsRes.agents.length > 0
+        ? syntheticOpenClawTargetsFromAgents(agentsRes.agents)
+        : [];
+    const fromForge =
+      instructions.length > 0
+        ? syntheticOpenClawTargetsFromForgeAgentIds(instructions.map((r) => r.agentId))
+        : [];
+    const merged = mergeOpenClawV1ModelEntries(fromAgents, fromForge);
+    if (merged.length > 0) {
+      v1Entries = merged;
+      supplementedFromAgents = fromAgents.length > 0;
+      supplementedFromForge = fromForge.length > 0;
+    }
   }
 
   const v1Lower = new Set(v1Entries.map((e) => e.id.toLowerCase()));
 
   let v1SourceNote: string | undefined;
-  if (supplementedFromAgents) {
+  if (supplementedFromAgents || supplementedFromForge) {
     if (v1disc.anyHttpOk && httpParsedCount === 0) {
       v1SourceNote =
-        'Le gateway a répondu sur /v1/models mais la liste était vide ou illisible ; les cibles openclaw/… affichées sont reconstruites depuis agents_list. Remarque : cette liste n’est pas le catalogue Ollama / providers — ce sont les identifiants de modèle « compat Open WebUI » (agent cible).';
+        'Le gateway a répondu sur /v1/models mais la liste était vide ou illisible ; les cibles openclaw/… affichées combinent agents_list et les rôles définis dans Forge. Remarque : ce n’est pas le catalogue Ollama / providers — ce sont les identifiants de modèle « compat Open WebUI » (agent cible).';
     } else if (!v1disc.anyHttpOk) {
       v1SourceNote =
-        'GET /v1/models (et /api/v1/models) injoignable ou refusé ; cibles openclaw/… dérivées de agents_list. Vérifiez gateway.http.endpoints.chatCompletions.enabled et le token.';
+        'GET /v1/models (et /api/v1/models) injoignable ou refusé ; cibles openclaw/… dérivées de agents_list et/ou des instructions Forge. Vérifiez gateway.http.endpoints.chatCompletions.enabled et le token.';
+    }
+    if (supplementedFromForge && !v1SourceNote) {
+      v1SourceNote =
+        'Cibles openclaw/… dérivées des instructions Forge (agents_list et HTTP /v1/models n’ont pas fourni de liste exploitable).';
     }
   }
 
-  const registryIds = new Set(agentsRes.agents.map((a) => a.id));
+  const registryKeys = gatewayRegistryKeySet(agentsRes.agents);
   const ollamaLower = new Set(ollama.names.map((n) => n.toLowerCase()));
 
   const rows: OpenClawModelsRow[] = instructions.map((row) => {
@@ -109,7 +141,7 @@ export const GET: APIRoute = async ({ locals }) => {
       openAiTarget: target,
       backendModel: backend,
       enabled: row.enabled === 1,
-      inGatewayRegistry: registryIds.has(row.agentId),
+      inGatewayRegistry: registryKeys.has(row.agentId.toLowerCase()),
       inV1Models: v1Lower.has(target.toLowerCase()),
       ollamaPresent,
     };
@@ -143,7 +175,7 @@ export const GET: APIRoute = async ({ locals }) => {
             ? 'Activez gateway.http.endpoints.chatCompletions dans OpenClaw pour exposer GET /v1/models (voir docs.openclaw.ai).'
             : !v1disc.anyHttpOk
               ? 'Vérifiez OPENCLAW_GATEWAY_URL / token et que le port HTTP du gateway est bien celui configuré.'
-              : httpParsedCount === 0 && !supplementedFromAgents
+              : httpParsedCount === 0 && !supplementedFromAgents && !supplementedFromForge
                 ? 'Aucune entrée sur /v1/models et agents_list vide — enregistrez des agents côté OpenClaw ou corrigez le format de réponse du gateway.'
                 : undefined,
       },

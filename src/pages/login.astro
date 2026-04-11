@@ -139,7 +139,7 @@ export const prerender = true;
           e.preventDefault();
           msg.classList.add('hidden');
           var em = email.value.trim();
-          var pw = password.value;
+          var pw = password.value.trim();
           if (!em || !pw) return;
           submit.disabled = true;
           var endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';

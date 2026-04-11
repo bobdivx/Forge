@@ -3,53 +3,67 @@ services:
   forge:
     cpu_shares: 90
     command: []
-    image: "${FORGE_IMAGE:-bobdivx/forge:latest}"
     container_name: forge
     deploy:
       resources:
+        limits:
+          memory: 33487568896
         reservations:
           memory: "134217728"
-    restart: unless-stopped
-    ports:
-      - "${FORGE_PORT:-4331}:4321"
-    # CasaOS/ZimaOS : le compose est exécuté sous /tmp sans copie de .env — variables dans l’UI de l’app ou ci-dessous.
+          devices: []
     environment:
-      HOST: 0.0.0.0
-      PORT: 4321
-      NODE_ENV: production
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - PORT=4321
+      # Ollama sur l’hôte : host.docker.internal. Surcharge : OLLAMA_HOST=http://… dans l’UI CasaOS / .env
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - host.docker.internal:host-gateway
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4321/login >/dev/null || exit 1"]
-      interval: 30s
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:4321/login >/dev/null || exit 1
       timeout: 10s
+      interval: 30s
       retries: 5
       start_period: 40s
+    image: bobdivx/forge:dev
+    labels:
+      icon: https://icon.casaos.io/main/all/forge.png
+      org.opencontainers.image.source: https://github.com/bobdivx/Forge
+      org.opencontainers.image.url: https://hub.docker.com/r/bobdivx/forge
+    ports:
+      - target: 4321
+        published: "4331"
+        protocol: tcp
+    privileged: true
+    pull_policy: always
+    restart: unless-stopped
     volumes:
       - type: bind
-        source: /DATA/AppData/forge/astro
+        source: /media/DATA/AppData/forge/astro
         target: /app/.astro
       - type: bind
-        source: /DATA/AppData/forge/data
+        source: /media/DATA/AppData/forge/data
         target: /app/.data
+    devices: []
+    cap_add: []
     networks:
       - forge-net
-
 networks:
   forge-net:
     name: forge-net
-
 x-casaos:
   architectures:
     - amd64
     - arm64
   author: Forge
   category: Development
-  hostname: zimaos.local
-  icon: https://raw.githubusercontent.com/withastro/astro/main/assets/astro-icon-light-gradient.svg
+  hostname: ""
+  icon: https://icon.casaos.io/main/all/forge.png
   index: /
   is_uncontrolled: false
-  port_map: "${FORGE_PORT:-4331}"
+  port_map: "4331"
   scheme: http
   store_app_id: forge
   title:

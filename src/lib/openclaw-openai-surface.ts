@@ -35,6 +35,17 @@ function findOpenAiModelItemArray(root: unknown): unknown[] | null {
   const unwrapped = unwrapOpenClawV1Payload(root);
   if (unwrapped == null) return null;
   if (Array.isArray(unwrapped)) return unwrapped;
+  if (typeof unwrapped === 'string') {
+    const t = unwrapped.trim();
+    if (t.startsWith('{') || t.startsWith('[')) {
+      try {
+        return findOpenAiModelItemArray(JSON.parse(t) as unknown);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
   if (typeof unwrapped !== 'object') return null;
   const o = unwrapped as Record<string, unknown>;
   if (Array.isArray(o.data)) return o.data;
@@ -44,6 +55,11 @@ function findOpenAiModelItemArray(root: unknown): unknown[] | null {
     const inner = o.data as Record<string, unknown>;
     if (Array.isArray(inner.data)) return inner.data;
     if (Array.isArray(inner.models)) return inner.models;
+    if (Array.isArray(inner.items)) return inner.items;
+  }
+  if (o.result != null) {
+    const nested = findOpenAiModelItemArray(o.result);
+    if (nested && nested.length) return nested;
   }
   return null;
 }
@@ -140,7 +156,42 @@ export function syntheticOpenClawTargetsFromAgents(
   add('openclaw/default', 'agents_list');
   for (const a of agents) {
     const id = String(a.id || '').trim();
-    if (id) add(`openclaw/${id}`, 'agents_list');
+    if (!id) continue;
+    if (/^openclaw\//i.test(id)) {
+      add(id, 'agents_list');
+    } else {
+      add(`openclaw/${id}`, 'agents_list');
+    }
+  }
+  return [...map.values()];
+}
+
+/** Cibles `openclaw/<agentId>` dérivées des instructions Forge (grille Paramètres). */
+export function syntheticOpenClawTargetsFromForgeAgentIds(
+  agentIds: string[],
+): OpenClawV1ModelEntry[] {
+  const map = new Map<string, OpenClawV1ModelEntry>();
+  for (const raw of agentIds) {
+    const bare = String(raw || '').trim();
+    if (!bare) continue;
+    const id = /^openclaw\//i.test(bare) ? bare : `openclaw/${bare}`;
+    const k = id.toLowerCase();
+    if (!map.has(k)) map.set(k, { id, ownedBy: 'forge' });
+  }
+  return [...map.values()];
+}
+
+export function mergeOpenClawV1ModelEntries(
+  ...lists: OpenClawV1ModelEntry[][]
+): OpenClawV1ModelEntry[] {
+  const map = new Map<string, OpenClawV1ModelEntry>();
+  for (const list of lists) {
+    for (const e of list) {
+      const id = String(e.id || '').trim();
+      if (!id) continue;
+      const k = id.toLowerCase();
+      if (!map.has(k)) map.set(k, { id, ownedBy: e.ownedBy });
+    }
   }
   return [...map.values()];
 }
@@ -164,38 +215,39 @@ export type OpenClawModelPingResult = {
   status: number;
   preview?: string;
   error?: string;
+  /** Ping réussi via `openclaw/default` + `x-openclaw-model` (l’agent `openclaw/<rôle>` est absent du gateway). */
+  viaDefaultFallback?: boolean;
+  /** Message du premier essai lorsque `viaDefaultFallback` est vrai. */
+  primaryAttemptError?: string;
 };
 
-export async function pingOpenClawChatCompletion(opts: {
+async function pingOpenClawChatCompletionOnce(params: {
+  base: string;
+  token: string;
   openAiModel: string;
   backendModel?: string;
   userMessage?: string;
-  maxTokens?: number;
+  maxTokens: number;
 }): Promise<OpenClawModelPingResult> {
-  const token = (await getOpenClawToken()).trim();
-  const base = await getOpenClawGatewayBaseUrl();
-  if (!token) {
-    return { ok: false, latencyMs: 0, status: 401, error: 'Token OpenClaw manquant.' };
-  }
-  const maxTok = opts.maxTokens ?? 24;
-  const maxTokens = Math.min(Math.max(maxTok, 8), 128);
   const t0 = Date.now();
   try {
-    const res = await fetch(`${base}/v1/chat/completions`, {
+    const res = await fetch(`${params.base}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        ...getGatewayAuthHeaders(token),
-        ...(opts.backendModel?.trim() ? { 'x-openclaw-model': opts.backendModel.trim() } : {}),
+        ...getGatewayAuthHeaders(params.token),
+        ...(params.backendModel?.trim()
+          ? { 'x-openclaw-model': params.backendModel.trim() }
+          : {}),
       },
       body: JSON.stringify({
-        model: opts.openAiModel,
-        max_tokens: maxTokens,
+        model: params.openAiModel,
+        max_tokens: params.maxTokens,
         messages: [
           {
             role: 'user',
-            content: opts.userMessage?.trim() || 'Réponds uniquement par le mot PONG.',
+            content: params.userMessage?.trim() || 'Réponds uniquement par le mot PONG.',
           },
         ],
       }),
@@ -237,6 +289,60 @@ export async function pingOpenClawChatCompletion(opts: {
   }
 }
 
+export async function pingOpenClawChatCompletion(opts: {
+  openAiModel: string;
+  backendModel?: string;
+  userMessage?: string;
+  maxTokens?: number;
+}): Promise<OpenClawModelPingResult> {
+  const token = (await getOpenClawToken()).trim();
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  if (!token) {
+    return { ok: false, latencyMs: 0, status: 401, error: 'Token OpenClaw manquant.' };
+  }
+  const maxTok = opts.maxTokens ?? 24;
+  const maxTokens = Math.min(Math.max(maxTok, 8), 128);
+  const userMessage = opts.userMessage?.trim() || 'Réponds uniquement par le mot PONG.';
+  const backend = opts.backendModel?.trim();
+
+  const primary = await pingOpenClawChatCompletionOnce({
+    base,
+    token,
+    openAiModel: opts.openAiModel,
+    backendModel: backend,
+    userMessage,
+    maxTokens,
+  });
+  if (primary.ok) return primary;
+
+  const m = String(opts.openAiModel || '').trim();
+  const afterPrefix = m.replace(/^openclaw\//i, '').toLowerCase();
+  const canTryDefault =
+    /^openclaw\//i.test(m) &&
+    afterPrefix !== '' &&
+    afterPrefix !== 'default' &&
+    afterPrefix !== 'openclaw' &&
+    Boolean(backend);
+
+  if (!canTryDefault) return primary;
+
+  const fallback = await pingOpenClawChatCompletionOnce({
+    base,
+    token,
+    openAiModel: 'openclaw/default',
+    backendModel: backend,
+    userMessage,
+    maxTokens,
+  });
+  if (!fallback.ok) return primary;
+
+  return {
+    ...fallback,
+    viaDefaultFallback: true,
+    primaryAttemptError: primary.error,
+  };
+}
+
 /**
  * Liste les tags Ollama si `OLLAMA_HOST` ou `OLLAMA_ORIGIN` est défini (optionnel).
  */
@@ -245,7 +351,11 @@ export async function fetchOllamaTagNames(): Promise<{
   names: string[];
   error?: string;
 }> {
-  const raw = process.env.OLLAMA_HOST?.trim() || process.env.OLLAMA_ORIGIN?.trim();
+  const raw =
+    process.env.OLLAMA_HOST?.trim() ||
+    process.env.OLLAMA_ORIGIN?.trim() ||
+    /* Dev local : évite « Ollama non configuré » si Ollama tourne sur la machine hôte. */
+    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : '');
   if (!raw) return { configured: false, names: [] };
   const base = raw.replace(/\/$/, '');
   const url = `${base}/api/tags`;

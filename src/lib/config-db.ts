@@ -15,6 +15,11 @@ export type ForgeConfig = {
   forgeReposRoot: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
+  /**
+   * Assistant premier lancement : `pending` → redirection /setup.
+   * `done` / `skipped` → plus d’assistant. Défaut `done` si absent en base (installations existantes).
+   */
+  forgeSetupState: string;
 };
 
 export const CONFIG_DEFAULTS: ForgeConfig = {
@@ -26,6 +31,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   forgeReposRoot: '/media/Github',
   dockerYamlDir: '/DATA/AppData',
   dockerAppDataDir: '/DATA/AppData',
+  forgeSetupState: 'done',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);

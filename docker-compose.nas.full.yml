@@ -3,8 +3,14 @@ services:
   forge:
     cpu_shares: 90
     command: []
-    image: "${FORGE_IMAGE:-bobdivx/forge:latest}"
+    # Image publiée : https://hub.docker.com/r/bobdivx/forge/tags
+    # Surcharge : FORGE_IMAGE=docker.io/bobdivx/forge:dev (ou :sha-…)
+    image: "${FORGE_IMAGE:-docker.io/bobdivx/forge:latest}"
+    pull_policy: always
     container_name: forge
+    labels:
+      org.opencontainers.image.url: "https://hub.docker.com/r/bobdivx/forge"
+      org.opencontainers.image.source: "https://github.com/bobdivx/Forge"
     deploy:
       resources:
         reservations:
@@ -17,6 +23,8 @@ services:
       HOST: 0.0.0.0
       PORT: 4321
       NODE_ENV: production
+      # Ollama sur l’hôte ZimaOS / Docker Desktop : host.docker.internal. Sinon : http://nom-service:11434
+      OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

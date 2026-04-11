@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import AgentCard from './AgentCard';
 import AgentActivityChart from './AgentActivityChart';
+import TabBar from '../ui/TabBar';
 
 type Agent = {
   id: string;
@@ -24,9 +25,9 @@ type TaskStats = {
 };
 
 function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>) {
+  /** Palette alignée Forge (vert marque + variantes lisibles sur fond blanc) */
   const CHART_COLORS = [
-    '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b',
-    '#f43f5e', '#06b6d4', '#6366f1', '#84cc16',
+    '#175B37', '#3BAE61', '#2d8a4a', '#5ec986', '#134a2d', '#6b7280', '#9ca3af', '#374151',
   ];
   const labels = agents.map((a) => {
     const n = a.name.replace('telegram:g-agent-', '').replace('agent:', '').replace(':main', '').split(':')[0].slice(0, 14);
@@ -40,7 +41,14 @@ function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>) {
   const totals = allStats.reduce((acc, s) => { acc.pending += s.pending; acc.running += s.running; acc.completed += s.completed; acc.failed += s.failed; return acc; }, { pending: 0, running: 0, completed: 0, failed: 0 });
   const doughnutData = {
     labels: ['En attente', 'En cours', 'Terminées', 'Erreurs'],
-    datasets: [{ data: [totals.pending, totals.running, totals.completed, totals.failed], backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#f43f5e'] }],
+    datasets: [
+      {
+        data: [totals.pending, totals.running, totals.completed, totals.failed],
+        backgroundColor: ['#EAB308', '#2563EB', '#3BAE61', '#EF4444'],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      },
+    ],
   };
   return { barData, doughnutData };
 }
@@ -78,10 +86,14 @@ export default function AgentsGrid() {
     return (
       <div class="space-y-8">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {[1, 2].map((i) => <div key={i} class="h-48 bg-slate-900 border border-slate-800 rounded-xl animate-pulse" />)}
+          {[1, 2].map((i) => (
+            <div key={i} class="h-48 bg-white border border-gray-100 rounded-[1.5rem] shadow-sm animate-pulse" />
+          ))}
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => <div key={i} class="h-64 bg-slate-900 border border-slate-800 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} class="h-64 bg-white border border-gray-100 rounded-[1.5rem] shadow-sm animate-pulse" />
+          ))}
         </div>
       </div>
     );
@@ -92,22 +104,30 @@ export default function AgentsGrid() {
       <AgentActivityChart barData={barData} doughnutData={doughnutData} />
 
       <div class="flex items-center justify-between flex-wrap gap-4">
-        <span class="text-sm text-slate-400">
-          <span class="text-white font-semibold">{agents.length}</span> session(s) —{' '}
-          <span class="text-emerald-400 font-semibold">{activeCount}</span> actif(s)
+        <span class="text-sm text-gray-500">
+          <span class="text-gray-900 font-semibold">{agents.length}</span> session(s) —{' '}
+          <span class="font-semibold" style={{ color: '#3BAE61' }}>{activeCount}</span> actif(s)
         </span>
-        <div class="flex gap-2">
-          {(['all', 'active', 'idle'] as const).map((f) => (
-            <button key={f} type="button" onClick={() => setFilter(f)} class={`text-xs px-3 py-1.5 rounded-lg border transition font-medium ${filter === f ? 'bg-blue-500/20 border-blue-500/40 text-blue-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
-              {f === 'all' ? 'Tous' : f === 'active' ? 'Actifs' : 'Veille'}
-            </button>
-          ))}
-        </div>
+        <TabBar
+          className="shrink-0"
+          tone="forge"
+          tabs={[
+            { id: 'all', label: 'Tous' },
+            { id: 'active', label: 'Actifs' },
+            { id: 'idle', label: 'Veille' },
+          ]}
+          active={filter}
+          onChange={(id) => setFilter(id as 'all' | 'active' | 'idle')}
+        />
       </div>
 
       {error && (
-        <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-sm text-amber-200">
-          {error} — vérifiez le token OpenClaw dans les <a href="/settings" class="underline">paramètres</a>.
+        <div class="bg-amber-50 border border-amber-200 rounded-[1.5rem] p-4 text-sm text-amber-900">
+          {error} — vérifiez le token OpenClaw dans les{' '}
+          <a href="/settings" class="underline font-medium" style={{ color: '#175B37' }}>
+            paramètres
+          </a>
+          .
         </div>
       )}
 
@@ -116,8 +136,8 @@ export default function AgentsGrid() {
           {filtered.map((agent) => <AgentCard key={agent.id} agent={agent} taskStats={taskStats[agent.id]} />)}
         </div>
       ) : (
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
-          <p class="text-slate-500 text-sm">
+        <div class="bg-white border border-gray-100 rounded-[1.5rem] shadow-sm p-12 text-center">
+          <p class="text-gray-500 text-sm">
             {filter !== 'all' ? 'Aucun agent dans ce filtre.' : 'Aucune session OpenClaw. Vérifiez que le gateway est démarré et le token configuré.'}
           </p>
         </div>

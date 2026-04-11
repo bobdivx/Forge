@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { defineMiddleware } from 'astro:middleware';
 import { verifySessionToken } from './lib/auth';
+import { getForgeSetupRedirect } from './lib/forge-setup';
 
 const PUBLIC_PATHS = [
   '/api/agents',
@@ -111,6 +112,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   if (session.valid) {
     context.locals.user = { email: session.email };
+    try {
+      const setupRedir = await getForgeSetupRedirect(pathname, context.request);
+      if (setupRedir) {
+        return context.redirect(setupRedir);
+      }
+    } catch {
+      /* DB indisponible : on laisse passer */
+    }
     return next();
   }
 

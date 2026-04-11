@@ -1,21 +1,38 @@
 import type { APIRoute } from 'astro';
-import { createSessionToken, verifyCredentials, isValidEmail, isValidPassword } from '../../../lib/auth';
+import {
+  createSessionToken,
+  verifyCredentials,
+  isValidEmail,
+  isValidPassword,
+  forgeSessionCookieSecure,
+  getUser,
+  hasUser,
+} from '../../../lib/auth';
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const body = await request.json().catch(() => ({}));
   const email = String(body?.email ?? '').trim().toLowerCase();
-  const password = String(body?.password ?? '');
+  const password = String(body?.password ?? '').trim();
 
   if (!isValidEmail(email) || !isValidPassword(password)) {
     return new Response(JSON.stringify({ error: 'Identifiants invalides' }), { status: 400 });
   }
 
   if (!(await verifyCredentials(email, password))) {
-    return new Response(JSON.stringify({ error: 'Email ou mot de passe incorrect' }), { status: 401 });
+    const existing = await getUser(email);
+    const anyAccount = await hasUser();
+    let error = 'Email ou mot de passe incorrect.';
+    if (!anyAccount) {
+      error =
+        'Aucun compte en base (table ForgeUser / fichier .astro/db.sqlite). Utilisez l’onglet « Créer un compte » ou restaurez une sauvegarde de la base.';
+    } else if (!existing) {
+      error = 'Aucun compte pour cet e-mail — vérifiez l’adresse ou créez un compte.';
+    }
+    return new Response(JSON.stringify({ error }), { status: 401 });
   }
 
   const token = await createSessionToken(email);
-  const secure = process.env.NODE_ENV === 'production';
+  const secure = forgeSessionCookieSecure(request.url);
   cookies.set('forge_session', token, {
     path: '/',
     httpOnly: true,

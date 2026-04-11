@@ -1,0 +1,16 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import SetupLayout from '../layouts/SetupLayout.astro';
+import SetupWizard from '../components/setup/SetupWizard';
+import { readForgeSetupState } from '../lib/forge-setup';
+
+const st = await readForgeSetupState();
+if (st !== 'pending') {
+  return Astro.redirect('/dashboard');
+}
+---
+
+<SetupLayout title="Assistant de configuration">
+  <SetupWizard client:load />
+</SetupLayout>

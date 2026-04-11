@@ -16,6 +16,8 @@ type PingResult = {
   status: number;
   preview?: string;
   error?: string;
+  viaDefaultFallback?: boolean;
+  primaryAttemptError?: string;
 };
 
 type OllamaInfo = { configured: boolean; count: number; error?: string; hint?: string };
@@ -59,13 +61,21 @@ function PingBadge({ result, loading }: { result: PingResult | null; loading: bo
     );
   if (!result) return null;
   const cls = result.ok ? STATUS_COLORS.ok : STATUS_COLORS.err;
+  const titleOk =
+    (result.preview ?? '') +
+    (result.viaDefaultFallback
+      ? ' — Ping via openclaw/default + x-openclaw-model (l’agent openclaw/<rôle> n’est pas enregistré sur le gateway).'
+      : '');
+  const titleKo = result.error ?? '';
   return (
     <span
       class={`inline-flex items-center gap-1 border rounded-full px-2 py-0.5 text-[10px] font-semibold ${cls}`}
-      title={result.ok ? (result.preview ?? '') : (result.error ?? '')}
+      title={result.ok ? titleOk : titleKo}
     >
       {result.ok ? '✓' : '✗'}
-      {result.ok ? `${result.latencyMs}ms` : 'Ping KO'}
+      {result.ok
+        ? `${result.latencyMs}ms${result.viaDefaultFallback ? ' · défaut' : ''}`
+        : 'Ping KO'}
     </span>
   );
 }

@@ -57,6 +57,7 @@ export default async function seed() {
         { key: 'forgeReposRoot',     value: '/media/Github',           updatedAt: new Date() },
         { key: 'dockerYamlDir',      value: '/DATA/AppData',           updatedAt: new Date() },
         { key: 'dockerAppDataDir',   value: '/DATA/AppData',           updatedAt: new Date() },
+        { key: 'forgeSetupState',    value: 'pending',                 updatedAt: new Date() },
       ]);
       console.log('Config defaults seeded.');
     }

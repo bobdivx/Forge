@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { getSuggestions, FORGE_COMMANDS, type CommandDef } from '../../lib/forge-commands';
+import { getSuggestions, type CommandDef } from '../../lib/forge-commands';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,10 +27,13 @@ const WELCOME: HistoryEntry[] = [
     id: uid(),
     type: 'welcome',
     content:
-      'Forge REPL v1.0  —  /help pour les commandes  ·  Tab pour compléter  ·  ↑↓ pour l\'historique',
+      "Forge REPL v1.0  —  /help pour les commandes  ·  Tab pour compléter  ·  ↑↓ pour l'historique",
     ts: '',
   },
 ];
+
+const FORGE = '#175B37';
+const FORGE_MUTED = '#3BAE61';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -47,7 +50,6 @@ export default function AgentRepl() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Charger la liste des agents pour le sélecteur
   useEffect(() => {
     fetch('/api/agents')
       .then((r) => r.json())
@@ -61,15 +63,12 @@ export default function AgentRepl() {
       .catch(() => {});
   }, []);
 
-  // Auto-scroll vers le bas à chaque nouvelle entrée
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
 
   const push = (type: EntryType, content: string) =>
     setHistory((h) => [...h, { id: uid(), type, content, ts: nowHMS() }]);
-
-  // ── Input handling ──────────────────────────────────────────────────────────
 
   const handleInput = (val: string) => {
     setInput(val);
@@ -96,11 +95,8 @@ export default function AgentRepl() {
     setSuggestions([]);
     push('cmd', cmd);
 
-    // /clear est géré côté client
     if (cmd === '/clear') {
-      setHistory([
-        { id: uid(), type: 'info', content: 'Terminal effacé.', ts: nowHMS() },
-      ]);
+      setHistory([{ id: uid(), type: 'info', content: 'Terminal effacé.', ts: nowHMS() }]);
       return;
     }
 
@@ -144,44 +140,38 @@ export default function AgentRepl() {
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
   return (
     <div
-      class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-2xl"
+      class="bg-white border border-gray-100 rounded-[1.5rem] shadow-sm overflow-hidden flex flex-col"
       style={{ height: '540px' }}
       onClick={() => inputRef.current?.focus()}
     >
-      {/* ── Barre de titre macOS-style ───────────────────────────────────── */}
-      <div class="flex items-center gap-3 px-4 py-2.5 bg-[#0d1117] border-b border-slate-800 shrink-0 select-none">
-        <div class="flex gap-1.5">
-          <div
-            class="w-3 h-3 rounded-full bg-rose-500/80 hover:bg-rose-400 cursor-pointer transition-colors"
+      {/* En-tête (même langage que les cartes agents / apps) */}
+      <div class="flex items-center gap-3 px-4 py-3 bg-gray-50/90 border-b border-gray-100 shrink-0 select-none">
+        <div class="flex gap-1.5 items-center">
+          <button
+            type="button"
             title="Effacer"
+            class="w-3 h-3 rounded-full bg-gray-300 hover:bg-rose-400 transition-colors border border-gray-200"
             onClick={(e) => {
               e.stopPropagation();
-              setHistory([
-                { id: uid(), type: 'info', content: 'Terminal effacé.', ts: nowHMS() },
-              ]);
+              setHistory([{ id: uid(), type: 'info', content: 'Terminal effacé.', ts: nowHMS() }]);
             }}
           />
-          <div class="w-3 h-3 rounded-full bg-amber-500/60" />
-          <div class="w-3 h-3 rounded-full bg-emerald-500/60" />
+          <span class="w-3 h-3 rounded-full bg-gray-200 border border-gray-200" />
+          <span class="w-3 h-3 rounded-full border" style={{ background: FORGE_MUTED, borderColor: `${FORGE}33` }} />
         </div>
 
-        <span class="text-[11px] font-mono text-slate-500 flex-1 text-center">
-          forge-repl
+        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex-1 text-center font-sans">
+          Console Forge
         </span>
 
-        {/* Sélecteur d'agent */}
         <div class="flex items-center gap-2">
-          <span class="text-[10px] text-slate-600 uppercase tracking-wider">
-            ctx
-          </span>
+          <span class="text-[10px] text-gray-400 uppercase tracking-wider hidden sm:inline">Contexte</span>
           <select
             value={agentId}
             onChange={(e) => setAgentId((e.target as HTMLSelectElement).value)}
-            class="select select-xs bg-slate-900 border-slate-700 text-slate-300 font-mono text-[11px] h-6 min-h-0 w-44 focus:outline-none focus:border-violet-500/50"
+            class="rounded-full border border-gray-200 bg-white text-gray-800 font-mono text-[11px] h-8 px-2.5 max-w-[10rem] sm:max-w-[12rem] focus:outline-none focus:ring-2 focus:ring-[#175B37]/25 focus:border-[#175B37]/40"
             onClick={(e) => e.stopPropagation()}
           >
             {agents.map((a) => (
@@ -192,35 +182,33 @@ export default function AgentRepl() {
           </select>
         </div>
 
-        {/* Indicateur d'activité */}
         <div
-          class={`w-2 h-2 rounded-full transition-colors ${
-            loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500/60'
+          class={`w-2 h-2 rounded-full shrink-0 transition-colors ${
+            loading ? 'bg-amber-400 animate-pulse' : ''
           }`}
+          style={!loading ? { background: FORGE_MUTED } : undefined}
           title={loading ? 'Exécution…' : 'Prêt'}
         />
       </div>
 
-      {/* ── Sortie scrollable ───────────────────────────────────────────── */}
-      <div class="flex-1 overflow-y-auto px-4 py-3 font-mono text-[12px] leading-relaxed space-y-0.5">
+      <div class="flex-1 overflow-y-auto px-4 py-3 font-mono text-[12px] leading-relaxed space-y-0.5 bg-white">
         {history.map((entry) => (
           <ReplLine key={entry.id} entry={entry} agentId={agentId} />
         ))}
 
         {loading && (
-          <div class="flex items-center gap-2 text-amber-400/60 py-0.5">
+          <div class="flex items-center gap-2 text-amber-600/80 py-0.5">
             <span class="loading loading-dots loading-xs" />
-            <span class="text-[11px]">exécution…</span>
+            <span class="text-[11px] text-gray-500">exécution…</span>
           </div>
         )}
 
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Suggestions ────────────────────────────────────────────────── */}
       {suggestions.length > 0 && (
         <div
-          class="bg-[#0d1117] border-t border-slate-800 px-4 py-2 flex flex-wrap gap-1.5 shrink-0"
+          class="bg-gray-50 border-t border-gray-100 px-4 py-2 flex flex-wrap gap-1.5 shrink-0"
           onClick={(e) => e.stopPropagation()}
         >
           {suggestions.map((s) => (
@@ -228,26 +216,25 @@ export default function AgentRepl() {
               key={s.name}
               type="button"
               onClick={() => pickSuggestion(s.name)}
-              class="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-emerald-300 hover:bg-slate-700 border border-slate-700 hover:border-emerald-500/40 transition-colors"
+              class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-white text-gray-700 hover:border-[#175B37]/35 border border-gray-200 transition-colors"
             >
-              <span class="text-violet-400">/{s.name}</span>
-              <span class="text-slate-500 ml-1">— {s.description}</span>
+              <span style={{ color: FORGE }}>/{s.name}</span>
+              <span class="text-gray-400 ml-1">— {s.description}</span>
             </button>
           ))}
-          <span class="text-[10px] text-slate-600 self-center ml-1">Tab ↵</span>
+          <span class="text-[10px] text-gray-400 self-center ml-1">Tab ↵</span>
         </div>
       )}
 
-      {/* ── Ligne de saisie ────────────────────────────────────────────── */}
       <div
-        class="flex items-center gap-2 px-4 py-2.5 bg-[#0d1117] border-t border-slate-800 shrink-0"
+        class="flex items-center gap-2 px-4 py-3 bg-gray-50/90 border-t border-gray-100 shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <span class="font-mono text-[12px] select-none shrink-0">
-          <span class="text-violet-400">forge</span>
-          <span class="text-slate-600">:</span>
-          <span class="text-cyan-400">{agentId}</span>
-          <span class="text-slateald-600 text-emerald-400">$</span>
+        <span class="font-mono text-[12px] select-none shrink-0 text-gray-500">
+          <span style={{ color: FORGE }}>forge</span>
+          <span class="text-gray-400">:</span>
+          <span style={{ color: FORGE_MUTED }}>{agentId}</span>
+          <span class="text-gray-400">$</span>
         </span>
 
         <input
@@ -258,7 +245,8 @@ export default function AgentRepl() {
           onKeyDown={handleKeyDown}
           placeholder="/help"
           disabled={loading}
-          class="flex-1 bg-transparent border-none outline-none font-mono text-[12px] text-emerald-300 placeholder-slate-700 disabled:opacity-40 caret-emerald-400"
+          class="flex-1 bg-white border border-gray-200 rounded-full px-3 py-1.5 outline-none font-mono text-[12px] text-gray-900 placeholder-gray-400 disabled:opacity-40 focus:ring-2 focus:ring-[#175B37]/20 focus:border-[#175B37]/40"
+          style={{ caretColor: FORGE }}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -271,15 +259,11 @@ export default function AgentRepl() {
             submit();
           }}
           disabled={loading || !input.trim()}
-          class="shrink-0 text-slate-600 hover:text-emerald-400 transition-colors disabled:opacity-20 p-1 rounded"
+          class="shrink-0 p-2 rounded-full border border-transparent transition-colors disabled:opacity-25 hover:bg-white hover:border-gray-200 hover:shadow-sm"
+          style={{ color: FORGE }}
           title="Exécuter (Entrée)"
         >
-          <svg
-            class="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -293,8 +277,6 @@ export default function AgentRepl() {
   );
 }
 
-// ── Sous-composant ReplLine ────────────────────────────────────────────────────
-
 function ReplLine({
   entry,
   agentId,
@@ -306,7 +288,7 @@ function ReplLine({
 
   if (type === 'welcome') {
     return (
-      <div class="text-slate-500 text-[11px] py-0.5 border-b border-slate-800/50 mb-2">
+      <div class="text-gray-500 text-[11px] py-0.5 border-b border-gray-100 mb-2">
         {content}
       </div>
     );
@@ -315,8 +297,8 @@ function ReplLine({
   if (type === 'info') {
     return (
       <div class="flex gap-2 items-start py-0.5">
-        {ts && <span class="text-slate-700 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
-        <span class="text-blue-400/70">{content}</span>
+        {ts && <span class="text-gray-400 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
+        <span class="text-sky-600">{content}</span>
       </div>
     );
   }
@@ -324,15 +306,15 @@ function ReplLine({
   if (type === 'cmd') {
     return (
       <div class="flex gap-2 items-start py-1">
-        {ts && <span class="text-slate-700 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
+        {ts && <span class="text-gray-400 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
         <div class="flex items-start gap-1.5 flex-wrap">
-          <span class="text-slate-600 shrink-0">
-            <span class="text-violet-400">forge</span>
-            <span class="text-slate-700">:</span>
-            <span class="text-cyan-400">{agentId}</span>
-            <span class="text-emerald-400">$</span>
+          <span class="text-gray-500 shrink-0">
+            <span style={{ color: FORGE }}>forge</span>
+            <span class="text-gray-400">:</span>
+            <span style={{ color: FORGE_MUTED }}>{agentId}</span>
+            <span style={{ color: FORGE }}>$</span>
           </span>
-          <span class="text-white/90 break-all">{content}</span>
+          <span class="text-gray-900 break-all">{content}</span>
         </div>
       </div>
     );
@@ -341,19 +323,16 @@ function ReplLine({
   if (type === 'error') {
     return (
       <div class="flex gap-2 items-start py-0.5">
-        {ts && <span class="text-slate-700 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
-        <pre class="text-rose-400 whitespace-pre-wrap break-words">{content}</pre>
+        {ts && <span class="text-gray-400 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
+        <pre class="text-red-600 whitespace-pre-wrap break-words">{content}</pre>
       </div>
     );
   }
 
-  // type === 'output'
   return (
     <div class="flex gap-2 items-start py-0.5">
-      {ts && <span class="text-slate-700 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
-      <pre class="text-slate-300 whitespace-pre-wrap break-words leading-relaxed text-[11.5px]">
-        {content}
-      </pre>
+      {ts && <span class="text-gray-400 text-[10px] mt-0.5 shrink-0 w-16">{ts}</span>}
+      <pre class="text-gray-700 whitespace-pre-wrap break-words leading-relaxed text-[11.5px]">{content}</pre>
     </div>
   );
 }

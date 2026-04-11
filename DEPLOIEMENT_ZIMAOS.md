@@ -47,15 +47,25 @@ Exemple:
 
 ## 5bis) Utiliser l'image Docker Hub
 
-Les compose NAS utilisent maintenant:
+Depot : [bobdivx/forge sur Docker Hub](https://hub.docker.com/r/bobdivx/forge/tags)
 
-`FORGE_IMAGE` (defaut: `bobdivx/forge:latest`)
+Les compose NAS utilisent :
 
-Exemple pour forcer un tag:
+- image par defaut : `docker.io/bobdivx/forge:latest`
+- variable optionnelle : `FORGE_IMAGE` (ex. branche CI `dev`, tag `sha-…`)
+
+Exemples :
 
 ```bash
-FORGE_IMAGE=bobdivx/forge:sha-abcdef123456 docker compose -f docker-compose.nas.yml up -d
+# Dernier tag pousse sur la branche par defaut du workflow
+FORGE_IMAGE=docker.io/bobdivx/forge:latest docker compose -f docker-compose.nas.yml up -d
+
+# Tag exact (voir onglet Tags sur Docker Hub)
+FORGE_IMAGE=docker.io/bobdivx/forge:dev docker compose -f docker-compose.nas.yml up -d
+FORGE_IMAGE=docker.io/bobdivx/forge:sha-0a604f1 docker compose -f docker-compose.nas.yml up -d
 ```
+
+Le service `forge` a `pull_policy: always` pour eviter une image locale obsolete.
 
 ## 6) Probleme connu: droits Docker
 

@@ -432,7 +432,9 @@ export async function fetchOpenClawAgentsList(_email: string | undefined): Promi
     for (const item of list) {
       if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
       const o = item as Record<string, unknown>;
-      const id = String(o.id ?? '').trim();
+      const id = String(
+        o.id ?? o.agentId ?? o.agent_id ?? o.key ?? o.slug ?? o.name ?? '',
+      ).trim();
       if (!id) continue;
       out.push({
         id,
@@ -573,6 +575,61 @@ export function mapSessionToAgentRow(s: Record<string, unknown>) {
     lastSeen: new Date(Number.isFinite(updated) ? updated : Date.now()).toLocaleString('fr-FR'),
     raw: s,
   };
+}
+
+/**
+ * Teste un gateway avec URL + jeton fournis (assistant setup / formulaire),
+ * sans lire la table Config (évite d’avoir à sauvegarder avant de tester).
+ */
+export async function probeOpenClawGatewayDraft(
+  gatewayBaseUrl: string,
+  token: string,
+): Promise<{ reachable: boolean; status: number; sessionCount: number; error?: string }> {
+  const base = String(gatewayBaseUrl || '').trim().replace(/\/$/, '');
+  const tok = String(token || '').trim();
+  if (!base || !/^https?:\/\//i.test(base)) {
+    return {
+      reachable: false,
+      status: 400,
+      sessionCount: 0,
+      error: 'URL invalide (http ou https requis).',
+    };
+  }
+  const invokeBody = buildSessionsListInvokeBody({ limit: 12, messageLimit: 0 });
+  const url = `${base}/tools/invoke`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(tok ? getGatewayAuthHeaders(tok) : {}),
+      },
+      body: invokeBody,
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+    if (!res.ok) {
+      const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+      const nested = d.error && typeof d.error === 'object' ? (d.error as { message?: string }).message : '';
+      const err =
+        (typeof d.error === 'string' ? d.error : '') ||
+        (typeof nested === 'string' ? nested : '') ||
+        (typeof d.message === 'string' ? d.message : '') ||
+        `HTTP ${res.status}`;
+      return { reachable: false, status: res.status, sessionCount: 0, error: err };
+    }
+    const sessions = normalizeOpenClawSessions(data);
+    return { reachable: true, status: res.status, sessionCount: sessions.length };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Gateway injoignable';
+    return { reachable: false, status: 0, sessionCount: 0, error: msg };
+  }
 }
 
 /**

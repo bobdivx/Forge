@@ -11,6 +11,24 @@ import { loadAstroDb } from './load-astro-db';
 
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 12;
 
+/**
+ * Cookie `Secure` : en prod sur HTTPS uniquement. Sur `http://localhost` même en
+ * `NODE_ENV=production`, sans Secure le navigateur envoie bien le cookie (sinon session
+ * « invisible » après connexion).
+ */
+export function forgeSessionCookieSecure(requestUrl: string): boolean {
+  if (process.env.NODE_ENV !== 'production') return false;
+  try {
+    const u = new URL(requestUrl);
+    if (u.protocol !== 'https:') return false;
+    const h = u.hostname.toLowerCase();
+    if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]') return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 function randomHex(size = 32): string {
   return crypto.randomBytes(size).toString('hex');
 }
