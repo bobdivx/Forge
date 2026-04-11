@@ -65,7 +65,8 @@ export default function MaintenanceTab({ onSync, syncing, message }: Props) {
             <div class="min-w-0">
               <h4 class="text-sm font-medium text-gray-900">Synchronisation des projets</h4>
               <p class="text-[10px] text-gray-400 mt-1">
-                Recherche les dépôts Git dans le dossier configuré et les ajoute à Astro DB.
+                Parcourt le répertoire des applications (Paramètres → Infrastructure), détecte les dossiers avec{' '}
+                <span class="font-mono">.git</span> et met à jour Astro DB.
               </p>
             </div>
             <button

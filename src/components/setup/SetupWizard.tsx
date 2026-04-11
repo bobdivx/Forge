@@ -12,7 +12,7 @@ type Config = {
   githubWebhookSecret: string;
 };
 
-const STEPS = ['OpenClaw', 'Dépôts & Docker', 'Jetons API', 'Validation'];
+const STEPS = ['OpenClaw', 'Applications & Docker', 'Jetons API', 'Validation'];
 
 const empty: Config = {
   openclawGatewayUrl: 'http://127.0.0.1:24190',
@@ -211,8 +211,8 @@ export default function SetupWizard() {
         {step === 1 && (
           <>
             <FormField
-              label="Racine des dépôts Git (apps)"
-              hint="Dossier parent où se trouvent les clones (ex. /media/GitHub sur ZimaOS)."
+              label="Répertoire des applications"
+              hint="Dossier parent : un sous-dossier = une application (clone Git). Ex. /media/GitHub."
             >
               <input
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-mono outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
@@ -283,7 +283,7 @@ export default function SetupWizard() {
                 <span class="text-gray-400">Jeton OC</span> {cfg.openclawToken ? '•••• renseigné' : '(vide)'}
               </li>
               <li>
-                <span class="text-gray-400">Dépôts</span> {cfg.forgeReposRoot}
+                <span class="text-gray-400">Applications</span> {cfg.forgeReposRoot}
               </li>
               <li>
                 <span class="text-gray-400">YAML / AppData</span> {cfg.dockerYamlDir} · {cfg.dockerAppDataDir}

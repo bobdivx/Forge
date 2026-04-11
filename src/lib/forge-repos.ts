@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { getConfig } from './config-db';
 
-/** Racine des dépôts (NAS). Surcharge : FORGE_REPOS_ROOT */
+/** Répertoire des applications sur disque (un sous-dossier = une app). Surcharge : FORGE_REPOS_ROOT */
 export function getReposRoot(): string {
   return process.env.FORGE_REPOS_ROOT?.trim() || '/media/Github';
 }

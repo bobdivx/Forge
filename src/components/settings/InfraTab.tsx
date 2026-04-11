@@ -18,10 +18,11 @@ export default function InfraTab({ settings, setSettings, onSave, saving, messag
     <div class="p-6 space-y-6">
       <div>
         <p class="text-xs text-gray-500 mb-6">
-          Définissez les dossiers racines pour les dépôts et les données Docker (recommandé : /mnt/).
+          Le répertoire des applications contient un dossier par application (dépôt Git cloné). Les dossiers Docker
+          servent de repères pour vos stacks ; adaptez-les à votre NAS (ex. <span class="font-mono">/media/…</span>).
         </p>
         <div class="space-y-4">
-          <FormField label="Racine des Dépôts GitHub">
+          <FormField label="Répertoire des applications">
             <input
               type="text"
               value={settings.forgeReposRoot}

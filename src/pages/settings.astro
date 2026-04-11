@@ -3,9 +3,6 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import SettingsForm from '../components/settings/SettingsForm';
 import OpenClawLayoutBadge from '../components/layout/OpenClawLayoutBadge';
 import AgentModelMatrix from '../components/settings/AgentModelMatrix';
-import { getReposRootResolved } from '../lib/forge-repos';
-
-const reposRoot = await getReposRootResolved();
 ---
 <DashboardLayout title="Paramètres" currentPath="/settings">
   <div class="max-w-4xl mx-auto space-y-6">
@@ -27,6 +24,11 @@ const reposRoot = await getReposRootResolved();
     </div>
 
     <SettingsForm client:load />
+
+    <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
+      <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">État de liaison OpenClaw</span>
+      <OpenClawLayoutBadge client:load />
+    </div>
 
     <!-- Modèles agents -->
     <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -51,36 +53,6 @@ const reposRoot = await getReposRootResolved();
       </div>
       <div class="p-6">
         <AgentModelMatrix client:load />
-      </div>
-    </div>
-
-    <!-- Infrastructure ZimaOS -->
-    <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
-      <div class="p-6">
-        <h3 class="font-semibold text-gray-900 mb-1">Infrastructure ZimaOS <span class="text-xs text-gray-400 font-normal">(Lecture seule)</span></h3>
-        <p class="text-[10px] text-gray-400 mb-6">Emplacements physiques des sources de vérité sur le disque NAS.</p>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Dépôts GitHub</label>
-            <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono truncate">{reposRoot}</div>
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">Docker YAML</label>
-            <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono truncate">/mnt/Docker/yaml</div>
-          </div>
-          <div>
-            <label class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">AppData ZimaOS</label>
-            <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 font-mono truncate">/mnt/Docker/AppData</div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="px-6 py-4 bg-gray-50 border-t border-gray-100">
-        <div class="flex items-center justify-between">
-          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">État de liaison</span>
-          <OpenClawLayoutBadge client:load />
-        </div>
       </div>
     </div>
 

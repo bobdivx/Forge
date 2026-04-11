@@ -39,7 +39,7 @@ export default function SyncProjectsButton() {
         {state === 'loading' ? (
           <span class="flex items-center gap-2"><span class="loading loading-spinner loading-xs" />Scan en cours…</span>
         ) : (
-          '⟳ Synchroniser les dépôts Git'
+          '⟳ Synchroniser les applications'
         )}
       </button>
       {msg && (
