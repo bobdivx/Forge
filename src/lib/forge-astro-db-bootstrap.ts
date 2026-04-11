@@ -1,16 +1,22 @@
 /**
- * Volume NAS vide sur `.astro` : SQLite sans tables → `no such table: ForgeUser`.
- * Un `astro db push` sur le même fichier que `ASTRO_DATABASE_FILE` (défaut : `.astro/content.db`).
- * Si le snapshot dit « à jour » mais les tables manquent, on supprime le fichier et on repousse une fois.
+ * Volume NAS vide : SQLite sans tables → `no such table: ForgeUser`.
+ * `astro db push` peut ne rien appliquer (migrations vides si `_astro_db_snapshot` prétend « à jour »).
+ * On recrée donc les tables comme le plugin Vite au build (`recreateTables`).
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { sql } from 'drizzle-orm';
+import { SQLiteAsyncDialect } from 'drizzle-orm/sqlite-core';
+import { createClient } from '@astrojs/db/dist/core/db-client/libsql-node.js';
+import { getCreateIndexQueries, getCreateTableQuery } from '@astrojs/db/dist/core/queries.js';
+import { resolveDbConfig } from '@astrojs/db/dist/core/load-file.js';
 import { normalizeDatabaseUrl } from '@astrojs/db/runtime';
 import { loadAstroDb } from './load-astro-db';
 
 let bootstrapGate: Promise<void> | undefined;
+
+const sqlite = new SQLiteAsyncDialect();
 
 function resolveLocalDbFileHref(): string {
   const cwd = process.cwd();
@@ -19,15 +25,28 @@ function resolveLocalDbFileHref(): string {
   return normalizeDatabaseUrl(envDb || '', defaultHref);
 }
 
-function runAstroDbPush(cwd: string, astroBin: string, pushUrl: string): void {
-  execFileSync(process.execPath, [astroBin, 'db', 'push'], {
-    cwd,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      ASTRO_DB_REMOTE_URL: pushUrl,
-    },
+function projectRootUrl(): URL {
+  const base = pathToFileURL(join(process.cwd(), sep === '\\' ? '\\' : '/'));
+  return new URL('.', base);
+}
+
+/** Recrée toutes les tables décrites dans `db/config.ts` (ordre : DROP IF EXISTS puis CREATE + index). */
+async function recreateAllTablesFromDbConfig(dbHref: string): Promise<void> {
+  const { dbConfig } = await resolveDbConfig({
+    root: projectRootUrl(),
+    integrations: [],
   });
+  const tables = dbConfig.tables ?? {};
+  const db = createClient({ url: dbHref });
+  const setupQueries = [];
+  for (const [name, table] of Object.entries(tables)) {
+    setupQueries.push(sql.raw(`DROP TABLE IF EXISTS ${sqlite.escapeName(name)}`));
+    setupQueries.push(sql.raw(getCreateTableQuery(name, table)));
+    for (const idx of getCreateIndexQueries(name, table)) {
+      setupQueries.push(sql.raw(idx));
+    }
+  }
+  await db.batch([db.run(sql`pragma defer_foreign_keys=true;`), ...setupQueries.map((q) => db.run(q))]);
 }
 
 async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
@@ -44,13 +63,6 @@ async function runBootstrap(): Promise<void> {
   const dbHref = resolveLocalDbFileHref();
   if (!dbHref.startsWith('file:')) return;
 
-  const cwd = process.cwd();
-  const astroBin = join(cwd, 'node_modules', 'astro', 'bin', 'astro.mjs');
-  if (!existsSync(astroBin)) {
-    console.error('[forge] Astro CLI introuvable — impossible d’appliquer le schéma DB.');
-    return;
-  }
-
   if (await forgeUserVisibleViaAstroDb()) return;
 
   const filePath = fileURLToPath(dbHref);
@@ -60,15 +72,19 @@ async function runBootstrap(): Promise<void> {
     /* ignore */
   }
 
-  console.warn('[forge] Schéma Astro DB absent — « astro db push » vers', dbHref);
-  runAstroDbPush(cwd, astroBin, dbHref);
+  try {
+    console.warn('[forge] Schéma Astro DB absent — recréation des tables vers', dbHref);
+    await recreateAllTablesFromDbConfig(dbHref);
+  } catch (e) {
+    console.warn('[forge] Échec recréation schéma (1ʳᵉ tentative):', e);
+  }
 
   if (await forgeUserVisibleViaAstroDb()) return;
 
   try {
     if (existsSync(filePath)) unlinkSync(filePath);
   } catch (e) {
-    console.warn('[forge] Impossible de supprimer le SQLite incohérent:', filePath, e);
+    console.warn('[forge] Impossible de supprimer le SQLite:', filePath, e);
   }
   try {
     mkdirSync(dirname(filePath), { recursive: true });
@@ -76,13 +92,17 @@ async function runBootstrap(): Promise<void> {
     /* ignore */
   }
 
-  console.warn('[forge] Nouvelle tentative « astro db push » après réinitialisation du fichier.');
-  runAstroDbPush(cwd, astroBin, dbHref);
+  try {
+    console.warn('[forge] Nouvelle recréation des tables après réinitialisation du fichier.');
+    await recreateAllTablesFromDbConfig(dbHref);
+  } catch (e) {
+    console.error('[forge] Échec recréation schéma (2ᵉ tentative):', e);
+  }
 
   if (!(await forgeUserVisibleViaAstroDb())) {
     console.error(
-      '[forge] ForgeUser toujours absent. Définissez ASTRO_DATABASE_FILE au **build** et au **run** ' +
-        '(ex. file:/app/.astro/content.db) puis reconstruisez l’image.',
+      '[forge] ForgeUser toujours absent après recréation. Vérifiez ASTRO_DATABASE_FILE (build + run) ' +
+        'et que `db/config.ts` est présent dans l’image.',
     );
   }
 }
