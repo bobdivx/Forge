@@ -8,8 +8,28 @@ export default function SyncProjectsButton() {
     setState('loading');
     setMsg('');
     try {
-      const r = await fetch('/api/sync-projects', { method: 'POST' });
-      const data = await r.json();
+      // Astro `checkOrigin` : un POST sans Content-Type est rejeté (403) si Origin est absent
+      // ou ne colle pas à l’URL côté serveur (proxy, IP vs hostname). JSON évite ce garde-fou.
+      const r = await fetch('/api/sync-projects', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: '{}',
+      });
+      const raw = await r.text();
+      let data: { ok?: boolean; error?: string; results?: { status: string }[] } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
+      if (!r.ok) {
+        const detail =
+          typeof data.error === 'string' && data.error ? data.error : raw.slice(0, 200) || r.statusText;
+        setMsg(`HTTP ${r.status} — ${detail}`);
+        setState('error');
+        return;
+      }
       if (data.ok) {
         const added = data.results?.filter((x: { status: string }) => x.status === 'added').length ?? 0;
         const updated =
