@@ -94,6 +94,21 @@ Pour lancer Forge + Postgres + Redis:
 docker compose -f docker-compose.nas.full.yml up -d --build
 ```
 
+## 9) CI GitHub : publication Docker Hub
+
+Le workflow `.github/workflows/dockerhub-publish.yml` pousse l'image `USERNAME/forge` sur Docker Hub.
+
+Dans le depot GitHub : **Settings → Secrets and variables → Actions → New repository secret**, ajouter :
+
+| Secret | Contenu |
+|--------|---------|
+| `DOCKERHUB_USERNAME` | Nom d'utilisateur Docker Hub |
+| `DOCKERHUB_TOKEN` | **Access Token** Docker Hub (pas le mot de passe du compte) |
+
+Noms alternatifs acceptes par le workflow : `DOCKER_USERNAME` et `DOCKER_TOKEN`.
+
+Sans ces secrets, l'etape de login echoue avec *Username and password required*.
+
 ---
 
 ## Commandes utiles
