@@ -15,7 +15,8 @@ services:
       - HOST=0.0.0.0
       - NODE_ENV=production
       - PORT=4321
-      # Ollama sur l’hôte : host.docker.internal. Surcharge : OLLAMA_HOST=http://… dans l’UI CasaOS / .env
+      # Même cible au build Docker et au run (évite db.sqlite vs content.db).
+      - ASTRO_DATABASE_FILE=file:/app/.astro/content.db
       - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
     extra_hosts:
       - host.docker.internal:host-gateway

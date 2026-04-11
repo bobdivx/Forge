@@ -90,7 +90,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   const { pathname } = context.url;
   const clientIp = getClientAddressSafe(context);
-  console.log(`[Middleware] ${pathname} from ${clientIp || '(prerender)'}`);
 
   if (isPublic(pathname)) {
     return next();

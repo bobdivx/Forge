@@ -1,12 +1,7 @@
 /**
- * Sur Docker / NAS, un volume vide monté sur `.astro` fournit un SQLite sans schéma :
- * `no such table: ForgeUser`. Les tables sont normalement créées au `astro build` sur le
- * fichier de build, pas au runtime. On applique ici `astro db push` une fois si besoin.
- *
- * Piège fréquent : `ASTRO_DATABASE_FILE` au runtime pointe vers `db.sqlite` alors que le
- * bundle `astro:db` a été construit avec la cible par défaut `.astro/content.db` — deux
- * fichiers distincts. On tente donc **plusieurs chemins locaux** et on réinitialise un
- * fichier SQLite incohérent (snapshot « à jour » mais tables absentes).
+ * Volume NAS vide sur `.astro` : SQLite sans tables → `no such table: ForgeUser`.
+ * Un `astro db push` sur le même fichier que `ASTRO_DATABASE_FILE` (défaut : `.astro/content.db`).
+ * Si le snapshot dit « à jour » mais les tables manquent, on supprime le fichier et on repousse une fois.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
@@ -24,45 +19,6 @@ function resolveLocalDbFileHref(): string {
   return normalizeDatabaseUrl(envDb || '', defaultHref);
 }
 
-/** Tous les emplacements plausibles pour un SQLite Astro DB local (évite db.sqlite vs content.db). */
-function collectLocalDbFileHrefs(): string[] {
-  const cwd = process.cwd();
-  const primary = resolveLocalDbFileHref();
-  const extras = [
-    pathToFileURL(join(cwd, '.astro', 'content.db')).href,
-    pathToFileURL(join(cwd, '.astro', 'db.sqlite')).href,
-  ];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const h of [primary, ...extras]) {
-    if (!h.startsWith('file:')) continue;
-    const key = h.replace(/\/+$/, '').toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(h);
-  }
-  return out;
-}
-
-async function forgeHasForgeUserTable(dbHref: string): Promise<boolean> {
-  const { createClient } = await import('@libsql/client');
-  const client = createClient({ url: dbHref });
-  try {
-    const r = await client.execute(
-      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ForgeUser' LIMIT 1",
-    );
-    return Boolean(r.rows?.length);
-  } catch {
-    return false;
-  } finally {
-    try {
-      client.close();
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
 function runAstroDbPush(cwd: string, astroBin: string, pushUrl: string): void {
   execFileSync(process.execPath, [astroBin, 'db', 'push'], {
     cwd,
@@ -74,7 +30,6 @@ function runAstroDbPush(cwd: string, astroBin: string, pushUrl: string): void {
   });
 }
 
-/** True si `astro:db` peut interroger ForgeUser (cible réelle du serveur). */
 async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
   try {
     const { db, ForgeUser } = await loadAstroDb();
@@ -85,12 +40,18 @@ async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
   }
 }
 
-async function ensureOneLocalFileHasSchema(
-  cwd: string,
-  astroBin: string,
-  dbHref: string,
-): Promise<void> {
+async function runBootstrap(): Promise<void> {
+  const dbHref = resolveLocalDbFileHref();
   if (!dbHref.startsWith('file:')) return;
+
+  const cwd = process.cwd();
+  const astroBin = join(cwd, 'node_modules', 'astro', 'bin', 'astro.mjs');
+  if (!existsSync(astroBin)) {
+    console.error('[forge] Astro CLI introuvable — impossible d’appliquer le schéma DB.');
+    return;
+  }
+
+  if (await forgeUserVisibleViaAstroDb()) return;
 
   const filePath = fileURLToPath(dbHref);
   try {
@@ -99,17 +60,11 @@ async function ensureOneLocalFileHasSchema(
     /* ignore */
   }
 
-  if (await forgeHasForgeUserTable(dbHref)) return;
-
-  console.warn(
-    '[forge] Schéma Astro DB absent (table ForgeUser). Exécution de « astro db push » vers',
-    dbHref,
-  );
+  console.warn('[forge] Schéma Astro DB absent — « astro db push » vers', dbHref);
   runAstroDbPush(cwd, astroBin, dbHref);
 
-  if (await forgeHasForgeUserTable(dbHref)) return;
+  if (await forgeUserVisibleViaAstroDb()) return;
 
-  /* Snapshot _astro_db_snapshot « à jour » mais tables manquantes : repartir de zéro sur ce fichier. */
   try {
     if (existsSync(filePath)) unlinkSync(filePath);
   } catch (e) {
@@ -121,45 +76,18 @@ async function ensureOneLocalFileHasSchema(
     /* ignore */
   }
 
-  console.warn('[forge] Nouvelle tentative « astro db push » après réinitialisation de', dbHref);
+  console.warn('[forge] Nouvelle tentative « astro db push » après réinitialisation du fichier.');
   runAstroDbPush(cwd, astroBin, dbHref);
+
+  if (!(await forgeUserVisibleViaAstroDb())) {
+    console.error(
+      '[forge] ForgeUser toujours absent. Définissez ASTRO_DATABASE_FILE au **build** et au **run** ' +
+        '(ex. file:/app/.astro/content.db) puis reconstruisez l’image.',
+    );
+  }
 }
 
-async function runBootstrap(): Promise<void> {
-  if (process.env.FORGE_SKIP_ASTRO_DB_BOOTSTRAP === '1') return;
-
-  const primary = resolveLocalDbFileHref();
-  if (!primary.startsWith('file:')) {
-    /* Turso / distant : schéma géré hors conteneur */
-    return;
-  }
-
-  const cwd = process.cwd();
-  const astroBin = join(cwd, 'node_modules', 'astro', 'bin', 'astro.mjs');
-  if (!existsSync(astroBin)) {
-    console.error('[forge] Astro CLI introuvable (', astroBin, ') — impossible d’appliquer le schéma DB.');
-    return;
-  }
-
-  if (await forgeUserVisibleViaAstroDb()) return;
-
-  const hrefs = collectLocalDbFileHrefs();
-  for (const href of hrefs) {
-    await ensureOneLocalFileHasSchema(cwd, astroBin, href);
-  }
-
-  if (await forgeUserVisibleViaAstroDb()) return;
-
-  console.error(
-    '[forge] Après « astro db push », la table ForgeUser reste inaccessible via astro:db. ' +
-      'Vérifiez que le **build** Docker utilise le même ASTRO_DATABASE_FILE qu’au runtime ' +
-      '(ex. `file:/app/.astro/content.db` partout), puis reconstruisez l’image.',
-  );
-}
-
-/** À appeler une fois au démarrage des requêtes (ex. middleware). */
 export function ensureAstroLocalDbSchemaOnce(): Promise<void> {
-  if (process.env.FORGE_SKIP_ASTRO_DB_BOOTSTRAP === '1') return Promise.resolve();
   if (!bootstrapGate) {
     bootstrapGate = runBootstrap().catch((e) => {
       bootstrapGate = undefined;

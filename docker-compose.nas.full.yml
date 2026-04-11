@@ -23,7 +23,7 @@ services:
       HOST: 0.0.0.0
       PORT: 4321
       NODE_ENV: production
-      # Ollama sur l’hôte ZimaOS / Docker Desktop : host.docker.internal. Sinon : http://nom-service:11434
+      ASTRO_DATABASE_FILE: "file:/app/.astro/content.db"
       OLLAMA_HOST: "${OLLAMA_HOST:-http://host.docker.internal:11434}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
