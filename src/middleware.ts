@@ -63,6 +63,15 @@ function isLocalRequest(request: Request, clientAddress?: string): boolean {
   return isLocalIp(normalizeClientIp(clientAddress));
 }
 
+/** Prérendu / build : `clientAddress` n'existe pas (voir PrerenderClientAddressNotAvailable). */
+function getClientAddressSafe(context: { clientAddress: string }): string {
+  try {
+    return context.clientAddress ?? '';
+  } catch {
+    return '';
+  }
+}
+
 function isPublic(pathname: string) {
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return true;
@@ -72,7 +81,8 @@ function isPublic(pathname: string) {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url;
-  console.log(`[Middleware] ${pathname} from ${context.clientAddress}`);
+  const clientIp = getClientAddressSafe(context);
+  console.log(`[Middleware] ${pathname} from ${clientIp || '(prerender)'}`);
 
   if (isPublic(pathname)) {
     return next();
@@ -82,7 +92,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // de reporting sans cookie de session.
   if (
     LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p)) &&
-    isLocalRequest(context.request, context.clientAddress)
+    isLocalRequest(context.request, clientIp)
   ) {
     context.locals.user = { email: 'agent@forge.local' };
     return next();
