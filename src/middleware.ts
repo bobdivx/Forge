@@ -15,6 +15,7 @@ const PUBLIC_PATHS = [
   '/api/auth/register',
   '/api/auth/logout',
   '/api/forge-hook',
+  '/api/db-test',
   // Endpoints écriture accessibles depuis le navigateur (formulaires du dashboard)
   '/api/agent-issues',
   '/api/agent-dependencies',
@@ -32,6 +33,7 @@ const LOCAL_ONLY_PATHS = [
   '/api/agent-repl',
   '/api/forge-tools',
   '/api/agent-api-secrets',
+  '/api/docker-health',
 ];
 
 function normalizeClientIp(raw: string | undefined): string {
@@ -70,6 +72,7 @@ function isPublic(pathname: string) {
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url;
+  console.log(`[Middleware] ${pathname} from ${context.clientAddress}`);
 
   if (isPublic(pathname)) {
     return next();
@@ -89,7 +92,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   let session = { valid: false, email: undefined };
   try {
     const token = context.cookies.get('forge_session')?.value ?? '';
-    session = await verifySessionToken(token);
+    if (token) {
+      session = await verifySessionToken(token);
+    }
   } catch {
     /* DB indisponible → session invalide, gérée ci-dessous */
   }
