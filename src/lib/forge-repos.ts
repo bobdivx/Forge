@@ -126,3 +126,27 @@ export async function resolveProjectPathFromDbProject(project: {
   return resolveProjectPathVariants(repoSlugFromProject(project));
 }
 
+/**
+ * Chemins absolus de chaque dépôt applicatif directement sous la racine Forge
+ * (un sous-dossier = une app). Utilisé pour corréler ports / PID entre projets.
+ */
+export async function listRepoProjectPaths(): Promise<string[]> {
+  const root = path.resolve(await getReposRootResolved());
+  const out: string[] = [];
+  try {
+    const entries = fs.readdirSync(root, { withFileTypes: true });
+    for (const e of entries) {
+      if (!e.isDirectory() || !isSafeRepoDirName(e.name)) continue;
+      const full = path.resolve(path.join(root, e.name));
+      try {
+        if (fs.statSync(full).isDirectory()) out.push(full);
+      } catch {
+        /* ignore */
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+

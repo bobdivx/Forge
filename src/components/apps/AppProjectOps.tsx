@@ -16,10 +16,13 @@ type ForgeAppDashboardConfig = {
   servers?: DashboardServerDef[];
 };
 
+type ForgePortOwner = { folder: string; label: string; pid: number };
+
 type ServerStatus = {
   running: boolean;
   pid: number | null;
   externalProcess?: boolean;
+  forgePortOwner?: ForgePortOwner | null;
   port: number;
   npmScript: string;
 };
@@ -79,6 +82,18 @@ export default function AppProjectOps({ appName, forgeVirtualHost }: Props) {
             running: Boolean(data.running),
             pid: data.pid ?? null,
             externalProcess: Boolean(data.externalProcess),
+            forgePortOwner:
+              data.forgePortOwner &&
+              typeof data.forgePortOwner === 'object' &&
+              typeof data.forgePortOwner.folder === 'string' &&
+              typeof data.forgePortOwner.label === 'string' &&
+              typeof data.forgePortOwner.pid === 'number'
+                ? {
+                    folder: data.forgePortOwner.folder,
+                    label: data.forgePortOwner.label,
+                    pid: data.forgePortOwner.pid,
+                  }
+                : null,
             port: data.port,
             npmScript: data.npmScript,
           } : null;

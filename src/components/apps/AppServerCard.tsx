@@ -5,10 +5,13 @@ type DashboardServerDef = {
   npmScript: string;
 };
 
+type ForgePortOwner = { folder: string; label: string; pid: number };
+
 type ServerStatus = {
   running: boolean;
   pid: number | null;
   externalProcess?: boolean;
+  forgePortOwner?: ForgePortOwner | null;
   port: number;
   npmScript: string;
 };
@@ -126,11 +129,28 @@ export default function AppServerCard({
       </div>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         {running ? (
-          <span class="font-semibold flex items-center gap-1.5" style="color:#3BAE61">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            {status?.externalProcess
-              ? `En cours · port ${server.port} (processus externe)`
-              : `En cours · PID ${status?.pid}`}
+          <span
+            class={`font-semibold flex flex-wrap items-center gap-x-1.5 gap-y-0.5 ${status?.externalProcess ? 'text-amber-700' : ''}`}
+            style={status?.externalProcess ? undefined : { color: '#3BAE61' }}
+          >
+            <span
+              class={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${status?.externalProcess ? 'bg-amber-500' : 'bg-green-500 animate-pulse'}`}
+            />
+            {status?.externalProcess ? (
+              status.forgePortOwner ? (
+                <>
+                  Port {server.port} déjà utilisé par le serveur « {status.forgePortOwner.label} » du projet{' '}
+                  <span class="font-mono">{status.forgePortOwner.folder}</span> (PID {status.forgePortOwner.pid}
+                  , suivi par Forge)
+                </>
+              ) : (
+                <>
+                  Port {server.port} occupé par un autre processus (non tracé par Forge pour cette entrée)
+                </>
+              )
+            ) : (
+              <>En cours · PID {status?.pid}</>
+            )}
           </span>
         ) : (
           <span class="text-gray-400 flex items-center gap-1.5">

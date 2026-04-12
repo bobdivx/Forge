@@ -3,7 +3,11 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import net from 'net';
 import path from 'path';
-import { resolveProjectPathVariants, isSafeRepoDirName } from '../../../../lib/forge-repos';
+import {
+  resolveProjectPathVariants,
+  isSafeRepoDirName,
+  listRepoProjectPaths,
+} from '../../../../lib/forge-repos';
 import { readAppDashboardConfig, devPidsDir } from '../../../../lib/project-app-config';
 
 function pidFile(projectPath: string, serverId: string) {
@@ -32,6 +36,38 @@ function isProcessAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+function sameProjectDir(a: string, b: string): boolean {
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b);
+  } catch {
+    return path.resolve(a) === path.resolve(b);
+  }
+}
+
+/**
+ * Si le port est occupé sans PID Forge pour cette entrée, cherche un autre
+ * serveur enregistré (autre projet ou autre entrée) avec le même port et un PID suivi encore vivant.
+ */
+async function findForgePortOwner(
+  currentProjectPath: string,
+  currentServerId: string,
+  port: number
+): Promise<{ folder: string; label: string; pid: number } | null> {
+  const paths = await listRepoProjectPaths();
+  for (const projectPath of paths) {
+    const cfg = readAppDashboardConfig(projectPath);
+    for (const srv of cfg.servers || []) {
+      if (srv.port !== port) continue;
+      if (sameProjectDir(projectPath, currentProjectPath) && srv.id === currentServerId) continue;
+      const tracked = readPid(projectPath, srv.id);
+      if (tracked != null && isProcessAlive(tracked)) {
+        return { folder: path.basename(projectPath), label: srv.label, pid: tracked };
+      }
+    }
+  }
+  return null;
 }
 
 /** Vérifie si un port TCP est déjà occupé (serveur externe non tracé par PID). */
@@ -85,12 +121,17 @@ export const POST: APIRoute = async ({ params, request }) => {
     // Fallback : si pas de PID tracé, vérifie si le port répond (ex. serveur démarré manuellement)
     const portBusy = !pidAlive ? await isPortListening(server.port) : false;
     const running = pidAlive || portBusy;
+    const externalProcess = portBusy && !pidAlive;
+    const forgePortOwner = externalProcess
+      ? await findForgePortOwner(projectPath, serverId, server.port)
+      : null;
     return new Response(
       JSON.stringify({
         serverId,
         running,
         pid: pidAlive ? pid : null,
-        externalProcess: portBusy && !pidAlive,
+        externalProcess,
+        forgePortOwner,
         port: server.port,
         npmScript: server.npmScript,
       }),
