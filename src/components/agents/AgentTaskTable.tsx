@@ -101,7 +101,20 @@ export default function AgentTaskTable() {
                 </div>
               </td>
               <td class="px-5 py-3 text-xs text-gray-600 max-w-xs">
-                <div class="truncate group-hover:whitespace-normal group-hover:break-words">{task.task}</div>
+                <div class="truncate group-hover:whitespace-normal group-hover:break-words">
+                  {task.task.includes('<thought>') ? (
+                    <div class="space-y-1">
+                      <div class="text-[10px] text-gray-400 italic bg-gray-50 p-2 rounded border-l-2 border-gray-200">
+                        {task.task.match(/<thought>([\s\S]*?)<\/thought>/)?.[1] || 'Thinking...'}
+                      </div>
+                      <div class="text-[#175B37] font-medium">
+                        {task.task.replace(/<thought>[\s\S]*?<\/thought>/g, '').trim()}
+                      </div>
+                    </div>
+                  ) : (
+                    task.task
+                  )}
+                </div>
               </td>
               <td class="px-5 py-3 text-center">
                 <StatusBadge status={task.status} />

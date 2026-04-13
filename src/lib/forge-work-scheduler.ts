@@ -164,8 +164,32 @@ async function sendWorkDirective(agentIds: string[]) {
   }
 }
 
+async function checkBudgetExceeded(): Promise<{ exceeded: boolean; cost?: number }> {
+  try {
+    const { fetchOpenClawSessionsPayload, normalizeOpenClawSessions, mapSessionToAgentRow } = await import('./openclaw-gateway');
+    const res = await fetchOpenClawSessionsPayload(undefined);
+    if (!res.ok) return { exceeded: false };
+    
+    const sessions = normalizeOpenClawSessions(res.data);
+    const totalCost = sessions.reduce((acc, s: any) => acc + (mapSessionToAgentRow(s).estimatedCostUsd || 0), 0);
+    
+    // Budget quotidien arbitraire (pourrait être lu depuis la table Config)
+    const DAILY_BUDGET = 5.0; 
+    return { exceeded: totalCost > DAILY_BUDGET, cost: totalCost };
+  } catch {
+    return { exceeded: false };
+  }
+}
+
 async function runWorkCycle(agentIds: string[]) {
   if (_currentlyWorking) return;
+  
+  const { exceeded, cost } = await checkBudgetExceeded();
+  if (exceeded) {
+    await logHeartbeat('warn', `Cycle annulé : Budget quotidien dépassé (${cost?.toFixed(2)}$ / 5.00$)`);
+    return;
+  }
+
   _currentlyWorking = true;
   _lastStartedAt = new Date();
   _state = 'running';

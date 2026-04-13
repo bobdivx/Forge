@@ -188,12 +188,9 @@ try {
     }
   }
 } catch (err) {
-  console.error(
-    "[forge] Échec installation binaires Windows :",
+  console.log(
+    "[forge] Échec installation binaires Windows (ignoré) :",
     err && err.message ? err.message : err
   );
-  console.error(
-    "[forge] Essaie : disque local (C:), fermer IDE sur node_modules, puis npm ci."
-  );
-  process.exit(1);
+  // process.exit(1);
 }

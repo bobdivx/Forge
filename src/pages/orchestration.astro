@@ -1,4 +1,67 @@
 ---
 export const prerender = false;
-return Astro.redirect('/work', 301);
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import ApprovalPanel from '../components/orchestration/ApprovalPanel';
+import { loadAstroDb } from '../lib/load-astro-db';
+
+let pendingCount = 0;
+try {
+  const { db, Approval, eq, count } = await loadAstroDb();
+  const res = await db.select({ value: count() }).from(Approval).where(eq(Approval.status, 'pending'));
+  pendingCount = res[0]?.value || 0;
+} catch { /* DB unavailable */ }
 ---
+
+<DashboardLayout title="Centre d'approbation" currentPath="/orchestration">
+  <div class="max-w-7xl mx-auto space-y-8">
+    
+    <!-- Header Section -->
+    <div class="flex items-end justify-between">
+      <div class="space-y-2">
+        <div class="flex items-center gap-2">
+           <div class="w-2 h-2 rounded-full bg-[#175B37] animate-pulse"></div>
+           <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Human-In-The-Loop</span>
+        </div>
+        <h1 class="text-5xl font-extrabold text-gray-900 tracking-tight">Centre d'approbation</h1>
+        <p class="text-gray-500 max-w-xl text-sm leading-relaxed">
+          Validez ou refusez les actions sensibles proposées par vos agents. Forge s'assure qu'aucune décision critique n'est prise sans votre accord.
+        </p>
+      </div>
+
+      <div class="hidden md:block">
+        <div class="bg-white px-8 py-4 rounded-[2rem] shadow-sm border border-gray-100 text-center">
+          <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">En attente</span>
+          <span class="text-4xl font-black text-[#175B37]">{pendingCount}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI State: Inbox -->
+    <section>
+      <div class="flex items-center gap-4 mb-6">
+        <h2 class="text-lg font-bold text-gray-900">Demandes de l'essaim</h2>
+        <div class="h-[1px] flex-1 bg-gray-100"></div>
+        <span class="text-[10px] text-gray-400 font-mono">Auto-refresh actif (10s)</span>
+      </div>
+
+      <ApprovalPanel client:load />
+    </section>
+
+    <!-- Footer Memo -->
+    <div class="bg-indigo-50/50 border border-indigo-100 rounded-[2rem] p-8 flex items-start gap-4">
+      <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 text-indigo-600">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div>
+        <h4 class="text-sm font-bold text-indigo-900">À propos de l'orchestration</h4>
+        <p class="text-xs text-indigo-700/70 mt-1 max-w-2xl leading-relaxed">
+          L'orchestration centralisée permet de gérer les politiques de sécurité et les budgets de l'essaim d'agents. 
+          Inspiré par Paperclip, ce centre devient le point de contrôle unique pour les actions nécessitant une validation humaine.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</DashboardLayout>

@@ -212,6 +212,27 @@ const WorkSchedule = defineTable({
   },
 });
 
+/**
+ * Demandes d’approbation (Human-in-the-Loop) — inspirées de Paperclip.
+ * Les agents peuvent soumettre une demande qui bloque une action critique.
+ * Statuts : pending | approved | rejected
+ */
+const Approval = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    agentId: column.text(),
+    /** hire | dep | budget | policy | code_change | generic */
+    type: column.text({ default: 'generic' }),
+    title: column.text(),
+    /** Données JSON structurées de la demande. */
+    payload: column.text({ optional: true }),
+    status: column.text({ default: 'pending' }),
+    feedback: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
   tables: {
     Project,
@@ -228,5 +249,6 @@ export default defineDb({
     AgentAppIssue,
     AgentDependencyRequest,
     WorkSchedule,
+    Approval,
   },
 });
