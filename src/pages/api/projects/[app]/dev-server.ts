@@ -38,6 +38,27 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Tue un processus de façon cross-platform.
+ * Sur Windows, SIGTERM n'est pas supporté : on utilise taskkill.
+ */
+function killProcess(pid: number): void {
+  try {
+    if (process.platform === 'win32') {
+      // taskkill /T = kill tree (enfants inclus), /F = force
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        detached: true,
+        stdio: 'ignore',
+        shell: false,
+      }).unref();
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+  } catch {
+    /* ignore — processus peut déjà être mort */
+  }
+}
+
 function sameProjectDir(a: string, b: string): boolean {
   try {
     return fs.realpathSync(a) === fs.realpathSync(b);
@@ -83,6 +104,20 @@ function isPortListening(port: number): Promise<boolean> {
   });
 }
 
+/**
+ * Résout le répertoire de travail effectif du serveur.
+ * Si workdir est défini, vérifie que le chemin est valide et reste dans le projet.
+ */
+function resolveServerCwd(projectPath: string, workdir?: string): string | null {
+  if (!workdir) return projectPath;
+  // Sécurité : empêche les traversées de dossier
+  const resolved = path.resolve(path.join(projectPath, workdir));
+  const rel = path.relative(projectPath, resolved);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) return null;
+  return resolved;
+}
+
 export const POST: APIRoute = async ({ params, request }) => {
   const app = params.app;
   if (!isSafeRepoDirName(String(app))) {
@@ -115,10 +150,10 @@ export const POST: APIRoute = async ({ params, request }) => {
   const pidsDir = devPidsDir(projectPath);
   fs.mkdirSync(pidsDir, { recursive: true });
 
+  // ── STATUS ──────────────────────────────────────────────────────────────────
   if (action === 'status') {
     const pid = readPid(projectPath, serverId);
     const pidAlive = pid != null && isProcessAlive(pid);
-    // Fallback : si pas de PID tracé, vérifie si le port répond (ex. serveur démarré manuellement)
     const portBusy = !pidAlive ? await isPortListening(server.port) : false;
     const running = pidAlive || portBusy;
     const externalProcess = portBusy && !pidAlive;
@@ -134,60 +169,50 @@ export const POST: APIRoute = async ({ params, request }) => {
         forgePortOwner,
         port: server.port,
         npmScript: server.npmScript,
+        workdir: server.workdir ?? null,
+        command: server.command ?? null,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
+  // ── STOP ────────────────────────────────────────────────────────────────────
   if (action === 'stop') {
     const pid = readPid(projectPath, serverId);
     if (pid == null || !isProcessAlive(pid)) {
-      try {
-        fs.unlinkSync(pidFile(projectPath, serverId));
-      } catch {
-        /* ignore */
-      }
+      try { fs.unlinkSync(pidFile(projectPath, serverId)); } catch { /* ignore */ }
       return new Response(JSON.stringify({ ok: true, stopped: false, message: 'Déjà arrêté' }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      /* ignore */
-    }
-    try {
-      fs.unlinkSync(pidFile(projectPath, serverId));
-    } catch {
-      /* ignore */
-    }
+    killProcess(pid);
+    try { fs.unlinkSync(pidFile(projectPath, serverId)); } catch { /* ignore */ }
     return new Response(JSON.stringify({ ok: true, stopped: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // start
+  // ── START ───────────────────────────────────────────────────────────────────
   const existing = readPid(projectPath, serverId);
   if (existing != null && isProcessAlive(existing)) {
     return new Response(
-      JSON.stringify({
-        ok: false,
-        error: 'Déjà en cours',
-        pid: existing,
-        port: server.port,
-      }),
+      JSON.stringify({ ok: false, error: 'Déjà en cours', pid: existing, port: server.port }),
       { status: 409, headers: { 'Content-Type': 'application/json' } }
     );
   }
-
   try {
-    if (existing != null) {
-      fs.unlinkSync(pidFile(projectPath, serverId));
-    }
-  } catch {
-    /* ignore */
+    if (existing != null) fs.unlinkSync(pidFile(projectPath, serverId));
+  } catch { /* ignore */ }
+
+  // Résolution du répertoire de travail
+  const cwd = resolveServerCwd(projectPath, server.workdir);
+  if (cwd === null) {
+    return new Response(
+      JSON.stringify({ error: `Sous-dossier invalide ou introuvable : "${server.workdir}"` }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   const log = logFile(projectPath, serverId);
@@ -200,30 +225,41 @@ export const POST: APIRoute = async ({ params, request }) => {
     });
   }
 
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-  const child = spawn(npmCmd, ['run', server.npmScript], {
-    cwd: projectPath,
+  // Construction de la commande
+  let spawnCmd: string;
+  let spawnArgs: string[];
+
+  if (server.command) {
+    // Commande custom (python, go, node, yarn, pnpm…)
+    spawnCmd = server.command;
+    spawnArgs = server.npmScript ? [server.npmScript] : [];
+  } else {
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    spawnCmd = npmCmd;
+    spawnArgs = ['run', server.npmScript];
+  }
+
+  // Variables d'env : process.env + PORT + env custom du serveur
+  const spawnEnv: Record<string, string> = {
+    ...process.env as Record<string, string>,
+    FORCE_COLOR: '0',
+    PORT: String(server.port),
+    ...(server.env ?? {}),
+  };
+
+  const child = spawn(spawnCmd, spawnArgs, {
+    cwd,
     detached: true,
     stdio: ['ignore', fd, fd],
     shell: false,
-    env: {
-      ...process.env,
-      FORCE_COLOR: '0',
-      // Permet plusieurs serveurs (Next, Vite, etc.) sans dupliquer les scripts npm.
-      PORT: String(server.port),
-    },
+    env: spawnEnv,
   });
 
-  try {
-    fs.closeSync(fd);
-  } catch {
-    /* ignore */
-  }
-
+  try { fs.closeSync(fd); } catch { /* ignore */ }
   child.unref();
 
   if (!child.pid) {
-    return new Response(JSON.stringify({ error: 'Échec du lancement npm' }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'Échec du lancement' }), { status: 500 });
   }
 
   fs.writeFileSync(pidFile(projectPath, serverId), String(child.pid), 'utf-8');
@@ -234,6 +270,9 @@ export const POST: APIRoute = async ({ params, request }) => {
       pid: child.pid,
       port: server.port,
       npmScript: server.npmScript,
+      workdir: server.workdir ?? null,
+      command: server.command ?? null,
+      cwd,
       logFile: path.basename(log),
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }

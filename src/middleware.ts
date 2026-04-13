@@ -3,6 +3,20 @@ import { defineMiddleware } from 'astro:middleware';
 import { verifySessionToken } from './lib/auth';
 import { ensureAstroLocalDbSchemaOnce } from './lib/forge-astro-db-bootstrap';
 import { getForgeSetupRedirect } from './lib/forge-setup';
+import { startScheduler } from './lib/forge-work-scheduler';
+import { startBugDetector } from './lib/forge-bug-detector';
+
+/** Démarrage du scheduler et du bug detector une seule fois après que la DB est prête. */
+let _schedulerBooted = false;
+function ensureSchedulerOnce() {
+  if (_schedulerBooted) return;
+  _schedulerBooted = true;
+  // Démarre après un court délai pour laisser le bootstrap DB se terminer
+  setTimeout(() => {
+    startScheduler();
+    startBugDetector();
+  }, 8_000);
+}
 
 const PUBLIC_PATHS = [
   '/api/agents',
@@ -36,6 +50,8 @@ const LOCAL_ONLY_PATHS = [
   '/api/forge-tools',
   '/api/agent-api-secrets',
   '/api/docker-health',
+  '/api/work-system',
+  '/api/work-schedules',
 ];
 
 function normalizeClientIp(raw: string | undefined): string {
@@ -84,6 +100,7 @@ function isPublic(pathname: string) {
 export const onRequest = defineMiddleware(async (context, next) => {
   try {
     await ensureAstroLocalDbSchemaOnce();
+    ensureSchedulerOnce();
   } catch (e) {
     console.error('[forge] ensureAstroLocalDbSchemaOnce (schéma Astro DB)', e);
   }

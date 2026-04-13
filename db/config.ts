@@ -188,6 +188,30 @@ const AgentDependencyRequest = defineTable({
   },
 });
 
+/**
+ * Plages horaires de travail automatique du swarm.
+ * Quand le système de travail est actif (enabled=1), le scheduler interne
+ * lance/arrête les agents selon les jours et heures configurés.
+ */
+const WorkSchedule = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Libellé affiché (ex: "Semaine", "Week-end"). */
+    label: column.text({ default: 'Horaires de travail' }),
+    /** Jours actifs — JSON array de 0-6 (0=dim, 1=lun, …, 6=sam). Ex: "[1,2,3,4,5]" */
+    days: column.text({ default: '[1,2,3,4,5]' }),
+    /** Heure de début au format "HH:MM". */
+    startTime: column.text({ default: '09:00' }),
+    /** Heure de fin au format "HH:MM". */
+    endTime: column.text({ default: '18:00' }),
+    /** Agents concernés — JSON array d'agentId. Vide = tous les agents. */
+    agentIds: column.text({ default: '[]' }),
+    /** 1 = cette plage est active, 0 = désactivée. */
+    enabled: column.number({ default: 1 }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
   tables: {
     Project,
@@ -203,5 +227,6 @@ export default defineDb({
     CustomApiToken,
     AgentAppIssue,
     AgentDependencyRequest,
+    WorkSchedule,
   },
 });

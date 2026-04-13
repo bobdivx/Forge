@@ -100,9 +100,17 @@ const app = {
     <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
       <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <a href="/apps" class="text-xs uppercase tracking-widest text-gray-400 hover:text-[#175B37] transition-colors">
-            ← Retour aux projets
-          </a>
+          <div class="flex items-center gap-3">
+            <a href="/apps" class="text-xs uppercase tracking-widest text-gray-400 hover:text-[#175B37] transition-colors">
+              ← Retour aux projets
+            </a>
+            <a
+              href={`/apps/${encodeURIComponent(folderKey)}/logs`}
+              class="text-xs font-mono text-gray-400 hover:text-[#175B37] transition-colors px-2 py-0.5 rounded border border-gray-200 hover:border-[#175B37]"
+            >
+              📋 Logs
+            </a>
+          </div>
           <h1 class="mt-2 text-2xl font-bold text-gray-900">{displayName}</h1>
           {displayName !== folderKey && (
             <p class="mt-1 text-[10px] font-mono text-gray-400">Dépôt : {folderKey}</p>

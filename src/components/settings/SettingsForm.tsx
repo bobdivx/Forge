@@ -5,6 +5,7 @@ import OpenClawTab from './OpenClawTab';
 import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
 import InfraTab from './InfraTab';
 import MaintenanceTab from './MaintenanceTab';
+import WorkScheduleTab from './WorkScheduleTab';
 
 type Config = {
   forgeReposRoot: string;
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'openclaw', label: 'Connexion OpenClaw' },
   { id: 'api', label: 'Jetons API' },
   { id: 'infra', label: 'Infrastructure' },
+  { id: 'schedule', label: 'Horaires de travail' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
 
@@ -269,6 +271,7 @@ export default function SettingsForm() {
             message={message}
           />
         )}
+        {activeTab === 'schedule' && <WorkScheduleTab />}
         {activeTab === 'maintenance' && (
           <MaintenanceTab onSync={syncProjects} syncing={syncing} message={message} />
         )}

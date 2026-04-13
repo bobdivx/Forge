@@ -18,10 +18,20 @@ export const GET: APIRoute = async ({ params }) => {
   }
   const config = readAppDashboardConfig(projectPath);
   const pkg = readPackageScripts(projectPath);
-  return new Response(JSON.stringify({ config, packageName: pkg.name, npmScripts: pkg.scripts }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+
+  // Pour chaque serveur ayant un workdir, on lit aussi les scripts de ce sous-dossier
+  const workdirScripts: Record<string, string[]> = {};
+  for (const srv of config.servers ?? []) {
+    if (srv.workdir) {
+      const sub = readPackageScripts(projectPath, srv.workdir);
+      if (sub.scripts.length > 0) workdirScripts[srv.id] = sub.scripts;
+    }
+  }
+
+  return new Response(
+    JSON.stringify({ config, packageName: pkg.name, npmScripts: pkg.scripts, workdirScripts }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } }
+  );
 };
 
 export const POST: APIRoute = async ({ params, request }) => {

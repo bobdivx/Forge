@@ -26,7 +26,8 @@ type MatrixData = {
   rows: ModelRow[];
   ollama: OllamaInfo;
   v1Models: { ok: boolean; httpReachable: boolean; sourceNote?: string; hint?: string };
-  agentsList: { ok: boolean; count: number };
+  agentsList: { ok: boolean; count: number; status?: number; error?: string };
+  gatewayMeta?: { gatewayBaseUrl: string; tokenConfigured: boolean; tokenSource: string };
 };
 
 const STATUS_COLORS = {
@@ -80,6 +81,19 @@ function PingBadge({ result, loading }: { result: PingResult | null; loading: bo
   );
 }
 
+type SyncPreview = {
+  ok: boolean;
+  path?: string;
+  container?: string | null;
+  current?: string[];
+  forgeAgents?: string[];
+  toAdd?: string[];
+  alreadyPresent?: string[];
+  notInForge?: string[];
+  upToDate?: boolean;
+  error?: string;
+};
+
 export default function AgentModelMatrix() {
   const [data, setData] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -91,6 +105,10 @@ export default function AgentModelMatrix() {
   const [editModel, setEditModel] = useState('');
   const [saving, setSaving] = useState<string | null>(null);
   const [saveMsg, setSaveMsg] = useState('');
+  const [syncPreview, setSyncPreview] = useState<SyncPreview | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
 
   async function load() {
     setLoading(true);
@@ -123,6 +141,46 @@ export default function AgentModelMatrix() {
       setPings((p) => ({ ...p, [row.agentId]: { ok: false, latencyMs: 0, status: 0, error: e.message } }));
     } finally {
       setPinging((p) => ({ ...p, [row.agentId]: false }));
+    }
+  }
+
+  async function loadSyncPreview() {
+    setSyncLoading(true);
+    setSyncMsg('');
+    try {
+      const res = await fetch('/api/openclaw-sync-agents');
+      const d = await res.json();
+      setSyncPreview(d);
+    } catch (e: unknown) {
+      setSyncPreview({ ok: false, error: e instanceof Error ? e.message : 'Erreur réseau' });
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
+  async function runSync(restart = true) {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const res = await fetch('/api/openclaw-sync-agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restart }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setSyncMsg(
+          `✓ ${d.agentsPushed?.length ?? 0} agents poussés vers OpenClaw${d.restart?.ok ? ' · conteneur redémarré' : d.restart ? ' · redémarrage échoué' : ''}.`,
+        );
+        setSyncPreview(null);
+        setTimeout(() => load(), 3000);
+      } else {
+        setSyncMsg(`✗ ${d.error || 'Échec de la synchronisation'}`);
+      }
+    } catch {
+      setSyncMsg('✗ Erreur réseau');
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -210,8 +268,50 @@ export default function AgentModelMatrix() {
 
       {/* Notes de contexte */}
       {data.ollama && !data.ollama.configured && (
-        <div class="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
-          <strong>Ollama non configuré</strong> — Définissez <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> sur l'hôte Forge pour vérifier la présence des modèles localement.
+        <div class="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700 space-y-1">
+          <p><strong>Ollama non configuré</strong> — Définissez <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> dans le <code class="bg-blue-100 px-1 rounded">.env</code> Forge (ex. <code class="bg-blue-100 px-1 rounded">http://127.0.0.1:11434</code>).</p>
+        </div>
+      )}
+      {data.ollama?.configured && data.ollama.count === 0 && (
+        <div class="rounded-xl bg-orange-50 border border-orange-100 px-4 py-3 text-xs text-orange-700 space-y-1">
+          <p><strong>Ollama : aucun modèle installé.</strong> Exécute <code class="bg-orange-100 px-1 rounded">ollama pull qwen2.5:32b</code> puis <code class="bg-orange-100 px-1 rounded">ollama pull qwen2.5-coder:7b</code>, etc. selon les modèles de tes agents.</p>
+        </div>
+      )}
+      {!data.agentsList.ok && (
+        <div class={`rounded-xl px-4 py-3 text-xs space-y-2 ${data.v1Models?.httpReachable ? 'bg-yellow-50 border border-yellow-100 text-yellow-800' : 'bg-red-50 border border-red-100 text-red-700'}`}>
+          <p class="font-semibold">
+            {data.v1Models?.httpReachable
+              ? `agents_list KO (HTTP ${data.agentsList.status ?? '?'}) — gateway HTTP accessible mais POST /tools/invoke a échoué`
+              : `Gateway inaccessible (HTTP ${data.agentsList.status ?? '?'})`}
+          </p>
+          {data.agentsList.error && (
+            <p class="font-mono bg-black/5 rounded px-2 py-1 break-all">
+              {typeof data.agentsList.error === 'string'
+                ? data.agentsList.error
+                : JSON.stringify(data.agentsList.error)}
+            </p>
+          )}
+          <div class="space-y-1 text-[11px] opacity-80">
+            {data.agentsList.status === 401 && (
+              <p>→ Token refusé par le gateway. Vérifie que le token dans Paramètres → Connexion OpenClaw correspond exactement à celui dans la config OpenClaw.</p>
+            )}
+            {data.agentsList.status === 403 && (
+              <p>→ Tool <code class="bg-black/10 px-1 rounded">agents_list</code> non autorisé. Ajoute <code class="bg-black/10 px-1 rounded">agents_list</code> à <code class="bg-black/10 px-1 rounded">gateway.tools.allow</code> dans la config OpenClaw.</p>
+            )}
+            {data.agentsList.status === 404 && (
+              <p>→ Endpoint <code class="bg-black/10 px-1 rounded">/tools/invoke</code> absent. Active <code class="bg-black/10 px-1 rounded">gateway.http.endpoints.toolsInvoke.enabled: true</code> dans la config OpenClaw.</p>
+            )}
+            {(!data.agentsList.status || data.agentsList.status === 0) && (
+              <p>→ Erreur réseau. Vérifie l'URL du gateway dans Paramètres → Connexion OpenClaw et que le conteneur tourne (<code class="bg-black/10 px-1 rounded">docker ps</code>).</p>
+            )}
+            {data.gatewayMeta && (
+              <p class="mt-1">
+                URL : <code class="bg-black/10 px-1 rounded">{data.gatewayMeta.gatewayBaseUrl}</code>
+                {' · '}
+                Token : {data.gatewayMeta.tokenConfigured ? `✓ configuré (source : ${data.gatewayMeta.tokenSource})` : '✗ absent'}
+              </p>
+            )}
+          </div>
         </div>
       )}
       {data.v1Models?.sourceNote && (
@@ -220,10 +320,127 @@ export default function AgentModelMatrix() {
         </div>
       )}
 
+      {/* Sync agents → OpenClaw */}
+      <div class="rounded-2xl border border-gray-200 overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-4 py-3 bg-gray-50">
+          <div>
+            <p class="text-xs font-semibold text-gray-800">Synchroniser les agents vers OpenClaw</p>
+            <p class="text-[10px] text-gray-400 mt-0.5">
+              Écrit la liste des agents Forge dans <span class="font-mono">openclaw.json</span> et redémarre le conteneur.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={syncPreview ? () => setSyncPreview(null) : loadSyncPreview}
+            disabled={syncLoading || syncing}
+            class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {syncLoading
+              ? <><span class="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" /> Analyse…</>
+              : syncPreview ? 'Masquer' : '↻ Analyser'}
+          </button>
+        </div>
+
+        {syncPreview && (
+          <div class="px-4 py-3 space-y-3 border-t border-gray-100">
+            {!syncPreview.ok ? (
+              <p class="text-xs text-red-600 font-mono">{syncPreview.error}</p>
+            ) : (
+              <>
+                <div class="flex flex-wrap gap-4 text-xs">
+                  <div>
+                    <span class="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Fichier</span>
+                    <code class="font-mono text-[10px] bg-gray-100 px-2 py-0.5 rounded">{syncPreview.path}</code>
+                  </div>
+                  <div>
+                    <span class="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Conteneur</span>
+                    <code class="font-mono text-[10px] bg-gray-100 px-2 py-0.5 rounded">{syncPreview.container ?? 'non détecté'}</code>
+                  </div>
+                </div>
+
+                {(syncPreview.toAdd?.length ?? 0) > 0 && (
+                  <div>
+                    <p class="text-[10px] text-emerald-700 font-semibold mb-1">
+                      {syncPreview.toAdd!.length} agent{syncPreview.toAdd!.length > 1 ? 's' : ''} à ajouter :
+                    </p>
+                    <div class="flex flex-wrap gap-1">
+                      {syncPreview.toAdd!.map((id) => (
+                        <span key={id} class="text-[10px] font-mono bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded-full">
+                          +{id}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(syncPreview.notInForge?.length ?? 0) > 0 && (
+                  <div>
+                    <p class="text-[10px] text-gray-400 font-semibold mb-1">
+                      {syncPreview.notInForge!.length} agent{syncPreview.notInForge!.length > 1 ? 's' : ''} déjà dans OpenClaw (conservés) :
+                    </p>
+                    <div class="flex flex-wrap gap-1">
+                      {syncPreview.notInForge!.map((id) => (
+                        <span key={id} class="text-[10px] font-mono bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{id}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {syncPreview.upToDate ? (
+                  <p class="text-xs text-emerald-600 font-semibold">✓ Tous les agents Forge sont déjà dans OpenClaw.</p>
+                ) : (
+                  <div class="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => runSync(true)}
+                      disabled={syncing}
+                      class="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                      style="background:#175B37"
+                    >
+                      {syncing
+                        ? <><span class="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" /> Sync…</>
+                        : '↑ Synchroniser + redémarrer OpenClaw'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runSync(false)}
+                      disabled={syncing}
+                      class="px-4 py-2 rounded-full text-xs font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Sans redémarrer
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {syncMsg && (
+          <div class={`px-4 py-2 text-xs font-medium border-t ${syncMsg.startsWith('✓') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+            {syncMsg}
+          </div>
+        )}
+      </div>
+
       {/* Actions */}
       <div class="flex items-center justify-between flex-wrap gap-2">
         <p class="text-xs text-gray-500">
-          {totalAgents} agents · Gateway : {data.agentsList.ok ? `${data.agentsList.count} enregistrés` : '⚠ non joignable'} · Ollama : {data.ollama.configured ? `${data.ollama.count} modèles` : 'non configuré'}
+          {totalAgents} agents
+          {' · '}
+          Gateway :{' '}
+          {data.agentsList.ok
+            ? `${data.agentsList.count} agent${data.agentsList.count !== 1 ? 's' : ''} enregistrés`
+            : data.v1Models?.httpReachable
+              ? '⚠ agents_list KO (token ou gateway.tools.allow)'
+              : '⚠ inaccessible (URL ou token)'}
+          {' · '}
+          Ollama :{' '}
+          {data.ollama.configured
+            ? data.ollama.count === 0
+              ? '⚠ 0 modèles (ollama pull requis)'
+              : `${data.ollama.count} modèle${data.ollama.count !== 1 ? 's' : ''}`
+            : 'non configuré (OLLAMA_HOST absent)'}
         </p>
         <div class="flex items-center gap-2">
           <button

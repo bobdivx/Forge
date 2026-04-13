@@ -336,14 +336,22 @@ export async function fetchOpenClawJson(
     let data: unknown = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
     if (!res.ok) {
+      const d = data as Record<string, unknown>;
+      const rawErr = d?.error ?? d?.message ?? d?.detail ?? null;
       const baseErr =
-        (data as Record<string, string>)?.error ||
-        (data as Record<string, string>)?.message ||
-        `HTTP ${res.status}`;
+        typeof rawErr === 'string'
+          ? rawErr
+          : rawErr != null && typeof rawErr === 'object'
+            ? ((rawErr as Record<string, unknown>).message != null
+                ? String((rawErr as Record<string, unknown>).message)
+                : JSON.stringify(rawErr))
+            : `HTTP ${res.status}`;
       const hint401 =
         res.status === 401 && !token
           ? ' — renseignez le token dans Paramètres → Connexion OpenClaw (ou OPENCLAW_GATEWAY_TOKEN).'
-          : '';
+          : res.status === 401 && token
+            ? ' — token configuré mais refusé par le gateway. Vérifiez la valeur dans OpenClaw (commande : openclaw gateway token show).'
+            : '';
       return {
         ok: false, status: res.status, data,
         error: `${baseErr}${hint401}`,

@@ -1,0 +1,49 @@
+---
+// @ts-nocheck
+export const prerender = false;
+
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import AppLogsPage from '../../../components/apps/AppLogsPage';
+import { resolveProjectPathVariants, isSafeRepoDirName } from '../../../lib/forge-repos';
+
+const rawParam = Astro.params.app;
+const appName = typeof rawParam === 'string' ? decodeURIComponent(rawParam) : '';
+
+if (!isSafeRepoDirName(appName)) {
+  return Astro.redirect('/apps');
+}
+
+const projectPath = await resolveProjectPathVariants(appName);
+if (!projectPath) {
+  return Astro.redirect('/apps');
+}
+
+const serverId = Astro.url.searchParams.get('server') ?? undefined;
+---
+
+<DashboardLayout title={`Logs — ${appName}`} currentPath="/apps">
+  <div class="max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <a
+        href={`/apps/${encodeURIComponent(appName)}`}
+        class="text-xs text-gray-400 hover:text-[#175B37] transition-colors"
+      >
+        ← {appName}
+      </a>
+      <span class="text-gray-300">/</span>
+      <h1 class="text-lg font-bold text-gray-900">Logs serveurs</h1>
+    </div>
+
+    <!-- Viewer pleine page -->
+    <div class="rounded-2xl overflow-hidden border border-gray-800 shadow-xl">
+      <AppLogsPage
+        client:load
+        appName={appName}
+        initialServerId={serverId}
+      />
+    </div>
+
+  </div>
+</DashboardLayout>

@@ -411,6 +411,85 @@ const dockerLogs: ForgeTool<
     }),
 };
 
+// ── Scripts npm ───────────────────────────────────────────────────────────────
+
+type ScriptEntry = { workdir: string; scripts: Record<string, string> };
+
+const projectScripts: ForgeTool<
+  { project: string; depth?: number },
+  ScriptEntry[]
+> = {
+  name: 'project_scripts',
+  description:
+    'Liste tous les scripts npm/package.json disponibles dans un projet (racine + sous-dossiers). ' +
+    'Retourne pour chaque package.json trouvé : le chemin relatif et les scripts définis.',
+  category: 'file',
+  params: {
+    project: { type: 'string', description: 'Nom du projet', required: true },
+    depth: {
+      type: 'number',
+      description: 'Profondeur de scan des sous-dossiers (défaut 2, max 3)',
+      default: 2,
+    },
+  },
+  execute: ({ project, depth = 2 }, _ctx) =>
+    run('project_scripts', () => {
+      const base = resolveProjectPath(project);
+      if (!base)
+        return {
+          ok: false,
+          output: [],
+          error: `Projet introuvable: ${project}`,
+          durationMs: 0,
+          toolName: 'project_scripts',
+        };
+
+      const maxDepth = Math.min(Number(depth) || 2, 3);
+      const results: ScriptEntry[] = [];
+      const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', '.turbo']);
+
+      function scanDir(absDir: string, relDir: string, currentDepth: number) {
+        const pkgPath = path.join(absDir, 'package.json');
+        if (fs.existsSync(pkgPath)) {
+          try {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+            const scripts: Record<string, string> = {};
+            if (pkg.scripts && typeof pkg.scripts === 'object') {
+              for (const [k, v] of Object.entries(pkg.scripts)) {
+                if (typeof v === 'string') scripts[k] = v;
+              }
+            }
+            if (Object.keys(scripts).length > 0) {
+              results.push({ workdir: relDir || '.', scripts });
+            }
+          } catch {
+            /* package.json invalide — ignorer */
+          }
+        }
+        if (currentDepth >= maxDepth) return;
+        try {
+          const entries = fs.readdirSync(absDir, { withFileTypes: true });
+          for (const e of entries) {
+            if (!e.isDirectory() || SKIP_DIRS.has(e.name) || e.name.startsWith('.')) continue;
+            const sub = path.join(absDir, e.name);
+            // Sécurité : rester dans le projet
+            if (!path.resolve(sub).startsWith(path.resolve(base))) continue;
+            scanDir(sub, relDir ? `${relDir}/${e.name}` : e.name, currentDepth + 1);
+          }
+        } catch { /* ignore */ }
+      }
+
+      scanDir(base, '', 0);
+
+      return {
+        ok: true,
+        output: results,
+        toolName: 'project_scripts',
+        durationMs: 0,
+      };
+    }),
+};
+
 // ── System ────────────────────────────────────────────────────────────────────
 
 const projectsList: ForgeTool<Record<string, never>, string[]> = {
@@ -455,6 +534,7 @@ const ALL_TOOLS: ForgeTool[] = [
   fileList as ForgeTool,
   fileRead as ForgeTool,
   fileTree as ForgeTool,
+  projectScripts as ForgeTool,
   dockerPs as ForgeTool,
   dockerLogs as ForgeTool,
   projectsList as ForgeTool,
