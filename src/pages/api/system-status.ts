@@ -29,10 +29,15 @@ export const GET: APIRoute = async () => {
     const cpuPercent = Math.round((loadAvg[0] / os.cpus().length) * 100);
 
     let diskUsage = null;
+    let githubDiskUsage = null;
     try {
       const dfOutput = execSync('df -h /mnt/Docker --output=pcent').toString();
       const match = dfOutput.match(/(\d+)%/);
       if (match) diskUsage = parseInt(match[1]);
+
+      const dfGitHub = execSync('df -h /mnt/GitHub --output=pcent').toString();
+      const matchGH = dfGitHub.match(/(\d+)%/);
+      if (matchGH) githubDiskUsage = parseInt(matchGH[1]);
     } catch (e) {
       console.error("Failed to fetch disk usage", e);
     }
@@ -42,6 +47,7 @@ export const GET: APIRoute = async () => {
       cpuLoad: cpuPercent,
       uptime: os.uptime(),
       diskUsage: diskUsage,
+      githubDiskUsage: githubDiskUsage,
       platform: os.platform()
     }), { 
       status: 200, 

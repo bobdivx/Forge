@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 
 export default function SystemMonitor() {
-  const [stats, setStats] = useState({ memoryUsage: 0, cpuLoad: 0 });
+  const [stats, setStats] = useState({ memoryUsage: 0, cpuLoad: 0, diskUsage: 0, githubDiskUsage: 0 });
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -24,6 +24,16 @@ export default function SystemMonitor() {
           label: 'Charge CPU',
           val: stats.cpuLoad,
           color: (stats.cpuLoad ?? 0) > 80 ? 'bg-red-500' : (stats.cpuLoad ?? 0) > 50 ? 'bg-yellow-500' : 'bg-indigo-500',
+        },
+        { 
+          label: 'Disque (Docker)', 
+          val: stats.diskUsage, 
+          color: (stats.diskUsage ?? 0) > 90 ? 'bg-red-500' : 'bg-emerald-500' 
+        },
+        { 
+          label: 'Disque (GitHub)', 
+          val: stats.githubDiskUsage, 
+          color: (stats.githubDiskUsage ?? 0) > 90 ? 'bg-red-500' : 'bg-cyan-500' 
         },
       ].map(({ label, val, color }) => (
         <div key={label}>
