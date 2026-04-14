@@ -1,0 +1,246 @@
+---
+// src/pages/health.astro
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import { loadAstroDb } from '../lib/load-astro-db';
+import { getOpenClawGatewayBaseUrl, fetchOpenClawSessionsPayload, normalizeOpenClawSessions, fetchOpenClawAgentsList, fetchOpenClawModelCatalog } from '../lib/openclaw-gateway';
+import { getAllConfig, getConfig } from '../lib/config-db';
+
+const config = await getAllConfig();
+const { db, AgentInstruction, ActivityLog, AgentBudget, Heartbeat, sql, desc } = await loadAstroDb();
+
+// 1. Gateway Health & Auth
+const gatewayUrl = await getOpenClawGatewayBaseUrl();
+const gatewayToken = (await getConfig('openclawToken')) || 'casaos';
+
+// 2. Sessions & Agents
+const userEmail = Astro.locals.user?.email;
+const gatewayRes = await fetchOpenClawSessionsPayload(userEmail);
+const sessions = gatewayRes.ok ? normalizeOpenClawSessions(gatewayRes.data) : [];
+const gatewayError = !gatewayRes.ok ? gatewayRes.error : null;
+
+const forgeAgents = await db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`);
+const forgeIds = forgeAgents.map(a => a.agentId.toLowerCase());
+const activeSessionIds = sessions.map((s: any) => (s.id || s.key || s.sessionKey || '').toLowerCase());
+
+// On considère "Connecté" si l'agent a une session active
+const connectedAgentsCount = forgeIds.filter(id => activeSessionIds.includes(id)).length;
+
+// 3. Ollama Status & Model Catalog
+let availableModels: string[] = [];
+try {
+    // a. Discovery par les agents (traditionnel)
+    const agentsRes = await fetchOpenClawAgentsList(userEmail);
+    if (agentsRes.ok) {
+        agentsRes.agents.forEach(a => availableModels.push(`openclaw/${a.id}`));
+    }
+    
+    // b. Discovery par le catalogue global (Ollama NAS / Windows)
+    const { fetchOpenClawModelCatalog } = await import('../lib/openclaw-gateway');
+    const catalogRes = await fetchOpenClawModelCatalog(userEmail);
+    if (catalogRes.ok) {
+        catalogRes.models.forEach(m => {
+            const id = `openclaw/${m.id}`;
+            if (!availableModels.includes(id)) availableModels.push(id);
+        });
+    }
+
+    if (!agentsRes.ok && !catalogRes.ok) {
+        console.warn('[Health] Discovery error:', agentsRes.error || catalogRes.error);
+    }
+} catch (e) {
+    console.error('[Health] Failed to sync models:', e);
+}
+
+// 4. Budget Status & Auto-Seeding (Robust approach)
+let budgets = await db.select().from(AgentBudget);
+if (budgets.length === 0 && forgeAgents.length > 0) {
+    const seed = forgeAgents.map(a => ({
+        agentId: a.agentId,
+        monthlyCents: 500,
+        alertThreshold: 80,
+        enabled: 1,
+        updatedAt: new Date()
+    }));
+    try {
+        await db.insert(AgentBudget).values(seed);
+        budgets = await db.select().from(AgentBudget);
+    } catch(e) { console.error('[Health] Seeding failed', e); }
+}
+// Protection contre console columns missing ou mismatch runtime
+const activeBudgetsCount = budgets.filter(b => b.enabled === 1 || (b as any).enabled === undefined || (b as any).enabled === null).length;
+const totalMonthSpent = budgets.reduce((acc, b) => acc + (Number(b.spentThisMonth) || 0), 0);
+
+// 5. Recent Activity
+const recentLogs = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(10);
+const rawPulse = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(100);
+const recentPulse = rawPulse.filter(p => p.action.startsWith('scheduler.') || p.action.startsWith('work_cycle.'));
+
+const recentHeartbeats = (recentPulse.length > 0) 
+    ? recentPulse.slice(0, 10).map(p => ({ 
+        timestamp: p.createdAt, 
+        level: p.action.includes('.') ? (p.action.split('.')[1] === 'started' ? 'info' : p.action.split('.')[1]) : 'info', 
+        message: p.action.startsWith('work_cycle') ? `Cycle: ${p.details}` : p.details 
+      })) 
+    : await db.select().from(Heartbeat).orderBy(desc(Heartbeat.timestamp)).limit(10);
+---
+
+<DashboardLayout title="Santé du Pipeline" currentPath="/health">
+    <div class="max-w-6xl mx-auto space-y-8 p-4 py-8">
+        <header class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-zinc-900 mb-2">Santé du Pipeline</h1>
+                <p class="text-zinc-500 font-medium small-caps tracking-wide">Monitoring Infrastructure Forge &times; OpenClaw</p>
+            </div>
+            <div class="flex gap-2">
+                <button 
+                  onclick="window.location.reload()" 
+                  class="px-6 py-2.5 bg-[#175B37] hover:bg-[#1a663e] text-white rounded-full font-semibold transition-all shadow-lg shadow-emerald-900/10 flex items-center gap-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>
+                    Actualiser
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Gateway Status -->
+            <div class={gatewayRes.ok ? "p-6 bg-white border-l-4 border-l-emerald-500 border border-zinc-100 rounded-3xl shadow-sm" : "p-6 bg-rose-50 border-l-4 border-l-rose-500 border border-rose-100 rounded-3xl shadow-sm"}>
+                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">{gatewayRes.ok ? "OpenClaw Gateway" : "Gateway Hors-Ligne"}</p>
+                <div class="flex items-center gap-2">
+                    <span class={gatewayRes.ok ? "text-2xl font-black text-zinc-900" : "text-2xl font-black text-rose-600"}>
+                        {gatewayRes.ok ? "Actif" : "Erreur"}
+                    </span>
+                    {gatewayRes.ok && <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>}
+                </div>
+                <p class="text-[10px] text-zinc-400 mt-2 truncate font-mono">{gatewayUrl}</p>
+            </div>
+
+            <!-- Agents Status -->
+            <div class="p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm">
+                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">Agents Connectés</p>
+                <div class="flex items-baseline gap-2">
+                    <span class={connectedAgentsCount > 0 ? "text-2xl font-black text-emerald-600" : "text-2xl font-black text-zinc-400"}>
+                        {connectedAgentsCount}
+                    </span>
+                    <span class="text-zinc-400 text-xs font-bold">/ {forgeIds.length} sessions</span>
+                </div>
+                <p class="text-[10px] text-zinc-400 mt-2">Présence dans le swarm</p>
+            </div>
+
+            <!-- Ollama Status -->
+            <div class="p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm">
+                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">Modèles LLM</p>
+                <div class="flex items-baseline gap-2">
+                    <span class={availableModels.length > 0 ? "text-2xl font-black text-emerald-600" : "text-2xl font-black text-rose-600"}>
+                        {availableModels.length}
+                    </span>
+                    <span class="text-zinc-400 text-xs font-bold">visibles</span>
+                </div>
+                <p class="text-[10px] text-zinc-400 mt-2 truncate">
+                    {availableModels.length > 0 ? availableModels[0] : (gatewayRes.error || 'Aucun modèle détecté')}
+                </p>
+            </div>
+
+            <!-- Budget Status -->
+            <div class="p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm">
+                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">Budget Mensuel</p>
+                <div class="flex items-baseline gap-2">
+                    <span class="text-2xl font-black text-zinc-900">{activeBudgetsCount}</span>
+                    <span class="text-zinc-400 text-xs font-bold">profils</span>
+                </div>
+                <p class="text-[10px] text-emerald-600 mt-2 font-bold tracking-tight">
+                  {(totalMonthSpent/100).toFixed(2)}€ dépensés
+                </p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Activity Log -->
+            <div class="bg-white border border-zinc-100 rounded-[2rem] p-8 shadow-sm h-full flex flex-col">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-xl font-bold text-zinc-900 px-2 border-l-4 border-emerald-500">Journal d'Audit</h2>
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Temps réel</span>
+                </div>
+                <div class="space-y-4 flex-1">
+                    {recentLogs.map(log => (
+                        <div class="p-4 bg-zinc-50/50 rounded-2xl border border-zinc-100 hover:bg-zinc-50 transition-all group">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs font-black text-zinc-900 uppercase tracking-tight">{log.action}</span>
+                                <span class="text-[10px] font-bold text-zinc-400">{new Date(log.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            <p class="text-[11px] text-zinc-500 font-medium leading-relaxed truncate opacity-80">{log.details || 'Pas de détails'}</p>
+                        </div>
+                    ))}
+                    {recentLogs.length === 0 && <p class="text-center py-12 text-zinc-300 italic text-sm">Aucun événement d'audit récent.</p>}
+                </div>
+            </div>
+
+            <!-- Heartbeats / Scheduler -->
+            <div class="bg-zinc-900 rounded-[2rem] p-8 shadow-2xl h-full flex flex-col text-white">
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="text-xl font-bold px-2 border-l-4 border-emerald-400">Scheduler Core</h2>
+                    <div class="flex items-center gap-3">
+                        <button 
+                            id="force-start-btn"
+                            class="text-[10px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            Démarrer le Swarm
+                        </button>
+                        <div class="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+                            <div class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                            <span class="text-[9px] font-black uppercase tracking-widest text-emerald-400">Engine Online</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-3 font-mono text-[10px]">
+                    {recentHeartbeats.map(hb => (
+                        <div class="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+                            <span class={hb.level === 'warn' ? "text-amber-400 font-bold" : hb.level === 'error' ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
+                                [{hb.level.toUpperCase()}]
+                            </span>
+                            <span class="text-zinc-300 flex-1">{hb.message}</span>
+                            <span class="text-zinc-500 tabular-nums">{new Date(hb.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                        </div>
+                    ))}
+                    {recentHeartbeats.length === 0 && <p class="text-center py-12 text-zinc-600 uppercase tracking-widest">En attente du prochain tick...</p>}
+                </div>
+            </div>
+        </div>
+    </div>
+</DashboardLayout>
+
+<script>
+    const forceBtn = document.getElementById('force-start-btn');
+    forceBtn?.addEventListener('click', async () => {
+        const originalText = forceBtn.innerHTML;
+        forceBtn.innerHTML = 'Activation...';
+        forceBtn.style.opacity = '0.5';
+        forceBtn.style.pointerEvents = 'none';
+
+        try {
+            const res = await fetch('/api/debug-scheduler', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert('Hive activé ! Le swarm va s’éveiller d’ici quelques secondes.');
+                window.location.reload();
+            } else {
+                alert('Erreur: ' + data.error);
+                forceBtn.innerHTML = originalText;
+                forceBtn.style.opacity = '1';
+                forceBtn.style.pointerEvents = 'auto';
+            }
+        } catch (e) {
+            alert('Erreur réseau');
+            forceBtn.innerHTML = originalText;
+            forceBtn.style.opacity = '1';
+            forceBtn.style.pointerEvents = 'auto';
+        }
+    });
+</script>
+
+<style>
+    .small-caps { font-variant: small-caps; }
+</style>

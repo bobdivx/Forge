@@ -1,0 +1,34 @@
+---
+// src/pages/debug-health-fetch.astro
+import { getOpenClawGatewayBaseUrl } from '../lib/openclaw-gateway';
+
+const gatewayUrl = await getOpenClawGatewayBaseUrl();
+const gatewayToken = 'casaos';
+
+let fetchResult = 'Not started';
+let fetchStatus = 0;
+let fetchError = '';
+
+try {
+    const res = await fetch(`${gatewayUrl.replace(/\/$/, '')}/v1/models`, {
+        headers: { 
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${gatewayToken}`
+        },
+    });
+    fetchStatus = res.status;
+    fetchResult = await res.text();
+} catch (e: any) {
+    fetchError = e.message;
+}
+---
+
+<html>
+<body>
+    <h1>Debug Health Fetch</h1>
+    <p>URL: {gatewayUrl}</p>
+    <p>Status: {fetchStatus}</p>
+    <p>Error: {fetchError}</p>
+    <pre>{fetchResult}</pre>
+</body>
+</html>

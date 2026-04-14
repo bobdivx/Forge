@@ -336,10 +336,18 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         task: 'pending',
         request: 'pending',
       };
+      let projectId: number | undefined;
+      if (project) {
+        const projects = await db.select().from(Project);
+        const pRow = projects.find(p => p.name.toLowerCase() === String(project).toLowerCase());
+        projectId = pRow?.id;
+      }
+
       await db.insert(AgentTask).values({
         agentId: String(agentId),
         task: `${String(title)}${projectTag}`,
         input: String(content),
+        projectId: projectId,
         status: statusMap[type as string] ?? 'pending',
         createdAt: now,
         updatedAt: now,

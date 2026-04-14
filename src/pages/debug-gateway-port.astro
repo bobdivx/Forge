@@ -1,0 +1,37 @@
+---
+// src/pages/debug-gateway-port.astro
+const ports = [24190, 18789, 8080];
+const target = '10.1.0.58';
+const token = 'casaos';
+
+const results = [];
+
+for (const port of ports) {
+    try {
+        const url = `http://${target}:${port}/v1/models`;
+        const start = Date.now();
+        const res = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            signal: AbortSignal.timeout(3000)
+        });
+        const duration = Date.now() - start;
+        const text = await res.text();
+        results.push({ 
+            port, 
+            status: res.status, 
+            contentType: res.headers.get('content-type'),
+            duration: `${duration}ms`,
+            preview: text.slice(0, 100)
+        });
+    } catch (e: any) {
+        results.push({ port, error: e.message });
+    }
+}
+---
+
+<html>
+<body>
+    <h1>Port Discovery (10.1.0.58)</h1>
+    <pre>{JSON.stringify(results, null, 2)}</pre>
+</body>
+</html>

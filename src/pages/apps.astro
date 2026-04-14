@@ -4,6 +4,7 @@ export const prerender = false;
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AppLauncher from '../components/apps/AppLauncher';
 import SyncProjectsButton from '../components/apps/SyncProjectsButton';
+import ProjectSwarmToggle from '../components/apps/ProjectSwarmToggle';
 import { loadAstroDb } from '../lib/load-astro-db';
 import { getReposRootResolved } from '../lib/forge-repos';
 
@@ -139,6 +140,11 @@ const totalActive = deployedApps.filter(a =>
                       >
                         📋 logs
                       </a>
+                      <ProjectSwarmToggle 
+                        client:load 
+                        projectId={app.id} 
+                        initialState={!!app.swarmEnabled} 
+                      />
                       <span class="text-[10px] text-gray-400">Sync: {app.lastSync}</span>
                     </span>
                   </div>

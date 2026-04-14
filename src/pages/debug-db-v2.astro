@@ -1,0 +1,24 @@
+---
+// src/pages/debug-db-v2.astro
+import { loadAstroDb } from '../lib/load-astro-db';
+
+const dbData = await loadAstroDb();
+const keys = Object.keys(dbData);
+const hasSql = 'sql' in dbData;
+const hasDesc = 'desc' in dbData;
+const hasEq = 'eq' in dbData;
+const heartbeatType = typeof dbData.Heartbeat;
+const heartbeatIsTable = dbData.Heartbeat && typeof dbData.Heartbeat === 'object' && 'Symbol(drizzle:Name)' in (dbData.Heartbeat as any);
+---
+
+<html>
+<body style="background: #111; color: #eee; font-family: monospace; padding: 2rem;">
+    <h1>Debug Astro DB v2</h1>
+    <p>Has sql: {hasSql ? 'YES' : 'NO'}</p>
+    <p>Has desc: {hasDesc ? 'YES' : 'NO'}</p>
+    <p>Has eq: {hasEq ? 'YES' : 'NO'}</p>
+    <p>Heartbeat type: {heartbeatType}</p>
+    <hr/>
+    <pre>{JSON.stringify(keys, null, 2)}</pre>
+</body>
+</html>

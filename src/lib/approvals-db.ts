@@ -9,33 +9,56 @@ export async function createApproval(params: {
   title: string;
   payload?: any;
 }) {
-  const { db, Approval } = await loadAstroDb();
+  const { db, Approval, ActivityLog } = await loadAstroDb();
   const payloadStr = params.payload ? JSON.stringify(params.payload) : null;
+  const now = new Date();
 
-  return await db.insert(Approval).values({
+  const result = await db.insert(Approval).values({
     agentId: params.agentId,
     type: params.type,
     title: params.title,
     payload: payloadStr,
     status: 'pending',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: now,
+    updatedAt: now,
   });
+
+  // Audit log — demande créée
+  await db.insert(ActivityLog).values({
+    actorType: 'agent',
+    actorId: params.agentId,
+    action: 'approval.requested',
+    entityType: 'approval',
+    entityId: String(params.agentId),
+    details: JSON.stringify({ type: params.type, title: params.title }),
+    createdAt: now,
+  });
+
+  return result;
 }
 
 export async function resolveApproval(id: number, status: ApprovalStatus, feedback?: string) {
-  const { db, Approval, eq } = await loadAstroDb();
-  
+  const { db, Approval, ActivityLog, eq } = await loadAstroDb();
+  const now = new Date();
+
   await db.update(Approval)
-    .set({ 
-      status, 
+    .set({
+      status,
       feedback: feedback || null,
-      updatedAt: new Date() 
+      updatedAt: now,
     })
     .where(eq(Approval.id, id));
 
-  // Note: En mode "vrai OS", on déclencherait ici les effets de bord (ex: installer la lib si approved)
-  // Pour l'instant on se contente de mettre à jour le statut pour que l'agent le contemple.
+  // Audit log — décision enregistrée
+  await db.insert(ActivityLog).values({
+    actorType: 'user',
+    actorId: 'board',
+    action: `approval.${status}`,
+    entityType: 'approval',
+    entityId: String(id),
+    details: feedback ? JSON.stringify({ feedback }) : null,
+    createdAt: now,
+  });
 }
 
 export async function getPendingApprovals() {
