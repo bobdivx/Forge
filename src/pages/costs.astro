@@ -1,0 +1,102 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import CostsDashboard from '../components/costs/CostsDashboard';
+import { loadAstroDb } from '../lib/load-astro-db';
+
+let globalStats = { totalCents: 0, totalInputTokens: 0, totalOutputTokens: 0, totalCalls: 0 };
+let topAgent = { agentId: '—', cents: 0 };
+
+try {
+  const { db, CostEvent } = await loadAstroDb();
+  const events = await db.select().from(CostEvent);
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEvents = events.filter(e => new Date(e.occurredAt) >= monthStart);
+
+  globalStats.totalCalls = monthEvents.length;
+  for (const ev of monthEvents) {
+    globalStats.totalCents += ev.costCents ?? 0;
+    globalStats.totalInputTokens += ev.inputTokens ?? 0;
+    globalStats.totalOutputTokens += ev.outputTokens ?? 0;
+  }
+
+  // Top agent du mois
+  const byAgent: Record<string, number> = {};
+  for (const ev of monthEvents) {
+    byAgent[ev.agentId] = (byAgent[ev.agentId] ?? 0) + (ev.costCents ?? 0);
+  }
+  const sorted = Object.entries(byAgent).sort((a, b) => b[1] - a[1]);
+  if (sorted.length > 0) topAgent = { agentId: sorted[0][0], cents: sorted[0][1] };
+} catch { /* DB unavailable */ }
+
+function fmtCents(cents: number): string {
+  if (cents === 0) return '0¢';
+  if (cents < 100) return `${cents}¢`;
+  return `${(cents / 100).toFixed(2)} €`;
+}
+
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+---
+
+<DashboardLayout title="Coûts & Budget" currentPath="/costs">
+
+  <!-- En-tête -->
+  <div class="flex items-end justify-between mb-6 flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+        <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Control plane · Paperclip-style</span>
+      </div>
+      <h1 class="text-4xl font-bold text-gray-900">Coûts & Budget</h1>
+      <p class="text-gray-500 text-sm mt-1 max-w-xl">
+        Suivez la consommation LLM de chaque agent. Définissez des budgets mensuels avec alertes et arrêts automatiques.
+      </p>
+    </div>
+
+    <!-- Stats serveur rapides -->
+    <div class="flex gap-3 flex-wrap">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-3 text-center min-w-[100px]">
+        <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Ce mois</span>
+        <span class="text-2xl font-black text-gray-900">{fmtCents(globalStats.totalCents)}</span>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-3 text-center min-w-[100px]">
+        <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Tokens</span>
+        <span class="text-2xl font-black text-gray-900">{fmtTokens(globalStats.totalInputTokens + globalStats.totalOutputTokens)}</span>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 px-5 py-3 text-center min-w-[100px]">
+        <span class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Appels LLM</span>
+        <span class="text-2xl font-black text-gray-900">{globalStats.totalCalls}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard Preact client -->
+  <CostsDashboard client:load />
+
+  <!-- Memo explicatif -->
+  <div class="mt-8 bg-emerald-50/50 border border-emerald-100 rounded-[2rem] p-8 flex items-start gap-4">
+    <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 text-emerald-600">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </div>
+    <div>
+      <h4 class="text-sm font-bold text-emerald-900">Comment les agents remontent leurs coûts</h4>
+      <p class="text-xs text-emerald-700/70 mt-1 max-w-2xl leading-relaxed">
+        Les agents appellent <code class="font-mono bg-emerald-100 px-1 rounded">POST /api/cost-event</code> 
+        après chaque appel LLM en transmettant <code class="font-mono bg-emerald-100 px-1 rounded">agentId</code>, 
+        <code class="font-mono bg-emerald-100 px-1 rounded">model</code>, <code class="font-mono bg-emerald-100 px-1 rounded">inputTokens</code>, 
+        <code class="font-mono bg-emerald-100 px-1 rounded">outputTokens</code> et <code class="font-mono bg-emerald-100 px-1 rounded">costCents</code>.
+        Pour les modèles Ollama locaux, le coût est 0¢. Ce système est inspiré du budget enforcement de Paperclip.
+      </p>
+    </div>
+  </div>
+
+</DashboardLayout>

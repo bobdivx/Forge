@@ -1,0 +1,35 @@
+---
+// src/pages/debug-budgets.astro
+import { loadAstroDb } from '../lib/load-astro-db';
+
+const { db, AgentBudget, AgentInstruction } = await loadAstroDb();
+const budgets = await db.select().from(AgentBudget);
+const instructions = await db.select().from(AgentInstruction);
+
+let seedResult = '';
+if (budgets.length === 0 && instructions.length > 0) {
+    try {
+        const seed = instructions.map(a => ({
+            agentId: a.agentId,
+            monthlyLimitCents: 500,
+            alertThresholdCents: 400,
+            enabled: 1,
+            updatedAt: new Date()
+        }));
+        await db.insert(AgentBudget).values(seed);
+        seedResult = `SUCCESS: seeded ${seed.length} budgets`;
+    } catch (e: any) {
+        seedResult = `ERROR: ${e.message}`;
+    }
+} else {
+    seedResult = `Skip: budgets=${budgets.length}, instructions=${instructions.length}`;
+}
+---
+
+<html>
+<body>
+    <h1>Budgets Debug</h1>
+    <p>Result: {seedResult}</p>
+    <pre>{JSON.stringify(budgets, null, 2)}</pre>
+</body>
+</html>

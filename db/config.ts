@@ -7,6 +7,7 @@ const Project = defineTable({
     description: column.text({ optional: true }),
     path: column.text(),
     status: column.text({ default: 'active' }),
+    swarmEnabled: column.number({ default: 0 }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
   },
@@ -41,6 +42,7 @@ const AgentTask = defineTable({
     input: column.text({ optional: true }),
     output: column.text({ optional: true }),
     status: column.text({ default: 'pending' }),
+    projectId: column.number({ optional: true, references: () => Project.columns.id }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
   },
@@ -213,6 +215,107 @@ const WorkSchedule = defineTable({
 });
 
 /**
+ * Événements de coût générés par les agents (inspiré de Paperclip cost_events).
+ * Chaque appel LLM produit un enregistrement avec tokens et coût en centimes.
+ */
+const CostEvent = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Identifiant de l'agent ayant généré la dépense. */
+    agentId: column.text(),
+    /** Tâche associée (optionnel). */
+    taskId: column.number({ optional: true }),
+    /** Fournisseur LLM : ollama | openai | anthropic | gemini */
+    provider: column.text({ default: 'ollama' }),
+    /** Modèle utilisé (ex: qwen2.5-coder, gemini-2.0-flash). */
+    model: column.text(),
+    /** Tokens en entrée. */
+    inputTokens: column.number({ default: 0 }),
+    /** Tokens en sortie. */
+    outputTokens: column.number({ default: 0 }),
+    /** Coût en centimes (0 pour modèles locaux Ollama). */
+    costCents: column.number({ default: 0 }),
+    /** Horodatage de l'événement. */
+    occurredAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Budget mensuel par agent (inspiré de Paperclip budget enforcement).
+ * Un enregistrement par agentId. Le système auto-pause l'agent si hardStop=1
+ * et que spentThisMonth >= monthlyCents.
+ */
+const AgentBudget = defineTable({
+  columns: {
+    /** Identifiant agent (clé primaire). */
+    agentId: column.text({ primaryKey: true }),
+    /** Budget mensuel en centimes (0 = illimité). */
+    monthlyCents: column.number({ default: 0 }),
+    /** Dépenses du mois en cours en centimes. */
+    spentThisMonth: column.number({ default: 0 }),
+    /** Seuil d'alerte douce (80 = 80%). */
+    alertThreshold: column.number({ default: 80 }),
+    /** 1 = stopper automatiquement l'agent à 100% du budget. */
+    hardStop: column.number({ default: 0 }),
+    /** Date de remise à zéro mensuelle. */
+    resetAt: column.date({ optional: true }),
+    /** 1 = budget actif, 0 = budget ignoré. */
+    enabled: column.number({ default: 1 }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Journal d'audit global — toute action mutante est enregistrée ici.
+ * Inspiré de Paperclip activity_log. Permet la traçabilité complète.
+ */
+const ActivityLog = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Type d'acteur : agent | user | system */
+    actorType: column.text({ default: 'system' }),
+    /** Identifiant de l'acteur. */
+    actorId: column.text(),
+    /** Action effectuée (ex: approval.approved, agent.paused, cost.ingested). */
+    action: column.text(),
+    /** Type d'entité concernée (ex: approval, agent, task). */
+    entityType: column.text(),
+    /** Identifiant de l'entité. */
+    entityId: column.text(),
+    /** Détails JSON optionnels. */
+    details: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Runs heartbeat enrichis (inspiré de Paperclip heartbeat_runs).
+ * Remplace la table Heartbeat basique avec statuts complets et métriques.
+ */
+const HeartbeatRun = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Agent invoqué. */
+    agentId: column.text(),
+    /** Source d'invocation : scheduler | manual | callback */
+    source: column.text({ default: 'scheduler' }),
+    /** Statut : queued | running | succeeded | failed | cancelled | timed_out */
+    status: column.text({ default: 'queued' }),
+    /** Début d'exécution. */
+    startedAt: column.date({ optional: true }),
+    /** Fin d'exécution. */
+    finishedAt: column.date({ optional: true }),
+    /** Durée en ms. */
+    durationMs: column.number({ optional: true }),
+    /** Message d'erreur si failed. */
+    error: column.text({ optional: true }),
+    /** ID de run externe (OpenClaw session id). */
+    externalRunId: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
  * Demandes d’approbation (Human-in-the-Loop) — inspirées de Paperclip.
  * Les agents peuvent soumettre une demande qui bloque une action critique.
  * Statuts : pending | approved | rejected
@@ -250,5 +353,10 @@ export default defineDb({
     AgentDependencyRequest,
     WorkSchedule,
     Approval,
+    // Phase 1 — Paperclip-inspired features
+    CostEvent,
+    AgentBudget,
+    ActivityLog,
+    HeartbeatRun,
   },
 });

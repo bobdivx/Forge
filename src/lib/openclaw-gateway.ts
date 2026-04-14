@@ -2,11 +2,12 @@
  * Appels au gateway OpenClaw.
  * Priorité : variables d’environnement, puis table Config (Astro DB).
  */
-import { getConfig } from './config-db';
+// // import { getConfig } from './config-db';
 
 export async function getOpenClawGatewayBaseUrl(): Promise<string> {
   const env = process.env.OPENCLAW_GATEWAY_URL?.trim();
   if (env) return env.replace(/\/$/, '');
+  const { getConfig } = await import('./config-db');
   const fromDb = (await getConfig('openclawGatewayUrl')).trim();
   if (fromDb) return fromDb.replace(/\/$/, '');
   /* Aligné sur les défauts Paramètres / seed (souvent 24190 en self-host). */
@@ -16,7 +17,11 @@ export async function getOpenClawGatewayBaseUrl(): Promise<string> {
 export async function getOpenClawToken(): Promise<string> {
   const env = process.env.OPENCLAW_GATEWAY_TOKEN?.trim();
   if (env) return env;
-  return (await getConfig('openclawToken')).trim();
+  const { getConfig } = await import('./config-db');
+  const fromDb = (await getConfig('openclawToken')).trim();
+  if (fromDb) return fromDb;
+  /* Aligné sur le défaut CasaOS/OpenClaw sur ZimaOS */
+  return 'casaos';
 }
 
 /**
@@ -29,6 +34,9 @@ const SESSION_LIST_PATHS = [
   '/api/sessions',
   '/v1/sessions',
   '/sessions',
+  '/api/models',
+  '/api/tags',
+  '/v1/models',
 ] as const;
 
 export function buildSessionsListInvokeBody(args?: Record<string, unknown>): string {
@@ -86,6 +94,7 @@ export async function getOpenClawClientDebugMeta(): Promise<{
   const envTok = process.env.OPENCLAW_GATEWAY_TOKEN?.trim() || '';
   const gatewayBaseUrl = await getOpenClawGatewayBaseUrl();
   const tokenStr = await getOpenClawToken();
+  const { getConfig } = await import('./config-db');
   const dbUrl = (await getConfig('openclawGatewayUrl')).trim();
 
   const urlSource: 'env' | 'database' | 'default' = envUrl
@@ -198,7 +207,8 @@ export async function fetchOpenClawSessionsPayload(
 export function getGatewayAuthHeaders(token: string): Record<string, string> {
   return {
     'X-Gateway-Token': token,
-    Authorization: `Bearer ${token}`,
+    'Authorization': `Bearer ${token}`,
+    'Accept': 'application/json',
   };
 }
 
@@ -319,26 +329,41 @@ export async function fetchOpenClawJson(
   path: string,
   init?: RequestInit
 ): Promise<{ ok: boolean; status: number; data: unknown; error?: string }> {
-  const token = (await getOpenClawToken()).trim();
-  const base = await getOpenClawGatewayBaseUrl();
-  const url = `${base}${path.startsWith('/') ? path : `/${path}`}`;
-  const authHeaders = token ? getGatewayAuthHeaders(token) : {};
   try {
+    const token = (await getOpenClawToken()).trim();
+    const base = await getOpenClawGatewayBaseUrl();
+    const url = `${base}${path.startsWith('/') ? path : `/${path}`}`;
+    const authHeaders = token ? getGatewayAuthHeaders(token) : {};
+    
     const res = await fetch(url, {
       ...init,
       headers: {
-        Accept: 'application/json',
+        'Accept': 'application/json',
         ...authHeaders,
         ...(init?.headers as Record<string, string>),
       },
     });
+
+    const contentType = res.headers.get('content-type') || '';
     const text = await res.text();
     let data: unknown = null;
-    try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
-    if (!res.ok) {
+    let isJson = false;
+
+    if (contentType.includes('application/json')) {
+        try { 
+            data = JSON.parse(text); 
+            isJson = true;
+        } catch { 
+            data = { raw: text }; 
+        }
+    } else {
+        data = { raw: text };
+    }
+
+    if (!res.ok || !isJson) {
       const d = data as Record<string, unknown>;
       const rawErr = d?.error ?? d?.message ?? d?.detail ?? null;
-      const baseErr =
+      let baseErr =
         typeof rawErr === 'string'
           ? rawErr
           : rawErr != null && typeof rawErr === 'object'
@@ -346,12 +371,24 @@ export async function fetchOpenClawJson(
                 ? String((rawErr as Record<string, unknown>).message)
                 : JSON.stringify(rawErr))
             : `HTTP ${res.status}`;
+      
+      // Si on a reçu quelque chose qui ressemble à du JSON malgré un mauvais Content-Type
+      if (!isJson && text.trim().startsWith('{')) {
+          try {
+              data = JSON.parse(text);
+              return { ok: true, status: res.status, data };
+          } catch {}
+      }
+
+      if (!isJson && res.ok) {
+          baseErr = `Réponse non-JSON (${contentType || 'inconnu'}) sur port ${new URL(url).port || '80'}.`;
+      }
+
       const hint401 =
         res.status === 401 && !token
-          ? ' — renseignez le token dans Paramètres → Connexion OpenClaw (ou OPENCLAW_GATEWAY_TOKEN).'
-          : res.status === 401 && token
-            ? ' — token configuré mais refusé par le gateway. Vérifiez la valeur dans OpenClaw (commande : openclaw gateway token show).'
-            : '';
+          ? ' — renseignez le token dans Paramètres → Connexion OpenClaw.'
+          : '';
+          
       return {
         ok: false, status: res.status, data,
         error: `${baseErr}${hint401}`,
@@ -461,36 +498,89 @@ export async function fetchOpenClawAgentsList(_email: string | undefined): Promi
   if (raw.length === 0) {
     const unwrapped = unwrapOpenClawResult(r.data);
     if (unwrapped != null && typeof unwrapped === 'object' && !Array.isArray(unwrapped)) {
-      const u = unwrapped as Record<string, unknown>;
-      if (Array.isArray(u.content) && u.content.length > 0) {
-        const first = u.content[0];
-        if (first != null && typeof first === 'object') {
-          const text = (first as { text?: unknown }).text;
-          if (typeof text === 'string' && text.trim().startsWith('{')) {
-            try {
-              const parsed = JSON.parse(text) as Record<string, unknown>;
-              if (Array.isArray(parsed.agents)) {
-                raw = parsed.agents;
-                if (parsed.requester != null) requester = String(parsed.requester);
-                if (typeof parsed.allowAny === 'boolean') allowAny = parsed.allowAny;
-              }
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-      }
+        const o = unwrapped as Record<string, any>;
+        if (Array.isArray(o.agents)) raw = o.agents;
     }
   }
 
-  const agents = mapRawToAgents(raw);
-  return {
-    ok: true,
-    status: r.status,
-    agents,
-    requester,
-    allowAny,
-  };
+  return { ok: true, status: r.status, agents: mapRawToAgents(raw), requester, allowAny };
+}
+
+/**
+ * Récupère le catalogue complet des modèles configurés dans OpenClaw (Ollama, etc).
+ */
+export async function fetchOpenClawModelCatalog(_email: string | undefined): Promise<{
+    ok: boolean;
+    status: number;
+    models: { id: string; name: string; ownedBy: string }[];
+    error?: string;
+}> {
+    // On essaie d'appeler l'outil models_list s'il est disponible
+    const r = await fetchOpenClawJson(_email, '/tools/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool: 'models_list', action: 'json', args: {} }),
+    });
+
+    if (r.ok) {
+        const details = extractToolsInvokeDetails(r.data);
+        const list = (details?.models as any[]) || [];
+        if (list.length > 0) {
+            return {
+                ok: true,
+                status: r.status,
+                models: list.map(m => ({
+                    id: String(m.id || m.modelId || m.key),
+                    name: String(m.name || m.displayName || m.id),
+                    ownedBy: 'openclaw',
+                })),
+            };
+        }
+    }
+
+    // Fallback : On essaie /v1/models mais en forçant le format JSON
+    const v1Res = await fetchOpenClawJson(_email, '/v1/models', {
+        headers: { 'Accept': 'application/json' }
+    });
+    
+    if (v1Res.ok && v1Res.data && typeof v1Res.data === 'object' && Array.isArray((v1Res.data as any).data)) {
+        return {
+            ok: true,
+            status: v1Res.status,
+            models: (v1Res.data as any).data.map((m: any) => ({
+                id: String(m.id),
+                name: String(m.name || m.id),
+                ownedBy: String(m.owned_by || 'openclaw'),
+            })),
+        };
+    }
+
+    // Ultime recours : Découverte directe des providers connus (NAS & Windows)
+    // Cette partie assure que même si la gateway masque le catalogue, Forge voit les modèles configurés.
+    const providers = [
+        'https://ollamanas.briseteia.me/v1/models',
+        'https://ollama.briseteia.me/v1/models'
+    ];
+    
+    const parallelDiscovery = await Promise.all(providers.map(async url => {
+        try {
+            const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            if (!resp.ok) return [];
+            const json = await resp.json();
+            return (json.data || []).map((m: any) => ({
+                id: String(m.id),
+                name: String(m.name || m.id),
+                ownedBy: url.includes('nas') ? 'ollama-nas' : 'ollama-windows'
+            }));
+        } catch { return []; }
+    }));
+
+    const directModels = parallelDiscovery.flat();
+    if (directModels.length > 0) {
+        return { ok: true, status: 200, models: directModels };
+    }
+
+    return { ok: false, status: r.status, models: [], error: 'Catalogue indisponible' };
 }
 
 /** Tente de parser le JSON dans `content[0].text` (même forme que jsonResult côté gateway). */

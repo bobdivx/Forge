@@ -1,0 +1,19 @@
+---
+// src/pages/debug-db.astro
+import { loadAstroDb } from '../lib/load-astro-db';
+
+const dbData = await loadAstroDb();
+const keys = Object.keys(dbData);
+---
+
+<html>
+<body style="background: #111; color: #eee; font-family: monospace; padding: 2rem;">
+    <h1>Debug Astro DB Exports</h1>
+    <ul>
+        {keys.map(k => (
+            <li>{k}: {typeof dbData[k]}</li>
+        ))}
+    </ul>
+    <pre>{JSON.stringify(keys, null, 2)}</pre>
+</body>
+</html>

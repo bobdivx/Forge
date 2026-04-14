@@ -27,6 +27,7 @@ export const POST: APIRoute = async ({ request }) => {
       'openclawGatewayUrl', 'openclawToken',
       'githubToken', 'vercelToken', 'githubWebhookSecret',
       'forgeReposRoot', 'dockerYamlDir', 'dockerAppDataDir',
+      'forgeReposRootAgent',
     ];
     for (const key of allowed) {
       if (!(key in data)) continue;

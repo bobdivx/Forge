@@ -15,6 +15,8 @@ export type ForgeConfig = {
   forgeReposRoot: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
+  /** Racine des projets telle que vue par les agents sur le NAS (ex: /mnt/GitHub). */
+  forgeReposRootAgent: string;
   /**
    * Assistant premier lancement : `pending` → redirection /setup.
    * `done` / `skipped` → plus d’assistant. Défaut `done` si absent en base (installations existantes).
@@ -31,6 +33,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   forgeReposRoot: '/media/Github',
   dockerYamlDir: '/DATA/AppData',
   dockerAppDataDir: '/DATA/AppData',
+  forgeReposRootAgent: '/mnt/GitHub',
   forgeSetupState: 'done',
 };
 

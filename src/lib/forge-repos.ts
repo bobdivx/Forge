@@ -19,6 +19,59 @@ export async function getReposRootResolved(): Promise<string> {
   return getReposRoot();
 }
 
+/** Racine des dépôts telle que vue par l'agent (ex: /mnt/GitHub sur le NAS). */
+export async function getAgentReposRootResolved(): Promise<string> {
+  try {
+    const fromDb = (await getConfig('forgeReposRootAgent')).trim();
+    if (fromDb) return fromDb;
+  } catch {
+    /* ignore */
+  }
+  return '/mnt/GitHub';
+}
+
+/**
+ * Traduit un chemin local (ex: Z:\Forge\src) en chemin agent (ex: /mnt/GitHub/Forge/src).
+ */
+export async function toAgentPath(localPath: string): Promise<string> {
+  if (!localPath) return localPath;
+  const localRoot = await getReposRootResolved();
+  const agentRoot = await getAgentReposRootResolved();
+
+  // On normalise les deux racines pour la comparaison
+  const normLocalRoot = path.resolve(localRoot).toLowerCase();
+  const normPath = path.resolve(localPath).toLowerCase();
+
+  if (normPath.startsWith(normLocalRoot)) {
+    const relativePart = path.relative(normLocalRoot, normPath);
+    // On rejoint avec la racine agent et on force les slashes Linux
+    return path.join(agentRoot, relativePart).replace(/\\/g, '/');
+  }
+
+  // Si on est déjà dans un format agent (ou hors racine), on normalise juste les slashes
+  return localPath.replace(/\\/g, '/');
+}
+
+/**
+ * Remplace toutes les occurrences du chemin racine local par le chemin racine agent dans un texte.
+ * Utile pour traduire les instructions de tâches contenant des chemins absolus.
+ */
+export async function translateContentForAgent(content: string): Promise<string> {
+  if (!content) return content;
+  const localRoot = await getReposRootResolved();
+  const agentRoot = await getAgentReposRootResolved();
+
+  // On normalise pour la recherche (on garde la casse originale pour le remplacement si possible, 
+  // mais ici on va faire simple avec un replace global)
+  const normLocal = localRoot.replace(/\\/g, '/').toLowerCase();
+  
+  let out = content.replace(/\\/g, '/'); // Force forward slashes first
+  
+  // Remplacement insensible à la casse pour la racine
+  const regex = new RegExp(normLocal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return out.replace(regex, agentRoot);
+}
+
 const SAFE_NAME = /^[a-zA-Z0-9._-]{1,128}$/;
 
 export function isSafeRepoDirName(name: string): boolean {

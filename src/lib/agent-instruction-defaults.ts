@@ -6,21 +6,21 @@ import { resolve } from 'node:path';
 import { getForgeRepoRoot } from './forge-repo-root';
 
 export const FORGE_AGENT_INSTRUCTION_ROWS = [
-  { agentId: 'CHEF_TECHNIQUE',      model: 'qwen2.5:32b',      filePath: 'instructions/SOUL.md' },
-  { agentId: 'ARCHITECTE_LOGICIEL', model: 'qwen2.5:32b',      filePath: 'instructions/agents/ARCHITECTE_LOGICIEL.md' },
-  { agentId: 'DEV_BACKEND',         model: 'qwen2.5-coder:7b', filePath: 'instructions/agents/DEV_BACKEND.md' },
-  { agentId: 'DEV_FRONTEND',        model: 'qwen2.5-coder:7b', filePath: 'instructions/agents/DEV_FRONTEND.md' },
-  { agentId: 'EXPERT_GITHUB',       model: 'mistral:7b',       filePath: 'instructions/agents/EXPERT_GITHUB.md' },
-  { agentId: 'ANALYSTE_CODE',       model: 'llama3.1:8b',      filePath: 'instructions/agents/ANALYSTE_CODE.md' },
-  { agentId: 'TESTEUR_QA',          model: 'llama3.1:8b',      filePath: 'instructions/agents/TESTEUR_QA.md' },
-  { agentId: 'INFRA_TECH',          model: 'qwen2.5-coder:7b', filePath: 'instructions/agents/INFRA_TECH.md' },
-  { agentId: 'SECURITE_CODE',       model: 'llama3.1:8b',      filePath: 'instructions/agents/SECURITE_CODE.md' },
-  { agentId: 'INGENIEUR_HARDWARE',  model: 'llama3.1:8b',      filePath: 'instructions/agents/INGENIEUR_HARDWARE.md' },
-  { agentId: 'INGENIEUR_PROMPT',    model: 'llama3.1:8b',      filePath: 'instructions/agents/INGENIEUR_PROMPT.md' },
-  { agentId: 'MAINTENANCE_REPO',    model: 'mistral:7b',       filePath: 'instructions/agents/MAINTENANCE_REPO.md' },
-  { agentId: 'REDACTEUR_DOC',       model: 'mistral:7b',       filePath: 'instructions/agents/REDACTEUR_DOC.md' },
-  { agentId: 'SCRIPTEUR_AUTOMATE',  model: 'qwen2.5-coder:7b', filePath: 'instructions/agents/SCRIPTEUR_AUTOMATE.md' },
-  { agentId: 'VEILLE_TECH',         model: 'llama3.1:8b',      filePath: 'instructions/agents/VEILLE_TECH.md' },
+  { agentId: 'CHEF_TECHNIQUE',      model: 'qwen3-coder:30b',  filePath: 'instructions/SOUL.md' },
+  { agentId: 'ARCHITECTE_LOGICIEL', model: 'qwen3-coder:30b',  filePath: 'instructions/agents/ARCHITECTE_LOGICIEL.md' },
+  { agentId: 'DEV_BACKEND',         model: 'qwen2.5:7b',       filePath: 'instructions/agents/DEV_BACKEND.md' },
+  { agentId: 'DEV_FRONTEND',        model: 'qwen2.5:7b',       filePath: 'instructions/agents/DEV_FRONTEND.md' },
+  { agentId: 'EXPERT_GITHUB',       model: 'gemma4:latest',    filePath: 'instructions/agents/EXPERT_GITHUB.md' },
+  { agentId: 'ANALYSTE_CODE',       model: 'llama3.2:latest',  filePath: 'instructions/agents/ANALYSTE_CODE.md' },
+  { agentId: 'TESTEUR_QA',          model: 'qwen2.5:7b',       filePath: 'instructions/agents/TESTEUR_QA.md' },
+  { agentId: 'INFRA_TECH',          model: 'qwen2.5:7b',       filePath: 'instructions/agents/INFRA_TECH.md' },
+  { agentId: 'SECURITE_CODE',       model: 'llama3.2:latest',  filePath: 'instructions/agents/SECURITE_CODE.md' },
+  { agentId: 'INGENIEUR_HARDWARE',  model: 'gemma4:latest',    filePath: 'instructions/agents/INGENIEUR_HARDWARE.md' },
+  { agentId: 'INGENIEUR_PROMPT',    model: 'llama3.2:latest',  filePath: 'instructions/agents/INGENIEUR_PROMPT.md' },
+  { agentId: 'MAINTENANCE_REPO',    model: 'gemma4:latest',    filePath: 'instructions/agents/MAINTENANCE_REPO.md' },
+  { agentId: 'REDACTEUR_DOC',       model: 'gemma4:latest',    filePath: 'instructions/agents/REDACTEUR_DOC.md' },
+  { agentId: 'SCRIPTEUR_AUTOMATE',  model: 'qwen2.5:7b',       filePath: 'instructions/agents/SCRIPTEUR_AUTOMATE.md' },
+  { agentId: 'VEILLE_TECH',         model: 'llama3.2:latest',  filePath: 'instructions/agents/VEILLE_TECH.md' },
 ] as const;
 
 /** Toujours égal au nombre de lignes ci-dessus (vérification / comparaison avec `agents_list` OpenClaw). */

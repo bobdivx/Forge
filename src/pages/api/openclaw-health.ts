@@ -21,57 +21,38 @@ function isLoopbackGateway(url: string): boolean {
 }
 
 export const GET: APIRoute = async () => {
-  const [gatewayUrl, token, configMeta] = await Promise.all([
-    getOpenClawGatewayBaseUrl(),
-    getOpenClawToken(),
-    getOpenClawClientDebugMeta(),
-  ]);
+  let gatewayUrl = 'unconfigured';
+  try {
+    const token = await getOpenClawToken();
+    gatewayUrl = await getOpenClawGatewayBaseUrl();
+    const configMeta = await getOpenClawClientDebugMeta();
 
-  const result = await fetchOpenClawSessionsPayload(undefined);
-  if (!result.ok) {
-    const loopHint = isLoopbackGateway(gatewayUrl)
-      ? 'Définissez une URL de gateway accessible depuis le serveur (IP LAN, DNS interne, ou OPENCLAW_GATEWAY_URL).'
-      : undefined;
-    const tokenHint =
-      !token.trim() && (result.status === 401 || String(result.error || '').includes('401'))
-        ? 'Le gateway exige un token — renseignez-le dans Paramètres → Connexion OpenClaw.'
-        : undefined;
+    const result = await fetchOpenClawSessionsPayload(undefined);
+    if (!result.ok) {
+        return new Response(
+            JSON.stringify({
+                reachable: false,
+                gatewayUrl,
+                sessionCount: 0,
+                error: result.error || 'Gateway injected error',
+                openclawDebug: { ...configMeta, attempts: result.attempts },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+    }
+
+    const sessions = normalizeOpenClawSessions(result.data);
     return new Response(
-      JSON.stringify({
-        reachable: false,
-        gatewayUrl,
-        sessionCount: 0,
-        runningCount: 0,
-        via: result.via,
-        reason: !token.trim() ? 'no_token_or_unreachable' : undefined,
-        error: result.error || 'Gateway injoignable ou refusé',
-        hint: tokenHint || loopHint,
-        openclawDebug: { ...configMeta, attempts: result.attempts },
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({
+            reachable: true,
+            gatewayUrl,
+            sessionCount: sessions.length,
+            via: result.via,
+            openclawDebug: { ...configMeta, attempts: result.attempts, resolvedVia: result.via },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
+  } catch (e: any) {
+    return new Response(JSON.stringify({ reachable: false, gatewayUrl, error: e.message }), { status: 200 });
   }
-
-  const sessions = normalizeOpenClawSessions(result.data);
-  const running = sessions.filter((s: Record<string, unknown>) => {
-    const st = String(s?.status || s?.state || '').toLowerCase();
-    return (
-      st === 'running' ||
-      st === 'active' ||
-      st === 'connected' ||
-      st === 'online'
-    );
-  }).length;
-
-  return new Response(
-    JSON.stringify({
-      reachable: true,
-      gatewayUrl,
-      sessionCount: sessions.length,
-      runningCount: running,
-      via: result.via,
-      openclawDebug: { ...configMeta, attempts: result.attempts, resolvedVia: result.via },
-    }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
 };

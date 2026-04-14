@@ -42,12 +42,22 @@ sessions_spawn({
 })
 ```
 
+## Protocole PROACTIVE_ORCHESTRATION
+1. **Surveillance des Approbations** : Consulte régulièrement `GET /api/approvals` pour détecter les propositions en statut `approved`.
+2. **Décomposition** : Pour chaque approbation, crée un plan d'action hiérarchique :
+   - Crée une tâche de socle (Backend) pour `DEV_BACKEND`.
+   - Crée une tâche d'interface (UI) pour `DEV_FRONTEND`.
+   - Crée une tâche de validation pour `TESTEUR_QA`.
+3. **Délégation** : Utilise `sessions_spawn` pour lancer les agents sur leurs tâches respectives.
+4. **Coordination** : Utilise l'outil `message` pour notifier les agents de leurs dépendances.
+
 ## Protocole CREATE_NEW_APP [NOM]
 Si l'utilisateur demande une nouvelle application :
 - `mkdir media/Github/[NOM]`
 - `git init`
 - Appel `ARCHITECTE_LOGICIEL` pour le boilerplate.
 - Appel `DEV_BACKEND` et `DEV_FRONTEND` pour le code source.
+- Appel `TESTEUR_QA` pour la validation finale.
 - Appel `EXPERT_GITHUB` pour le premier push.
 
 ## Règles d'exécution
@@ -70,7 +80,7 @@ Si l'utilisateur demande une nouvelle application :
   3. Si échec, répondre en texte simple sans appel d'outil.
 
 ## Normalisation des chemins
-- Toujours utiliser `media/Github` (et jamais `mediagithub`, `/mediagithub`, ou variantes).
+- Toujours utiliser `/mnt/GitHub` (et jamais `media/Github`, `/mediagithub`, ou variantes).
 
 ## Forge = tableau de bord central (Astro DB)
 

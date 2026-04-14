@@ -1,0 +1,40 @@
+---
+// src/pages/debug-health-api.astro
+import { getOpenClawGatewayBaseUrl } from '../lib/openclaw-gateway';
+
+const gatewayUrl = await getOpenClawGatewayBaseUrl();
+const gatewayToken = 'casaos';
+
+let sessionsResult = 'Not started';
+let modelsResult = 'Not started';
+
+try {
+    const sRes = await fetch(`${gatewayUrl.replace(/\/$/, '')}/api/sessions`, {
+        headers: { 'Authorization': `Bearer ${gatewayToken}` },
+    });
+    sessionsResult = `Status: ${sRes.status} | Content-Type: ${sRes.headers.get('content-type')}`;
+    const sJson = await sRes.json().catch(() => 'NOT_JSON');
+    sessionsResult += ` | JSON: ${JSON.stringify(sJson).slice(0, 100)}`;
+
+    const mRes = await fetch(`${gatewayUrl.replace(/\/$/, '')}/api/models`, {
+        headers: { 'Authorization': `Bearer ${gatewayToken}` },
+    });
+    modelsResult = `Status: ${mRes.status} | Content-Type: ${mRes.headers.get('content-type')}`;
+    const mJson = await mRes.json().catch(() => 'NOT_JSON');
+    modelsResult += ` | JSON: ${JSON.stringify(mJson).slice(0, 100)}`;
+
+} catch (e: any) {
+    sessionsResult = `ERROR: ${e.message}`;
+}
+---
+
+<html>
+<body>
+    <h1>API Debug</h1>
+    <p>URL: {gatewayUrl}</p>
+    <h2>Sessions</h2>
+    <pre>{sessionsResult}</pre>
+    <h2>Models</h2>
+    <pre>{modelsResult}</pre>
+</body>
+</html>

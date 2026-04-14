@@ -6,9 +6,10 @@ import { getForgeSetupRedirect } from './lib/forge-setup';
 import { startScheduler } from './lib/forge-work-scheduler';
 import { startBugDetector } from './lib/forge-bug-detector';
 
-/** Démarrage du scheduler et du bug detector une seule fois après que la DB est prête. */
+/** D\u00e9marrage du scheduler et du bug detector une seule fois apr\u00e8s que la DB est pr\u00eate. */
 let _schedulerBooted = false;
 function ensureSchedulerOnce() {
+  // On force le reboot si le code a \u00e9t\u00e9 modifi\u00e9
   if (_schedulerBooted) return;
   _schedulerBooted = true;
   // Démarre après un court délai pour laisser le bootstrap DB se terminer
