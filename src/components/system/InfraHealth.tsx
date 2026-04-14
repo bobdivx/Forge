@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 
 export default function InfraHealth() {
-  const [stats, setStats] = useState({ memoryUsage: 0, cpuLoad: 0, diskUsage: 0, uptime: 0 });
+  const [stats, setStats] = useState({ memoryUsage: 0, cpuLoad: 0, diskUsage: 0, githubDiskUsage: 0, uptime: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,6 +28,7 @@ export default function InfraHealth() {
         <div class="w-16 h-16 rounded-full bg-slate-800" />
         <div class="w-16 h-16 rounded-full bg-slate-800" />
       </div>
+      <div class="h-2 bg-slate-800 rounded w-full mb-2" />
       <div class="h-2 bg-slate-800 rounded w-full" />
     </div>
   );
@@ -49,12 +50,21 @@ export default function InfraHealth() {
           </div>
         ))}
       </div>
-      <div class="space-y-1">
-        <div class="flex justify-between text-[10px] font-medium text-slate-400">
-          <span>Stockage (/mnt/Docker)</span>
-          <span class={stats.diskUsage > 90 ? 'text-error font-bold' : ''}>{stats.diskUsage}%</span>
+      <div class="space-y-4">
+        <div class="space-y-1">
+          <div class="flex justify-between text-[10px] font-medium text-slate-400">
+            <span>Docker (/mnt/Docker)</span>
+            <span class={stats.diskUsage > 90 ? 'text-error font-bold' : ''}>{stats.diskUsage}%</span>
+          </div>
+          <progress class={`progress w-full h-1.5 ${barColor(stats.diskUsage)} bg-slate-800`} value={stats.diskUsage} max="100" />
         </div>
-        <progress class={`progress w-full h-1.5 ${barColor(stats.diskUsage)} bg-slate-800`} value={stats.diskUsage} max="100" />
+        <div class="space-y-1">
+          <div class="flex justify-between text-[10px] font-medium text-slate-400">
+            <span>GitHub (/mnt/GitHub)</span>
+            <span class={stats.githubDiskUsage > 90 ? 'text-error font-bold' : ''}>{stats.githubDiskUsage}%</span>
+          </div>
+          <progress class={`progress w-full h-1.5 ${barColor(stats.githubDiskUsage)} bg-slate-800`} value={stats.githubDiskUsage} max="100" />
+        </div>
       </div>
       <div class="mt-4 text-[9px] font-mono text-slate-600 text-right">
         Uptime: {Math.floor(stats.uptime / 3600)}h {Math.floor((stats.uptime % 3600) / 60)}m
