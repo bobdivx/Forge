@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { fetchOpenClawJson } from '../../../lib/openclaw-gateway';
+import { fetchOpenClawJson } from '../../lib/openclaw-gateway';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {

@@ -1,4 +1,3 @@
-/** @jsxImportSource preact */
 import { useState, useEffect, useCallback } from 'preact/hooks';
 
 interface AgentCost {
