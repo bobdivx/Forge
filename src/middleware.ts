@@ -51,6 +51,7 @@ const LOCAL_ONLY_PATHS = [
   '/api/forge-tools',
   '/api/agent-api-secrets',
   '/api/docker-health',
+  '/api/system-status',
   '/api/work-system',
   '/api/work-schedules',
 ];
