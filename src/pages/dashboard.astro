@@ -8,6 +8,7 @@ import DashProposals from '../components/dashboard/DashProposals';
 import DashProjectList from '../components/dashboard/DashProjectList';
 import DashAgentTeam from '../components/dashboard/DashAgentTeam';
 import DashAuditLog from '../components/dashboard/DashAuditLog';
+import DashForgeLogs from '../components/dashboard/DashForgeLogs';
 import DashSystemStatus from '../components/dashboard/DashSystemStatus';
 import { loadAstroDb } from '../lib/load-astro-db';
 
@@ -54,20 +55,27 @@ try {
     <DashStatsRow client:load serverProjectTotal={projectTotalCount} />
   </div>
 
-  <!-- ── Ligne 2 : Activité (6/12) | Proposals (3/12) | Projets (3/12) ── -->
+  <!-- ── Ligne 2 : Activité (6/12) | Logs (6/12) ── -->
   <div class="grid grid-cols-12 gap-5 mb-5">
     <div class="col-span-12 lg:col-span-6">
       <DashActivity client:load />
     </div>
-    <div class="col-span-12 sm:col-span-6 lg:col-span-3">
-      <DashProposals client:load />
-    </div>
-    <div class="col-span-12 sm:col-span-6 lg:col-span-3">
-      <DashProjectList client:load projects={recentProjects} />
+    <div class="col-span-12 lg:col-span-6">
+      <DashForgeLogs client:load />
     </div>
   </div>
 
-  <!-- ── Ligne 3 : Équipe (5/12) | Audit (4/12) | Système (3/12) ── -->
+  <!-- ── Ligne 3 : Projets (6/12) | Propositions (6/12) ── -->
+  <div class="grid grid-cols-12 gap-5 mb-5">
+    <div class="col-span-12 lg:col-span-6">
+      <DashProjectList client:load projects={recentProjects} />
+    </div>
+    <div class="col-span-12 lg:col-span-6">
+      <DashProposals client:load />
+    </div>
+  </div>
+
+  <!-- ── Ligne 4 : Équipe (5/12) | Audit (4/12) | Système (3/12) ── -->
   <div class="grid grid-cols-12 gap-5">
     <div class="col-span-12 lg:col-span-5">
       <DashAgentTeam client:load />
