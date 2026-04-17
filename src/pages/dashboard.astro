@@ -4,11 +4,11 @@ export const prerender = false;
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import DashStatsRow from '../components/dashboard/DashStatsRow';
 import DashActivity from '../components/dashboard/DashActivity';
-import DashNextTask from '../components/dashboard/DashNextTask';
+import DashProposals from '../components/dashboard/DashProposals';
 import DashProjectList from '../components/dashboard/DashProjectList';
 import DashAgentTeam from '../components/dashboard/DashAgentTeam';
 import DashOrcheStatus from '../components/dashboard/DashOrcheStatus';
-import DashForgeTracker from '../components/dashboard/DashForgeTracker';
+import DashSystemStatus from '../components/dashboard/DashSystemStatus';
 import { loadAstroDb } from '../lib/load-astro-db';
 
 let recentProjects = [];
@@ -54,13 +54,13 @@ try {
     <DashStatsRow client:load serverProjectTotal={projectTotalCount} />
   </div>
 
-  <!-- ── Ligne 2 : Activité (6/12) | Rappels (3/12) | Projets (3/12) ── -->
+  <!-- ── Ligne 2 : Activité (6/12) | Proposals (3/12) | Projets (3/12) ── -->
   <div class="grid grid-cols-12 gap-5 mb-5">
     <div class="col-span-12 lg:col-span-6">
       <DashActivity client:load />
     </div>
     <div class="col-span-12 sm:col-span-6 lg:col-span-3">
-      <DashNextTask client:load />
+      <DashProposals client:load />
     </div>
     <div class="col-span-12 sm:col-span-6 lg:col-span-3">
       <DashProjectList client:load projects={recentProjects} />
@@ -76,7 +76,7 @@ try {
       <DashOrcheStatus client:load />
     </div>
     <div class="col-span-12 sm:col-span-6 lg:col-span-3">
-      <DashForgeTracker client:load />
+      <DashSystemStatus client:load />
     </div>
   </div>
 

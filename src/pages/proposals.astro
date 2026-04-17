@@ -1,0 +1,21 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import DashProposals from '../components/dashboard/DashProposals';
+---
+
+<DashboardLayout title="Propositions & Demandes" currentPath="/proposals">
+  <div class="flex justify-between items-end mb-6">
+    <div>
+      <h1 class="text-4xl font-bold mb-2 text-gray-900">Carnet de bord</h1>
+      <p class="text-gray-500 text-sm">Gérez les propositions d'évolution et les corrections demandées par les agents ou les utilisateurs.</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6">
+    <div class="h-[600px]">
+       <DashProposals client:load />
+    </div>
+  </div>
+</DashboardLayout>
