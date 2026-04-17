@@ -7,7 +7,7 @@ import DashActivity from '../components/dashboard/DashActivity';
 import DashProposals from '../components/dashboard/DashProposals';
 import DashProjectList from '../components/dashboard/DashProjectList';
 import DashAgentTeam from '../components/dashboard/DashAgentTeam';
-import DashOrcheStatus from '../components/dashboard/DashOrcheStatus';
+import DashAuditLog from '../components/dashboard/DashAuditLog';
 import DashSystemStatus from '../components/dashboard/DashSystemStatus';
 import { loadAstroDb } from '../lib/load-astro-db';
 
@@ -67,13 +67,13 @@ try {
     </div>
   </div>
 
-  <!-- ── Ligne 3 : Équipe (5/12) | Progression (4/12) | Traceur (3/12) ── -->
+  <!-- ── Ligne 3 : Équipe (5/12) | Audit (4/12) | Système (3/12) ── -->
   <div class="grid grid-cols-12 gap-5">
     <div class="col-span-12 lg:col-span-5">
       <DashAgentTeam client:load />
     </div>
     <div class="col-span-12 sm:col-span-6 lg:col-span-4">
-      <DashOrcheStatus client:load />
+      <DashAuditLog client:load />
     </div>
     <div class="col-span-12 sm:col-span-6 lg:col-span-3">
       <DashSystemStatus client:load />
