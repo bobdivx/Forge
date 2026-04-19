@@ -9,6 +9,7 @@
  * - Journalise dans la table Heartbeat.
  */
 
+import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
 import { invokeOpenClawSessionsSend, resolveSessionsSendKey } from './openclaw-gateway';
@@ -128,6 +129,59 @@ async function logHeartbeat(level: 'info' | 'warn' | 'error', message: string) {
 
 // ── Cycle de travail ──────────────────────────────────────────────────────────
 
+/** Pour chaque AgentAppIssue encore `open`, crée une AgentTask (évite les doublons même texte AppIssue #id). */
+async function dispatchOpenAppIssues(agentIds: string[]) {
+  try {
+    const { db, AgentAppIssue, AgentTask, Project } = await loadAstroDb();
+    const activeProjects = await db.select({ id: Project.id }).from(Project).where(eq(Project.swarmEnabled, 1));
+    const activeIds = new Set(activeProjects.map((p) => p.id));
+
+    const issues = await db.select().from(AgentAppIssue).limit(150);
+    const open = issues.filter((i) => String(i.status).toLowerCase() === 'open');
+    if (!open.length) return;
+
+    const taskRows = await db.select({ task: AgentTask.task, input: AgentTask.input }).from(AgentTask).limit(300);
+    const seenIssueIds = new Set<string>();
+    for (const t of taskRows) {
+      const blob = `${t.task ?? ''}\n${t.input ?? ''}`;
+      const m = blob.match(/AppIssue\s*#(\d+)/i);
+      if (m) seenIssueIds.add(m[1]);
+    }
+
+    for (const issue of open) {
+      if (issue.projectId != null && !activeIds.has(issue.projectId)) continue;
+      const idStr = String(issue.id);
+      if (seenIssueIds.has(idStr)) continue;
+
+      const assignee = String(issue.assigneeAgentId || 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE';
+      if (agentIds.length && !agentIds.includes(assignee)) continue;
+
+      const taskTitle = `[AppIssue #${issue.id}] ${issue.title}`;
+      const taskInput = [
+        `URL: ${issue.url}`,
+        `Type: ${issue.errorType}`,
+        issue.detail ? `Détail: ${issue.detail}` : '',
+        `Rapporté par: ${issue.reportedByAgentId}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      await db.insert(AgentTask).values({
+        agentId: assignee,
+        task: taskTitle,
+        input: taskInput,
+        projectId: issue.projectId ?? undefined,
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      seenIssueIds.add(idStr);
+    }
+  } catch (e) {
+    console.warn('[work-scheduler] dispatchOpenAppIssues error:', e);
+  }
+}
+
 async function dispatchPendingTasks(agentIds: string[]) {
   try {
     const { db, AgentTask, Project } = await loadAstroDb();
@@ -243,9 +297,14 @@ async function checkBudgetExceeded(): Promise<{ exceeded: boolean; info: string 
   }
 }
 
-async function runWorkCycle(agentIds: string[]) {
+/**
+ * @param fromManual — true si déclenché par POST /api/work-system (manualStart) : on garde `_state === 'running'`.
+ *                     false si déclenché par la planification : après le cycle on repasse en `scheduled`
+ *                     sinon le premier tick bloque tous les suivants (`tick` ignorait tout si `_state === 'running'`).
+ */
+async function runWorkCycle(agentIds: string[], fromManual = false) {
   if (_currentlyWorking) return;
-  
+
   const { exceeded, info } = await checkBudgetExceeded();
   if (exceeded) {
     await logHeartbeat('warn', `Cycle annulé : ${info}`);
@@ -254,13 +313,14 @@ async function runWorkCycle(agentIds: string[]) {
 
   _currentlyWorking = true;
   _lastStartedAt = new Date();
-  _state = 'running';
+  if (fromManual) {
+    _state = 'running';
+  }
 
   try {
     const { db, ActivityLog } = await loadAstroDb();
     await logHeartbeat('info', `Cycle de travail démarré (${info})`);
-    
-    // Log d'audit
+
     await db.insert(ActivityLog).values({
       actorType: 'system',
       actorId: 'scheduler',
@@ -272,11 +332,16 @@ async function runWorkCycle(agentIds: string[]) {
     });
 
     await sendWorkDirective(agentIds);
+    /** Crée des AgentTask pour les bugs ouverts, puis envoie toutes les tâches `pending`/`bug`. */
+    await dispatchOpenAppIssues(agentIds);
     await dispatchPendingTasks(agentIds);
   } catch (e) {
     await logHeartbeat('error', `Erreur cycle de travail : ${String(e)}`);
   } finally {
     _currentlyWorking = false;
+    if (!fromManual) {
+      _state = 'scheduled';
+    }
   }
 }
 
@@ -321,11 +386,11 @@ async function tick() {
       // Si la plage ne spécifie aucun agent, on prend tous les agents activés
       if (targets.length === 0) {
         const { AgentInstruction } = await loadAstroDb();
-        const allAgents = await db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`);
+        const allAgents = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
         targets = allAgents.map(a => a.agentId);
       }
 
-      await runWorkCycle(targets);
+      await runWorkCycle(targets, false);
     } else if (!inWindow && _currentlyWorking) {
       await stopWorkCycle('fin de plage horaire');
     }
@@ -378,12 +443,12 @@ export async function manualStart(agentIds: string[] = []) {
 
   if (targets.length === 0) {
     const { loadAstroDb } = await import('./load-astro-db');
-    const { db, AgentInstruction, sql } = await loadAstroDb();
-    const allAgents = await db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`);
+    const { db, AgentInstruction } = await loadAstroDb();
+    const allAgents = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
     targets = allAgents.map(a => a.agentId);
   }
 
-  await runWorkCycle(targets);
+  await runWorkCycle(targets, true);
 }
 
 /** Arrêt manuel — repasse en mode `stopped` (les plages planifiées ne reprennent pas). */
