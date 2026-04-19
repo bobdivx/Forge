@@ -28,7 +28,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   githubToken: '',
   vercelToken: '',
   githubWebhookSecret: '',
-  forgeReposRoot: '/media/Github',
+  forgeReposRoot: '/mnt/GitHub',
   dockerYamlDir: '/DATA/AppData',
   dockerAppDataDir: '/DATA/AppData',
   forgeSetupState: 'done',

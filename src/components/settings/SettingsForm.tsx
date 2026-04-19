@@ -35,7 +35,7 @@ const TABS = [
 export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
-    forgeReposRoot:    '/media/Github',
+    forgeReposRoot:    '/mnt/GitHub',
     dockerYamlDir:     '/DATA/AppData',
     dockerAppDataDir:  '/DATA/AppData',
     githubToken:       '',

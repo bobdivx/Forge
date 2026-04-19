@@ -3,20 +3,41 @@ import fs from 'fs';
 import path from 'path';
 import { getConfig } from './config-db';
 
-/** Répertoire des applications sur disque (un sous-dossier = une app). Surcharge : FORGE_REPOS_ROOT */
-export function getReposRoot(): string {
-  return process.env.FORGE_REPOS_ROOT?.trim() || '/media/Github';
+/**
+ * Chemins courants selon l’hôte (Zima/NAS) vs conteneur Docker.
+ * Si la base contient encore `/media/Github` mais le volume est monté sur `/mnt/GitHub`,
+ * on utilise le premier répertoire qui existe réellement sur le FS du conteneur.
+ */
+const DEFAULT_REPOS_ROOT_CANDIDATES = ['/mnt/GitHub', '/media/GitHub', '/media/Github'] as const;
+
+function resolveReposRootSync(preferred: Array<string | undefined>): string {
+  for (const p of preferred) {
+    const t = typeof p === 'string' ? p.trim() : '';
+    if (t && fs.existsSync(t)) return path.resolve(t);
+  }
+  for (const c of DEFAULT_REPOS_ROOT_CANDIDATES) {
+    if (fs.existsSync(c)) return path.resolve(c);
+  }
+  const fallback =
+    preferred.map((p) => (typeof p === 'string' ? p.trim() : '')).find(Boolean) ||
+    DEFAULT_REPOS_ROOT_CANDIDATES[0];
+  return path.resolve(fallback);
 }
 
-/** Préfère la valeur enregistrée en base (Paramètres), puis l’env, puis défaut. */
+/** Répertoire des applications sur disque (un sous-dossier = une app). Surcharge : FORGE_REPOS_ROOT */
+export function getReposRoot(): string {
+  return resolveReposRootSync([process.env.FORGE_REPOS_ROOT]);
+}
+
+/** Préfère l’env, puis la base (Paramètres), puis les emplacements par défaut qui existent. */
 export async function getReposRootResolved(): Promise<string> {
+  let fromDb = '';
   try {
-    const fromDb = (await getConfig('forgeReposRoot')).trim();
-    if (fromDb) return fromDb;
+    fromDb = (await getConfig('forgeReposRoot')).trim();
   } catch {
     /* ignore */
   }
-  return getReposRoot();
+  return resolveReposRootSync([process.env.FORGE_REPOS_ROOT, fromDb]);
 }
 
 const SAFE_NAME = /^[a-zA-Z0-9._-]{1,128}$/;

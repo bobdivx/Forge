@@ -18,10 +18,10 @@ export default async function seed() {
       console.log('Seeding base data...');
 
       await db.insert(Project).values([
-        { name: 'Forge',    path: '/media/Github/Forge',    status: 'active', description: 'Dashboard DevForge' },
-        { name: 'Tesla',    path: '/media/Github/tesla',    status: 'active' },
-        { name: 'ZimaOS-MCP', path: '/media/Github/ZimaOS-MCP', status: 'active' },
-        { name: 'Popcorn',  path: '/media/Github/popcorn',  status: 'dev' },
+        { name: 'Forge',    path: '/mnt/GitHub/Forge',    status: 'active', description: 'Dashboard DevForge' },
+        { name: 'Tesla',    path: '/mnt/GitHub/tesla',    status: 'active' },
+        { name: 'ZimaOS-MCP', path: '/mnt/GitHub/ZimaOS-MCP', status: 'active' },
+        { name: 'Popcorn',  path: '/mnt/GitHub/popcorn',  status: 'dev' },
       ]);
 
       await db.insert(AppData).values([
@@ -54,7 +54,7 @@ export default async function seed() {
         { key: 'githubToken',        value: '',                        updatedAt: new Date() },
         { key: 'vercelToken',        value: '',                        updatedAt: new Date() },
         { key: 'githubWebhookSecret', value: '',                       updatedAt: new Date() },
-        { key: 'forgeReposRoot',     value: '/media/Github',           updatedAt: new Date() },
+        { key: 'forgeReposRoot',     value: '/mnt/GitHub',            updatedAt: new Date() },
         { key: 'dockerYamlDir',      value: '/DATA/AppData',           updatedAt: new Date() },
         { key: 'dockerAppDataDir',   value: '/DATA/AppData',           updatedAt: new Date() },
         { key: 'forgeSetupState',    value: 'pending',                 updatedAt: new Date() },
