@@ -59,6 +59,7 @@ export const POST: APIRoute = async ({ request }) => {
         name: dirName,
         path: fullPath,
         status: 'active',
+        swarmEnabled: 1,
         description: 'Dépôt détecté automatiquement',
       });
       results.push({ name: dirName, status: 'added' });

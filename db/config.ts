@@ -7,6 +7,8 @@ const Project = defineTable({
     description: column.text({ optional: true }),
     path: column.text(),
     status: column.text({ default: 'active' }),
+    /** Swarm / agents : obligatoire pour aligner les bases SQLite persistantes sur le schéma actuel. */
+    swarmEnabled: column.number({ default: 1 }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
   },

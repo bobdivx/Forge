@@ -28,6 +28,21 @@ function recreateTablesViaNodeScript(dbHref: string): void {
   execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
 }
 
+/** Colonnes additives sur une base SQLite déjà peuplée (NAS) pour suivre le schéma du code. */
+function migrateTablesViaNodeScript(dbHref: string): void {
+  const cwd = process.cwd();
+  const script = join(cwd, 'scripts', 'forge-migrate-local-db.mjs');
+  if (!existsSync(script)) {
+    console.warn('[forge] Script migrations absent:', script);
+    return;
+  }
+  try {
+    execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
+  } catch (e) {
+    console.warn('[forge] forge-migrate-local-db (non bloquant):', e);
+  }
+}
+
 async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
   try {
     const { db, ForgeUser } = await loadAstroDb();
@@ -41,6 +56,8 @@ async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
 async function runBootstrap(): Promise<void> {
   const dbHref = resolveLocalDbFileHref();
   if (!dbHref.startsWith('file:')) return;
+
+  migrateTablesViaNodeScript(dbHref);
 
   if (await forgeUserVisibleViaAstroDb()) return;
 

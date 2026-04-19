@@ -18,10 +18,10 @@ export default async function seed() {
       console.log('Seeding base data...');
 
       await db.insert(Project).values([
-        { name: 'Forge',    path: '/mnt/GitHub/Forge',    status: 'active', description: 'Dashboard DevForge' },
-        { name: 'Tesla',    path: '/mnt/GitHub/tesla',    status: 'active' },
-        { name: 'ZimaOS-MCP', path: '/mnt/GitHub/ZimaOS-MCP', status: 'active' },
-        { name: 'Popcorn',  path: '/mnt/GitHub/popcorn',  status: 'dev' },
+        { name: 'Forge', path: '/mnt/GitHub/Forge', status: 'active', swarmEnabled: 1, description: 'Dashboard DevForge' },
+        { name: 'Tesla', path: '/mnt/GitHub/tesla', status: 'active', swarmEnabled: 1 },
+        { name: 'ZimaOS-MCP', path: '/mnt/GitHub/ZimaOS-MCP', status: 'active', swarmEnabled: 1 },
+        { name: 'Popcorn', path: '/mnt/GitHub/popcorn', status: 'dev', swarmEnabled: 1 },
       ]);
 
       await db.insert(AppData).values([

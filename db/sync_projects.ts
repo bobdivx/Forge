@@ -18,6 +18,7 @@ export default async function seed() {
           name: p.name,
           path: p.path,
           status: 'active',
+          swarmEnabled: 1,
           description: 'Projet synchronisé depuis le NAS'
         });
         console.log(`+ Added ${p.name}`);
