@@ -88,6 +88,22 @@ export default function DashSystemStatus() {
             ></div>
           </div>
         </div>
+
+        {/* GitHub Disk */}
+        {data.githubDiskUsage !== null && (
+          <div>
+            <div class="flex justify-between text-[11px] mb-1">
+              <span class="text-gray-500 font-medium">Disque GitHub (FORGE)</span>
+              <span class="text-gray-700 font-bold">{data.githubDiskUsage}%</span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <div 
+                class={`h-full rounded-full transition-all duration-500 ${data.githubDiskUsage > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+                style={{ width: `${data.githubDiskUsage}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div class="mt-4 pt-3 border-t border-gray-50 flex justify-between items-center text-[10px]">
