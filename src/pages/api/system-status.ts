@@ -30,11 +30,18 @@ export const GET: APIRoute = async () => {
 
     let diskUsage = null;
     try {
-      const dfOutput = execSync('df -h /mnt/Docker --output=pcent').toString();
-      const match = dfOutput.match(/(\d+)%/);
-      if (match) diskUsage = parseInt(match[1]);
+      /** BusyBox `df` (Alpine) ne supporte pas `--output=pcent` (GNU coreutils). */
+      const dfOutput = execSync('df -P /mnt/Docker 2>/dev/null || df -P / 2>/dev/null || true')
+        .toString();
+      const lines = dfOutput.trim().split('\n').filter(Boolean);
+      const last = lines[lines.length - 1];
+      const parts = last?.trim().split(/\s+/);
+      const capIdx = parts?.findIndex((p) => /^\d+%$/.test(p));
+      const pct =
+        capIdx != null && capIdx >= 0 ? parts?.[capIdx] : parts?.find((p) => /^\d+%$/.test(p));
+      if (pct) diskUsage = parseInt(pct.replace('%', ''), 10);
     } catch (e) {
-      console.error("Failed to fetch disk usage", e);
+      console.error('Failed to fetch disk usage', e);
     }
 
     return new Response(JSON.stringify({

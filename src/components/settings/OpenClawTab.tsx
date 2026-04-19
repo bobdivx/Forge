@@ -1,7 +1,7 @@
 import FormField from '../ui/FormField';
 import SaveRow from '../ui/SaveRow';
 
-type Config = { openclawGatewayUrl: string; openclawToken: string; [k: string]: string };
+type Config = { openclawGatewayUrl: string; openclawToken: string; ollamaUrl: string; [k: string]: string };
 
 type Props = {
   settings: Config;
@@ -45,6 +45,20 @@ export default function OpenClawTab({ settings, setSettings, onSave, saving, mes
               value={settings.openclawToken}
               onInput={(e) =>
                 setSettings({ ...settings, openclawToken: (e.target as HTMLInputElement).value })
+              }
+              class={inputCls}
+            />
+          </FormField>
+          <FormField
+            label="URL Ollama (API)"
+            hint="Origine HTTP pour lister les modèles (GET /api/tags). Ex. http://host.docker.internal:11434 si Ollama est sur l’hôte. Équivalent à la variable OLLAMA_HOST du conteneur."
+          >
+            <input
+              type="url"
+              placeholder="http://host.docker.internal:11434"
+              value={settings.ollamaUrl}
+              onInput={(e) =>
+                setSettings({ ...settings, ollamaUrl: (e.target as HTMLInputElement).value })
               }
               class={inputCls}
             />

@@ -15,6 +15,7 @@ type Config = {
   githubWebhookSecret: string;
   openclawToken: string;
   openclawGatewayUrl: string;
+  ollamaUrl: string;
 };
 
 type AuthState = {
@@ -35,14 +36,15 @@ const TABS = [
 export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
-    forgeReposRoot:    '/media/Github',
-    dockerYamlDir:     '/DATA/AppData',
-    dockerAppDataDir:  '/DATA/AppData',
+    forgeReposRoot:    '',
+    dockerYamlDir:     '',
+    dockerAppDataDir:  '',
     githubToken:       '',
     vercelToken:       '',
     githubWebhookSecret: '',
     openclawToken:     '',
-    openclawGatewayUrl: 'http://127.0.0.1:24190',
+    openclawGatewayUrl: '',
+    ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({
     currentEmail: '',
@@ -73,6 +75,7 @@ export default function SettingsForm() {
           openclawToken: s.openclawToken || '',
           openclawGatewayUrl:
             String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+          ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
         const items = Array.isArray(t.items) ? t.items : [];
@@ -104,6 +107,7 @@ export default function SettingsForm() {
       openclawToken: typeof s.openclawToken === 'string' ? s.openclawToken : prev.openclawToken,
       openclawGatewayUrl:
         String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+      ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
     }));
   };
 

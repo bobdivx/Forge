@@ -15,6 +15,7 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
   const allowed: (keyof ForgeConfig)[] = [
     'openclawGatewayUrl',
     'openclawToken',
+    'ollamaUrl',
     'githubToken',
     'vercelToken',
     'githubWebhookSecret',
