@@ -5,7 +5,7 @@ import { getConfig } from './config-db';
 
 /** Répertoire des applications sur disque (un sous-dossier = une app). Surcharge : FORGE_REPOS_ROOT */
 export function getReposRoot(): string {
-  return process.env.FORGE_REPOS_ROOT?.trim() || '/media/Github';
+  return process.env.FORGE_REPOS_ROOT?.trim() || '/mnt/GitHub';
 }
 
 /** Préfère la valeur enregistrée en base (Paramètres), puis l’env, puis défaut. */

@@ -12,12 +12,11 @@ services:
           memory: "134217728"
           devices: []
     environment:
+      - ASTRO_DATABASE_FILE=file:/app/.astro/content.db
       - HOST=0.0.0.0
       - NODE_ENV=production
+      - OLLAMA_HOST=
       - PORT=4321
-      # Même cible au build Docker et au run (évite db.sqlite vs content.db).
-      - ASTRO_DATABASE_FILE=file:/app/.astro/content.db
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
     extra_hosts:
       - host.docker.internal:host-gateway
     healthcheck:
@@ -42,11 +41,20 @@ services:
     restart: unless-stopped
     volumes:
       - type: bind
-        source: /media/DATA/AppData/forge/astro
+        source: /media/Docker/AppData/forge/astro
         target: /app/.astro
       - type: bind
-        source: /media/DATA/AppData/forge/data
+        source: /media/Docker/AppData/forge/data
         target: /app/.data
+      - type: bind
+        source: /media/Docker/AppData
+        target: /mnt/AppData
+      - type: bind
+        source: /media/Docker/yaml
+        target: /mnt/yaml
+      - type: bind
+        source: /media/GitHub
+        target: /mnt/GitHub
     devices: []
     cap_add: []
     networks:

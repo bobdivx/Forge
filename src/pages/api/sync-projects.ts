@@ -20,11 +20,16 @@ export const POST: APIRoute = async () => {
     try { return fs.statSync(path.join(reposRoot, d)).isDirectory(); } catch { return false; }
   });
 
-  const results: { name: string; status: string }[] = [];
+  const results: { name: string; status: string; errorMessage?: string }[] = [];
+  console.log(`[sync-projects] Scanned ${reposRoot}. Found directories: ${dirs.join(', ')}`);
 
   for (const dirName of dirs) {
     const fullPath = path.join(reposRoot, dirName);
-    if (!fs.existsSync(path.join(fullPath, '.git'))) continue;
+    const hasGit = fs.existsSync(path.join(fullPath, '.git'));
+    if (!hasGit) {
+      console.log(`[sync-projects] Skipping ${dirName}: no .git folder`);
+      continue;
+    }
 
     try {
       const existing = await db.select().from(Project).where(eq(Project.name, dirName)).limit(1);
@@ -49,9 +54,12 @@ export const POST: APIRoute = async () => {
         status: 'active',
         description: 'Dépôt détecté automatiquement',
       });
+      console.log(`[sync-projects] Added ${dirName}`);
       results.push({ name: dirName, status: 'added' });
-    } catch {
-      results.push({ name: dirName, status: 'error' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[sync-projects] Database error for element ${dirName}:`, msg);
+      results.push({ name: dirName, status: 'error', errorMessage: msg });
     }
   }
 
