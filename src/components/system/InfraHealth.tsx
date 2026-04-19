@@ -2,14 +2,18 @@ import { useState, useEffect } from 'preact/hooks';
 
 export default function InfraHealth() {
   const [stats, setStats] = useState({ memoryUsage: 0, cpuLoad: 0, diskUsage: 0, githubDiskUsage: 0, uptime: 0 });
+  const [dockerStats, setDockerStats] = useState<{ containers: any[] }>({ containers: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('/api/system-status');
-        const data = await res.json();
-        setStats(data);
+        const [res, dRes] = await Promise.all([
+          fetch('/api/system-status'),
+          fetch('/api/docker-health')
+        ]);
+        if (res.ok) setStats(await res.json());
+        if (dRes.ok) setDockerStats(await dRes.json());
         setLoading(false);
       } catch { /* ignore */ }
     };
@@ -17,6 +21,10 @@ export default function InfraHealth() {
     const interval = setInterval(fetchStats, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const unhealthyContainers = dockerStats.containers.filter(c => 
+    c.Status.includes('unhealthy') || c.Status.includes('Restarting')
+  );
 
   const statusColor = (v: number) => v > 85 ? 'text-error' : v > 65 ? 'text-warning' : 'text-success';
   const barColor = (v: number) => v > 85 ? 'progress-error' : v > 65 ? 'progress-warning' : 'progress-success';
@@ -42,6 +50,16 @@ export default function InfraHealth() {
         </span>
         Santé Infra
       </h3>
+
+      {unhealthyContainers.length > 0 && (
+        <div class="mb-4 p-2 bg-error/10 border border-error/20 rounded text-[10px] text-error">
+          <p class="font-bold mb-1">Alerte Docker :</p>
+          {unhealthyContainers.map(c => (
+            <div key={c.Names}>• {c.Names} ({c.Status})</div>
+          ))}
+        </div>
+      )}
+
       <div class="flex justify-around mb-6">
         {[{ v: stats.cpuLoad, label: 'CPU' }, { v: stats.memoryUsage, label: 'RAM' }].map(({ v, label }) => (
           <div key={label} class="flex flex-col items-center gap-2">
