@@ -1,87 +1,34 @@
-import {
-  FORGE_AGENT_INSTRUCTION_ROWS,
-  readInstructionMdFromRepo,
-} from '../src/lib/agent-instruction-defaults';
-
 /**
  * Import dynamique obligatoire : un `import { … } from 'astro:db'` en tête de ce fichier
  * s’exécute pendant le bootstrap de `@astrojs/db` avant l’enregistrement du seed handler,
  * ce qui provoque « INTERNAL Seed handler not loaded yet ».
+ *
+ * Aucun projet, agent ni message fictif : les apps viennent de la synchro (/api/sync-projects),
+ * les agents et modèles des actions utilisateur ou imports explicites.
  */
 export default async function seed() {
-  const { db, Project, AppData, Heartbeat, AgentMessage, AgentInstruction, Config } = await import('astro:db');
+  const { db, Config } = await import('astro:db');
 
-  // ── 1. Données de base (Project, AppData, Heartbeat, AgentMessage) ──────────
-  try {
-    const existingProjects = await db.select().from(Project);
-    if (existingProjects.length === 0) {
-      console.log('Seeding base data...');
-
-      await db.insert(Project).values([
-        { name: 'Forge',    path: '/media/Github/Forge',    status: 'active', description: 'Dashboard DevForge' },
-        { name: 'Tesla',    path: '/media/Github/tesla',    status: 'active' },
-        { name: 'ZimaOS-MCP', path: '/media/Github/ZimaOS-MCP', status: 'active' },
-        { name: 'Popcorn',  path: '/media/Github/popcorn',  status: 'dev' },
-      ]);
-
-      await db.insert(AppData).values([
-        { appName: 'OpenClaw', composePath: '/DATA/AppData/openclaw', dataDir: '/DATA/AppData/openclaw', status: 'running' },
-      ]);
-
-      await db.insert(Heartbeat).values([
-        { level: 'info', message: 'Forge initialized with Astro DB', source: 'CHEF_TECHNIQUE' },
-      ]);
-
-      await db.insert(AgentMessage).values([
-        { fromAgent: 'CHEF_TECHNIQUE', content: 'Base de données de communication activée.' },
-      ]);
-
-      console.log('Base data seeded.');
-    } else {
-      console.log('Base data already present, skipping.');
-    }
-  } catch (e) {
-    console.error('Base seed failed:', e);
-  }
-
-  // ── 2. Config par défaut ─────────────────────────────────────────────────────
+  // ── 1. Config initiale (clés vides — pas de chemins imposés) ──
   try {
     const existingConfig = await db.select().from(Config);
     if (existingConfig.length === 0) {
       await db.insert(Config).values([
-        { key: 'openclawGatewayUrl', value: 'http://127.0.0.1:24190', updatedAt: new Date() },
-        { key: 'openclawToken',      value: '',                        updatedAt: new Date() },
-        { key: 'githubToken',        value: '',                        updatedAt: new Date() },
-        { key: 'vercelToken',        value: '',                        updatedAt: new Date() },
-        { key: 'githubWebhookSecret', value: '',                       updatedAt: new Date() },
-        { key: 'forgeReposRoot',     value: '/media/Github',           updatedAt: new Date() },
-        { key: 'dockerYamlDir',      value: '/DATA/AppData',           updatedAt: new Date() },
-        { key: 'dockerAppDataDir',   value: '/DATA/AppData',           updatedAt: new Date() },
-        { key: 'forgeSetupState',    value: 'pending',                 updatedAt: new Date() },
-        { key: 'forgeReposRootAgent', value: '/mnt/GitHub',             updatedAt: new Date() },
+        { key: 'openclawGatewayUrl', value: '', updatedAt: new Date() },
+        { key: 'openclawToken', value: '', updatedAt: new Date() },
+        { key: 'ollamaUrl', value: '', updatedAt: new Date() },
+        { key: 'githubToken', value: '', updatedAt: new Date() },
+        { key: 'vercelToken', value: '', updatedAt: new Date() },
+        { key: 'githubWebhookSecret', value: '', updatedAt: new Date() },
+        { key: 'forgeReposRoot', value: '', updatedAt: new Date() },
+        { key: 'dockerYamlDir', value: '', updatedAt: new Date() },
+        { key: 'dockerAppDataDir', value: '', updatedAt: new Date() },
+        { key: 'forgeReposRootAgent', value: '', updatedAt: new Date() },
+        { key: 'forgeSetupState', value: 'pending', updatedAt: new Date() },
       ]);
-      console.log('Config defaults seeded.');
+      console.log('Config keys seeded (empty — utilisateur à renseigner).');
     }
   } catch (e) {
     console.warn('Config seed skipped:', e);
-  }
-
-  // ── 3. Instructions agents — bloc isolé, ne bloque pas le reste ───────────
-  try {
-    const existing = await db.select().from(AgentInstruction);
-    if (existing.length === 0) {
-      const rows = FORGE_AGENT_INSTRUCTION_ROWS.map((agent) => ({
-        agentId:      agent.agentId,
-        model:        agent.model,
-        filePath:     agent.filePath,
-        systemPrompt: readInstructionMdFromRepo(agent.filePath),
-        enabled:      1,
-        updatedAt:    new Date(),
-      }));
-      await db.insert(AgentInstruction).values(rows);
-      console.log(`Seeded ${rows.length} agent instructions.`);
-    }
-  } catch (e) {
-    console.warn('AgentInstruction seed skipped (migration peut-être en cours):', e);
   }
 }

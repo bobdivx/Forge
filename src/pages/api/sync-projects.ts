@@ -5,9 +5,21 @@ import { getReposRootResolved } from '../../lib/forge-repos';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import fs from 'fs';
 
-export const POST: APIRoute = async () => {
+export const POST: APIRoute = async ({ request }) => {
   const { db, Project } = await loadAstroDb();
-  const reposRoot = await getReposRootResolved();
+  let reposRoot = await getReposRootResolved();
+
+  /** Paramètres envoie ce champ dans le corps pour synchroniser avec le formulaire avant sauvegarde. */
+  try {
+    const ct = request.headers.get('content-type') ?? '';
+    if (ct.includes('application/json')) {
+      const body = (await request.json()) as { forgeReposRoot?: string };
+      const hint = typeof body?.forgeReposRoot === 'string' ? body.forgeReposRoot.trim() : '';
+      if (hint && path.isAbsolute(hint)) reposRoot = path.resolve(hint);
+    }
+  } catch {
+    /* corps absent ou invalide → getReposRootResolved */
+  }
 
   if (!fs.existsSync(reposRoot)) {
     return new Response(
@@ -52,6 +64,7 @@ export const POST: APIRoute = async () => {
         name: dirName,
         path: fullPath,
         status: 'active',
+        swarmEnabled: 1,
         description: 'Dépôt détecté automatiquement',
       });
       console.log(`[sync-projects] Added ${dirName}`);

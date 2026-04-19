@@ -269,7 +269,11 @@ export default function AgentModelMatrix() {
       {/* Notes de contexte */}
       {data.ollama && !data.ollama.configured && (
         <div class="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700 space-y-1">
-          <p><strong>Ollama non configuré</strong> — Définissez <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> dans le <code class="bg-blue-100 px-1 rounded">.env</code> Forge (ex. <code class="bg-blue-100 px-1 rounded">http://127.0.0.1:11434</code>).</p>
+          <p>
+            <strong>Ollama non configuré pour la liste des tags</strong> — Indiquez l’<strong>URL Ollama</strong> dans{' '}
+            <strong>Paramètres → Connexion OpenClaw</strong>, ou définissez{' '}
+            <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> sur le conteneur.
+          </p>
         </div>
       )}
       {data.ollama?.configured && data.ollama.count === 0 && (

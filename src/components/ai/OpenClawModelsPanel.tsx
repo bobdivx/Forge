@@ -359,7 +359,7 @@ export default function OpenClawModelsPanel() {
                           label="ollama"
                           title={
                             row.ollamaPresent === null
-                              ? 'OLLAMA_HOST non défini sur Forge'
+                              ? 'URL Ollama non configurée (Paramètres → Connexion OpenClaw) ou OLLAMA_HOST absent'
                               : 'Tag présent sur Ollama'
                           }
                         />

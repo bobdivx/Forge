@@ -7,7 +7,7 @@ const Project = defineTable({
     description: column.text({ optional: true }),
     path: column.text(),
     status: column.text({ default: 'active' }),
-    swarmEnabled: column.number({ default: 0 }),
+    swarmEnabled: column.number({ default: 1 }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
   },

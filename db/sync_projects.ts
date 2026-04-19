@@ -1,29 +1,7 @@
-import { db, Project } from 'astro:db';
-import fs from 'fs';
-
+/**
+ * Les projets ne sont plus injectés par seed : utiliser le dashboard
+ * (Synchroniser) ou POST /api/sync-projects après avoir défini la racine des dépôts.
+ */
 export default async function seed() {
-  console.log('Syncing projects from /mnt/GitHub/ to Astro DB...');
-  const paths = [
-    { name: 'Tesla', path: '/mnt/GitHub/tesla' },
-    { name: 'Popcorn', path: '/mnt/GitHub/popcorn' },
-    { name: 'Forge', path: '/mnt/GitHub/Forge' },
-    { name: 'mcp-turso', path: '/mnt/GitHub/mcp-turso' },
-    { name: 'ZimaOS-MCP', path: '/mnt/GitHub/ZimaOS-MCP' },
-  ];
-
-  for (const p of paths) {
-    if (fs.existsSync(p.path)) {
-      try {
-        await db.insert(Project).values({
-          name: p.name,
-          path: p.path,
-          status: 'active',
-          description: 'Projet synchronisé depuis le NAS'
-        });
-        console.log(`+ Added ${p.name}`);
-      } catch (e) {
-        console.log(`! Skip ${p.name} (already exists or error)`);
-      }
-    }
-  }
+  /* intentionnellement vide */
 }

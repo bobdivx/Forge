@@ -28,13 +28,28 @@ function recreateTablesViaNodeScript(dbHref: string): void {
   execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
 }
 
+/** Ajoute colonnes/tables attendues sans DROP (bases NAS déjà peuplées). */
+function migrateTablesViaNodeScript(dbHref: string): void {
+  const cwd = process.cwd();
+  const script = join(cwd, 'scripts', 'forge-migrate-local-db.mjs');
+  if (!existsSync(script)) {
+    console.warn('[forge] Script migrations absent:', script);
+    return;
+  }
+  try {
+    execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
+  } catch (e) {
+    console.warn('[forge] forge-migrate-local-db (non bloquant):', e);
+  }
+}
+
+/** CREATE IF NOT EXISTS depuis le schéma actuel (tables manquantes uniquement). */
 function syncTablesViaNodeScript(dbHref: string): void {
   const cwd = process.cwd();
   const script = join(cwd, 'scripts', 'forge-sync-local-db.mjs');
   if (existsSync(script)) {
     execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
   } else {
-    // Fallback if the new script is missing from the environment
     recreateTablesViaNodeScript(dbHref);
   }
 }
@@ -53,6 +68,8 @@ async function runBootstrap(): Promise<void> {
   const dbHref = resolveLocalDbFileHref();
   if (!dbHref.startsWith('file:')) return;
 
+  migrateTablesViaNodeScript(dbHref);
+
   const filePath = fileURLToPath(dbHref);
   try {
     mkdirSync(dirname(filePath), { recursive: true });
@@ -61,15 +78,12 @@ async function runBootstrap(): Promise<void> {
   }
 
   try {
-    // Systematic sync strictly adds missing tables/indexes (CREATE IF NOT EXISTS)
     syncTablesViaNodeScript(dbHref);
   } catch (e) {
     console.warn('[forge] Échec synchronisation schéma Astro DB:', e);
   }
 
   if (await forgeUserVisibleViaAstroDb()) return;
-
-
 
   try {
     console.warn('[forge] Schéma Astro DB absent — recréation des tables vers', dbHref);
