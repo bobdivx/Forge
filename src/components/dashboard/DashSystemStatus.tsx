@@ -8,6 +8,7 @@ export default function DashSystemStatus() {
     diskUsage: number | null;
     githubDiskUsage: number | null;
     platform: string;
+    lastMaintenance: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -106,9 +107,17 @@ export default function DashSystemStatus() {
         )}
       </div>
 
-      <div class="mt-4 pt-3 border-t border-gray-50 flex justify-between items-center text-[10px]">
-        <span class="text-gray-400 font-medium uppercase tracking-tighter">Uptime</span>
-        <span class="text-gray-600 font-mono font-bold">{data.uptime ? formatUptime(data.uptime) : '—'}</span>
+      <div class="mt-4 pt-3 border-t border-gray-50 flex flex-col gap-1 text-[10px]">
+        <div class="flex justify-between items-center">
+          <span class="text-gray-400 font-medium uppercase tracking-tighter">Uptime</span>
+          <span class="text-gray-600 font-mono font-bold">{data.uptime ? formatUptime(data.uptime) : '—'}</span>
+        </div>
+        {data.lastMaintenance && (
+          <div class="flex justify-between items-center">
+            <span class="text-gray-400 font-medium uppercase tracking-tighter">Dernière veille</span>
+            <span class="text-indigo-600 font-bold">{new Date(data.lastMaintenance).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        )}
       </div>
     </div>
   );

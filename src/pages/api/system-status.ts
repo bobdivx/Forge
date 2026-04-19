@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import os from 'os';
 import { execSync } from 'child_process';
+import { db, Config, eq } from 'astro:db';
 
 export const GET: APIRoute = async () => {
   try {
@@ -42,18 +43,22 @@ export const GET: APIRoute = async () => {
       console.error("Failed to fetch disk usage", e);
     }
 
+    const lastMaint = await db.select().from(Config).where(eq(Config.key, 'lastMaintenanceCycle')).get();
+
     return new Response(JSON.stringify({
       memoryUsage: memPercent,
       cpuLoad: cpuPercent,
       uptime: os.uptime(),
       diskUsage: diskUsage,
       githubDiskUsage: githubDiskUsage,
-      platform: os.platform()
+      platform: os.platform(),
+      lastMaintenance: lastMaint?.value ?? null
     }), { 
       status: 200, 
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error) {
+    console.error("System status error:", error);
     return new Response(JSON.stringify({ error: "Sonde indisponible" }), { 
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
