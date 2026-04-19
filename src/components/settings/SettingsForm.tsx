@@ -36,14 +36,14 @@ const TABS = [
 export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
-    forgeReposRoot:    '/mnt/GitHub',
-    dockerYamlDir:     '/DATA/AppData',
-    dockerAppDataDir:  '/DATA/AppData',
+    forgeReposRoot:    '',
+    dockerYamlDir:     '',
+    dockerAppDataDir:  '',
     githubToken:       '',
     vercelToken:       '',
     githubWebhookSecret: '',
     openclawToken:     '',
-    openclawGatewayUrl: 'http://127.0.0.1:24190',
+    openclawGatewayUrl: '',
     ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({

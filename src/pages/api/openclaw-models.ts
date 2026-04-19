@@ -1,8 +1,4 @@
 import type { APIRoute } from 'astro';
-import {
-  FORGE_AGENT_INSTRUCTION_ROWS,
-  readInstructionMdFromRepo,
-} from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
   fetchOpenClawAgentsList,
@@ -28,21 +24,6 @@ function gatewayRegistryKeySet(agents: { id: string }[]): Set<string> {
     if (bare) s.add(bare.toLowerCase());
   }
   return s;
-}
-
-async function ensureAgentInstructionsFromDisk() {
-  const { db, AgentInstruction } = await loadAstroDb();
-  const existing = await db.select().from(AgentInstruction);
-  if (existing.length > 0) return;
-  const rows = FORGE_AGENT_INSTRUCTION_ROWS.map((a) => ({
-    agentId: a.agentId,
-    model: a.model,
-    filePath: a.filePath,
-    systemPrompt: readInstructionMdFromRepo(a.filePath),
-    enabled: 1,
-    updatedAt: new Date(),
-  }));
-  await db.insert(AgentInstruction).values(rows);
 }
 
 export type OpenClawModelsRow = {
@@ -74,7 +55,6 @@ export const GET: APIRoute = async ({ locals }) => {
   }[] = [];
 
   try {
-    await ensureAgentInstructionsFromDisk();
     const { db, AgentInstruction } = await loadAstroDb();
     const rows = await db
       .select({

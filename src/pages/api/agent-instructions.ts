@@ -1,26 +1,6 @@
 import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
-import {
-  FORGE_AGENT_INSTRUCTION_ROWS,
-  readInstructionMdFromRepo,
-} from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
-
-/** Si la table est vide (DB migrée sans seed), on remplit depuis les .md du repo. */
-async function ensureAgentInstructionsFromDisk() {
-  const { db, AgentInstruction } = await loadAstroDb();
-  const existing = await db.select().from(AgentInstruction);
-  if (existing.length > 0) return;
-  const rows = FORGE_AGENT_INSTRUCTION_ROWS.map((a) => ({
-    agentId: a.agentId,
-    model: a.model,
-    filePath: a.filePath,
-    systemPrompt: readInstructionMdFromRepo(a.filePath),
-    enabled: 1,
-    updatedAt: new Date(),
-  }));
-  await db.insert(AgentInstruction).values(rows);
-}
 
 /** GET  /api/agent-instructions         → liste tous les agents
  *  GET  /api/agent-instructions?id=X    → un agent spécifique
@@ -28,12 +8,6 @@ async function ensureAgentInstructionsFromDisk() {
  */
 
 export const GET: APIRoute = async ({ url }) => {
-  try {
-    await ensureAgentInstructionsFromDisk();
-  } catch {
-    /* table absente ou lecture disque impossible */
-  }
-
   const { db, AgentInstruction } = await loadAstroDb();
   const agentId = url.searchParams.get('id');
 

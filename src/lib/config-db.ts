@@ -24,16 +24,17 @@ export type ForgeConfig = {
   forgeSetupState: string;
 };
 
+/** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
 export const CONFIG_DEFAULTS: ForgeConfig = {
-  openclawGatewayUrl: 'http://127.0.0.1:24190',
+  openclawGatewayUrl: '',
   openclawToken: '',
   ollamaUrl: '',
   githubToken: '',
   vercelToken: '',
   githubWebhookSecret: '',
-  forgeReposRoot: '/mnt/GitHub',
-  dockerYamlDir: '/DATA/AppData',
-  dockerAppDataDir: '/DATA/AppData',
+  forgeReposRoot: '',
+  dockerYamlDir: '',
+  dockerAppDataDir: '',
   forgeSetupState: 'done',
 };
 

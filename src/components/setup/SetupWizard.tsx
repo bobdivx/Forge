@@ -16,12 +16,12 @@ type Config = {
 const STEPS = ['OpenClaw', 'Applications & Docker', 'Jetons API', 'Validation'];
 
 const empty: Config = {
-  openclawGatewayUrl: 'http://127.0.0.1:24190',
+  openclawGatewayUrl: '',
   openclawToken: '',
   ollamaUrl: '',
-  forgeReposRoot: '/mnt/GitHub',
-  dockerYamlDir: '/DATA/AppData',
-  dockerAppDataDir: '/DATA/AppData',
+  forgeReposRoot: '',
+  dockerYamlDir: '',
+  dockerAppDataDir: '',
   githubToken: '',
   vercelToken: '',
   githubWebhookSecret: '',

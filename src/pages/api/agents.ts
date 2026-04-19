@@ -3,7 +3,6 @@ import { desc } from 'drizzle-orm';
 import {
   FORGE_AGENT_INSTRUCTION_ROWS,
   FORGE_SWARM_AGENT_COUNT,
-  readInstructionMdFromRepo,
 } from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
@@ -203,29 +202,6 @@ function disabledAgentRow(agentId: string, model: string) {
   };
 }
 
-/** Insère les agents du dépôt manquants en base (souvent une seule ligne seed / import partiel). */
-async function ensureAllDefaultAgentsInDb(): Promise<void> {
-  try {
-    const { db, AgentInstruction } = await loadAstroDb();
-    const existing = await db.select().from(AgentInstruction);
-    const have = new Set(existing.map((r) => r.agentId));
-    const missing = FORGE_AGENT_INSTRUCTION_ROWS.filter((row) => !have.has(row.agentId));
-    if (!missing.length) return;
-    await db.insert(AgentInstruction).values(
-      missing.map((a) => ({
-        agentId: a.agentId,
-        model: a.model,
-        filePath: a.filePath,
-        systemPrompt: readInstructionMdFromRepo(a.filePath),
-        enabled: 1,
-        updatedAt: new Date(),
-      })),
-    );
-  } catch {
-    /* doublon, concurrence, ou table indisponible */
-  }
-}
-
 function buildSwarmFromDefaultsAndSessions(
   byAgentId: Map<string, { model?: string | null; enabled?: number | null }>,
   rawSessions: Record<string, unknown>[],
@@ -293,8 +269,6 @@ export const GET: APIRoute = async ({ locals }) => {
       else if (s === 'running') taskStatsDb[id].running++;
       else taskStatsDb[id].pending++;
     }
-
-    await ensureAllDefaultAgentsInDb();
 
     const allInstructions = await db.select().from(AgentInstruction);
     dbInstructionRowCount = allInstructions.length;
