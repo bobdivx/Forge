@@ -29,7 +29,10 @@ export function getReposRoot(): string {
   return resolveReposRootSync([process.env.FORGE_REPOS_ROOT]);
 }
 
-/** Préfère l’env, puis la base (Paramètres), puis les emplacements par défaut qui existent. */
+/**
+ * Ordre : base (Paramètres utilisateur), puis FORGE_REPOS_ROOT (compose),
+ * puis les chemins usuels qui existent. Les réglages Forge priment sur l’env Docker.
+ */
 export async function getReposRootResolved(): Promise<string> {
   let fromDb = '';
   try {
@@ -37,7 +40,7 @@ export async function getReposRootResolved(): Promise<string> {
   } catch {
     /* ignore */
   }
-  return resolveReposRootSync([process.env.FORGE_REPOS_ROOT, fromDb]);
+  return resolveReposRootSync([fromDb, process.env.FORGE_REPOS_ROOT]);
 }
 
 const SAFE_NAME = /^[a-zA-Z0-9._-]{1,128}$/;
