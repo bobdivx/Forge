@@ -28,6 +28,17 @@ function recreateTablesViaNodeScript(dbHref: string): void {
   execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
 }
 
+function syncTablesViaNodeScript(dbHref: string): void {
+  const cwd = process.cwd();
+  const script = join(cwd, 'scripts', 'forge-sync-local-db.mjs');
+  if (existsSync(script)) {
+    execFileSync(process.execPath, [script, dbHref], { cwd, stdio: 'inherit' });
+  } else {
+    // Fallback if the new script is missing from the environment
+    recreateTablesViaNodeScript(dbHref);
+  }
+}
+
 async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
   try {
     const { db, ForgeUser } = await loadAstroDb();
@@ -42,14 +53,23 @@ async function runBootstrap(): Promise<void> {
   const dbHref = resolveLocalDbFileHref();
   if (!dbHref.startsWith('file:')) return;
 
-  if (await forgeUserVisibleViaAstroDb()) return;
-
   const filePath = fileURLToPath(dbHref);
   try {
     mkdirSync(dirname(filePath), { recursive: true });
   } catch {
     /* ignore */
   }
+
+  try {
+    // Systematic sync strictly adds missing tables/indexes (CREATE IF NOT EXISTS)
+    syncTablesViaNodeScript(dbHref);
+  } catch (e) {
+    console.warn('[forge] Échec synchronisation schéma Astro DB:', e);
+  }
+
+  if (await forgeUserVisibleViaAstroDb()) return;
+
+
 
   try {
     console.warn('[forge] Schéma Astro DB absent — recréation des tables vers', dbHref);
