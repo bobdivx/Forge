@@ -8,6 +8,7 @@ import {
   getOpenClawGatewayBaseUrl,
   getOpenClawToken,
 } from './openclaw-gateway';
+import { getOllamaOriginResolved } from './config-db';
 
 export type OpenClawV1ModelEntry = { id: string; ownedBy?: string };
 
@@ -344,18 +345,14 @@ export async function pingOpenClawChatCompletion(opts: {
 }
 
 /**
- * Liste les tags Ollama si `OLLAMA_HOST` ou `OLLAMA_ORIGIN` est défini (optionnel).
+ * Liste les tags Ollama si une origine est connue : Paramètres (`ollamaUrl`), puis env (optionnel).
  */
 export async function fetchOllamaTagNames(): Promise<{
   configured: boolean;
   names: string[];
   error?: string;
 }> {
-  const raw =
-    process.env.OLLAMA_HOST?.trim() ||
-    process.env.OLLAMA_ORIGIN?.trim() ||
-    /* Dev local : évite « Ollama non configuré » si Ollama tourne sur la machine hôte. */
-    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : '');
+  const raw = await getOllamaOriginResolved();
   if (!raw) return { configured: false, names: [] };
   const base = raw.replace(/\/$/, '');
   const url = `${base}/api/tags`;

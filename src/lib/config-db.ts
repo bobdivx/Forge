@@ -8,6 +8,8 @@ import { loadAstroDb } from './load-astro-db';
 export type ForgeConfig = {
   openclawGatewayUrl: string;
   openclawToken: string;
+  /** URL de l’API Ollama (GET /api/tags), ex. http://host.docker.internal:11434 — même rôle que OLLAMA_HOST. */
+  ollamaUrl: string;
   githubToken: string;
   vercelToken: string;
   /** Secret HMAC du webhook GitHub (PR Jules) — même valeur que dans les réglages du dépôt GitHub. */
@@ -25,6 +27,7 @@ export type ForgeConfig = {
 export const CONFIG_DEFAULTS: ForgeConfig = {
   openclawGatewayUrl: 'http://127.0.0.1:24190',
   openclawToken: '',
+  ollamaUrl: '',
   githubToken: '',
   vercelToken: '',
   githubWebhookSecret: '',
@@ -35,6 +38,20 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);
+
+/**
+ * Origine HTTP pour l’API Ollama (`GET …/api/tags`).
+ * Ordre : Paramètres (`ollamaUrl`) → `OLLAMA_HOST` → `OLLAMA_ORIGIN` → localhost en dev uniquement.
+ */
+export async function getOllamaOriginResolved(): Promise<string> {
+  const fromDb = (await getConfig('ollamaUrl')).trim();
+  return (
+    fromDb ||
+    process.env.OLLAMA_HOST?.trim() ||
+    process.env.OLLAMA_ORIGIN?.trim() ||
+    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : '')
+  );
+}
 
 export async function getConfig(key: keyof ForgeConfig): Promise<string> {
   try {

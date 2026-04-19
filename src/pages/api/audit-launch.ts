@@ -12,6 +12,7 @@ import {
   getOpenClawToken,
   getGatewayAuthHeaders,
 } from '../../lib/openclaw-gateway';
+import { getOllamaOriginResolved } from '../../lib/config-db';
 
 const execFileAsync = promisify(execFile);
 
@@ -321,12 +322,9 @@ async function invokeViaGatewayAgentsInvoke(
 }
 
 /** Base Ollama pour le fallback audit (désactivable avec FORGE_AUDIT_DISABLE_OLLAMA_FALLBACK=1). */
-function getOllamaAuditBaseUrl(): string | null {
+async function getOllamaAuditBaseUrl(): Promise<string | null> {
   if (String(process.env.FORGE_AUDIT_DISABLE_OLLAMA_FALLBACK || '').trim() === '1') return null;
-  const raw =
-    process.env.OLLAMA_HOST?.trim() ||
-    process.env.OLLAMA_ORIGIN?.trim() ||
-    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : '');
+  const raw = await getOllamaOriginResolved();
   if (!raw) return null;
   return raw.replace(/\/$/, '');
 }
@@ -469,9 +467,9 @@ async function invokeViaOllamaChat(
   model: string,
   message: string,
 ): Promise<{ ok: boolean; method: string; error?: string }> {
-  const ollamaBase = getOllamaAuditBaseUrl();
+  const ollamaBase = await getOllamaAuditBaseUrl();
   if (!ollamaBase) {
-    return { ok: false, method: 'ollama-chat', error: 'OLLAMA_HOST absent ou fallback désactivé' };
+    return { ok: false, method: 'ollama-chat', error: 'Ollama non configuré (Paramètres ou OLLAMA_HOST) ou fallback désactivé' };
   }
   const m = String(model || '').trim();
   if (!m) return { ok: false, method: 'ollama-chat', error: 'Modèle vide' };

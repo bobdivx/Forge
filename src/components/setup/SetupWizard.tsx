@@ -4,6 +4,7 @@ import FormField from '../ui/FormField';
 type Config = {
   openclawGatewayUrl: string;
   openclawToken: string;
+  ollamaUrl: string;
   forgeReposRoot: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
@@ -17,6 +18,7 @@ const STEPS = ['OpenClaw', 'Applications & Docker', 'Jetons API', 'Validation'];
 const empty: Config = {
   openclawGatewayUrl: 'http://127.0.0.1:24190',
   openclawToken: '',
+  ollamaUrl: '',
   forgeReposRoot: '/mnt/GitHub',
   dockerYamlDir: '/DATA/AppData',
   dockerAppDataDir: '/DATA/AppData',
@@ -46,6 +48,7 @@ export default function SetupWizard() {
         setCfg({
           openclawGatewayUrl: String(c.openclawGatewayUrl || empty.openclawGatewayUrl).trim(),
           openclawToken: String(c.openclawToken || ''),
+          ollamaUrl: String(c.ollamaUrl || ''),
           forgeReposRoot: String(c.forgeReposRoot || empty.forgeReposRoot),
           dockerYamlDir: String(c.dockerYamlDir || empty.dockerYamlDir),
           dockerAppDataDir: String(c.dockerAppDataDir || empty.dockerAppDataDir),
@@ -188,6 +191,18 @@ export default function SetupWizard() {
                 onInput={(e) => merge({ openclawToken: (e.target as HTMLInputElement).value })}
                 placeholder="(optionnel)"
                 autoComplete="off"
+              />
+            </FormField>
+            <FormField
+              label="URL Ollama (optionnel)"
+              hint="Pour la matrice « Modèles agents » : liste des tags Ollama. Ex. http://host.docker.internal:11434 sur Docker."
+            >
+              <input
+                type="url"
+                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-mono outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                value={cfg.ollamaUrl}
+                onInput={(e) => merge({ ollamaUrl: (e.target as HTMLInputElement).value })}
+                placeholder="http://host.docker.internal:11434"
               />
             </FormField>
             <div class="flex flex-wrap items-center gap-3">

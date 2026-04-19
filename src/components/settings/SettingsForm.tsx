@@ -15,6 +15,7 @@ type Config = {
   githubWebhookSecret: string;
   openclawToken: string;
   openclawGatewayUrl: string;
+  ollamaUrl: string;
 };
 
 type AuthState = {
@@ -43,6 +44,7 @@ export default function SettingsForm() {
     githubWebhookSecret: '',
     openclawToken:     '',
     openclawGatewayUrl: 'http://127.0.0.1:24190',
+    ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({
     currentEmail: '',
@@ -73,6 +75,7 @@ export default function SettingsForm() {
           openclawToken: s.openclawToken || '',
           openclawGatewayUrl:
             String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+          ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
         const items = Array.isArray(t.items) ? t.items : [];
@@ -104,6 +107,7 @@ export default function SettingsForm() {
       openclawToken: typeof s.openclawToken === 'string' ? s.openclawToken : prev.openclawToken,
       openclawGatewayUrl:
         String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+      ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
     }));
   };
 

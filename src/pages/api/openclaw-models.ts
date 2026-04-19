@@ -190,7 +190,7 @@ export const GET: APIRoute = async ({ locals }) => {
         count: ollama.names.length,
         error: ollama.error,
         hint: !ollama.configured
-          ? 'Optionnel : définissez OLLAMA_HOST (ex. http://127.0.0.1:11434) sur l’hôte Forge pour comparer les modèles avec les tags Ollama.'
+          ? 'Renseignez l’URL Ollama dans Paramètres → Connexion OpenClaw (section « Modèles agents » utilise ce réglage), ou définissez OLLAMA_HOST sur le conteneur.'
           : undefined,
       },
       rows,

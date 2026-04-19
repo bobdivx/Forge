@@ -51,6 +51,7 @@ export default async function seed() {
       await db.insert(Config).values([
         { key: 'openclawGatewayUrl', value: 'http://127.0.0.1:24190', updatedAt: new Date() },
         { key: 'openclawToken',      value: '',                        updatedAt: new Date() },
+        { key: 'ollamaUrl',          value: '',                        updatedAt: new Date() },
         { key: 'githubToken',        value: '',                        updatedAt: new Date() },
         { key: 'vercelToken',        value: '',                        updatedAt: new Date() },
         { key: 'githubWebhookSecret', value: '',                       updatedAt: new Date() },

@@ -211,7 +211,9 @@ export default function AgentModelMatrix() {
       {/* Notes de contexte */}
       {data.ollama && !data.ollama.configured && (
         <div class="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
-          <strong>Ollama non configuré</strong> — Définissez <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> sur l'hôte Forge pour vérifier la présence des modèles localement.
+          <strong>Ollama non configuré pour la liste des tags</strong> — Renseignez l’<strong>URL Ollama</strong> dans{' '}
+          <strong>Paramètres → Connexion OpenClaw</strong> (puis « Sauvegarder la connexion »), ou définissez{' '}
+          <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> sur le conteneur (équivalent).
         </div>
       )}
       {data.v1Models?.sourceNote && (
