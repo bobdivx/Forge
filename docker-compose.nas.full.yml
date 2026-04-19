@@ -45,6 +45,16 @@ services:
       - type: bind
         source: /DATA/AppData/forge/data
         target: /app/.data
+      - type: bind
+        source: /mnt/GitHub
+        target: /mnt/GitHub
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /media/GitHub
+        target: /media/GitHub
+        bind:
+          create_host_path: true
     networks:
       - forge-net
 
