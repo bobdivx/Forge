@@ -221,6 +221,13 @@ export type InvokeSessionsSendResult = {
   httpStatus?: number;
 };
 
+export type InvokeAgentTaskResult = {
+  ok: boolean;
+  error?: string;
+  detail?: unknown;
+  httpStatus?: number;
+};
+
 /**
  * POST /tools/invoke — outil `sessions_send` (même charge utile que /api/openclaw-directive).
  * `asyncDelivery: false` par défaut : timeout 120 s, sans `args.async` (compat gateway maximale).
@@ -321,6 +328,76 @@ export async function invokeOpenClawSessionsSend(params: {
       ok: false,
       error: `${msg} — gateway configuré : ${hostOnly}. Si Forge tourne ailleurs que le gateway, définissez OPENCLAW_GATEWAY_URL.`,
     };
+  }
+}
+
+/**
+ * Fallback quand `sessions_send` est bloqué : délègue au tool `agents_invoke`.
+ * Ici `agentId` est généralement l'id canonique Forge (DEV_FRONTEND, etc.).
+ */
+export async function invokeOpenClawAgentTask(params: {
+  agentId: string;
+  message: string;
+}): Promise<InvokeAgentTaskResult> {
+  const token = (await getOpenClawToken()).trim();
+  if (!token) {
+    return { ok: false, error: 'Token OpenClaw manquant (OPENCLAW_GATEWAY_TOKEN ou table Config).' };
+  }
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const url = `${base}/tools/invoke`;
+
+  const agentId = String(params.agentId || '').trim();
+  if (!agentId) return { ok: false, error: 'agentId requis' };
+  const message = String(params.message || '').slice(0, MAX_SESSIONS_SEND_MESSAGE);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getGatewayAuthHeaders(token),
+      },
+      body: JSON.stringify({
+        tool: 'agents_invoke',
+        action: 'json',
+        args: {
+          agentId,
+          input: message,
+        },
+      }),
+    });
+
+    const text = await res.text();
+    let data: Record<string, unknown> = {};
+    try {
+      data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+    } catch {
+      data = { raw: text };
+    }
+
+    if (!res.ok) {
+      const errMsg =
+        (data.error as { message?: string } | undefined)?.message ||
+        (typeof data.error === 'string' ? data.error : '') ||
+        (typeof data.message === 'string' ? data.message : '') ||
+        `Gateway HTTP ${res.status}`;
+      return { ok: false, httpStatus: res.status, error: errMsg, detail: data };
+    }
+
+    if (data.ok === false) {
+      const errMsg =
+        (data.error as { message?: string } | undefined)?.message ||
+        (typeof data.error === 'string' ? data.error : '') ||
+        (typeof data.message === 'string' ? data.message : '') ||
+        'agents_invoke refusé';
+      return { ok: false, httpStatus: 400, error: errMsg, detail: data };
+    }
+
+    return { ok: true, detail: data };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Erreur réseau';
+    return { ok: false, error: msg };
   }
 }
 
