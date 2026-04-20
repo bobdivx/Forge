@@ -19,7 +19,9 @@ const inputCls =
 function isSessionUsable(a: AgentRow): boolean {
   if (a.raw?.disabledInDb) return false;
   if (a.raw?.offline) return false;
-  return !/en veille|désactivé/i.test(a.status);
+  // "en veille" peut quand même accepter un sessions_send ; on exclut seulement
+  // les états explicitement non exploitables.
+  return !/désactivé/i.test(a.status);
 }
 
 export default function DiscussionComposer() {
@@ -141,6 +143,7 @@ export default function DiscussionComposer() {
   };
 
   const usableAgents = agents.filter(isSessionUsable);
+  const offlineCount = agents.length - usableAgents.length;
 
   if (loading) {
     return <div class="animate-pulse text-gray-400 py-12 text-center text-sm">Chargement du contexte…</div>;
@@ -201,13 +204,23 @@ export default function DiscussionComposer() {
           </select>
           {usableAgents.length === 0 && (
             <p class="text-xs text-amber-700 mt-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              Aucune session OpenClaw « active » détectée. Vérifiez le gateway dans Paramètres ou ouvrez une session pour
-              l’agent voulu — les agents « en veille » sont exclus pour éviter un envoi vers une clé invalide.
+              Aucune session exploitable détectée. Vérifiez le gateway dans Paramètres, le nom du conteneur OpenClaw,
+              puis rechargez. Les sessions « en veille » sont autorisées ; seuls les agents désactivés/offline sont exclus.
+            </p>
+          )}
+          {usableAgents.length > 0 && offlineCount > 0 && (
+            <p class="text-[11px] text-gray-500 mt-2">
+              {usableAgents.length} session(s) exploitable(s), {offlineCount} hors ligne/désactivée(s).
             </p>
           )}
           {selectedAgent && (
             <p class="text-[11px] font-mono text-gray-500 mt-2 break-all">
               Clé session : {selectedAgent.id}
+            </p>
+          )}
+          {usableAgents.length > 0 && offlineCount > 0 && (
+            <p class="text-[11px] text-gray-500 mt-2">
+              {offlineCount} agent(s) désactivé(s) / offline masqué(s) de la liste.
             </p>
           )}
         </div>
