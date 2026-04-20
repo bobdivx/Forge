@@ -7,6 +7,7 @@ import {
   invokeOpenClawV1ChatFallback,
   getOpenClawToken,
   getOpenClawGatewayBaseUrl,
+  resolveSessionsSendKey,
 } from '../../lib/openclaw-gateway';
 import { getConfig } from '../../lib/config-db';
 
@@ -270,8 +271,11 @@ export const POST: APIRoute = async ({ request }) => {
       ? Math.floor(body.timeoutSeconds)
       : 120;
 
+  const resolvedSessionKey =
+    (await resolveSessionsSendKey(undefined, [sessionKey]).catch(() => null)) || sessionKey;
+
   const result = await invokeOpenClawSessionsSend({
-    sessionKey,
+    sessionKey: resolvedSessionKey,
     message,
     timeoutSeconds,
     asyncDelivery: false,
@@ -283,6 +287,7 @@ export const POST: APIRoute = async ({ request }) => {
       JSON.stringify({
         ok: true,
         via: 'sessions_send',
+        routedSessionKey: resolvedSessionKey,
         result: reply ? { status: 'completed', reply } : { status: 'accepted' },
         detail: result.detail ?? { ok: true },
       }),

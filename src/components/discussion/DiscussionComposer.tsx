@@ -345,7 +345,11 @@ export default function DiscussionComposer() {
         },
       ]);
       if (!reply?.trim()) {
-        void pollAssistantReply(agentId, sentAtMs);
+        const pollSessionKey =
+          typeof data.sessionKeyResolved === 'string' && data.sessionKeyResolved.trim()
+            ? data.sessionKeyResolved.trim()
+            : agentId;
+        void pollAssistantReply(pollSessionKey, sentAtMs);
       }
       setMessage('');
     } catch {
