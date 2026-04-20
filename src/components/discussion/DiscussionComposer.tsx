@@ -21,7 +21,9 @@ type ChatMessage = {
 
 type GatewayRemediation = {
   title?: string;
+  endpoint?: string;
   where?: string;
+  configPath?: string;
   instructions?: unknown;
   json?: string;
   docs?: string;
@@ -31,7 +33,9 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   if (!remediation || typeof remediation !== 'object') return '';
   const lines: string[] = [];
   const title = typeof remediation.title === 'string' ? remediation.title.trim() : '';
+  const endpoint = typeof remediation.endpoint === 'string' ? remediation.endpoint.trim() : '';
   const where = typeof remediation.where === 'string' ? remediation.where.trim() : '';
+  const configPath = typeof remediation.configPath === 'string' ? remediation.configPath.trim() : '';
   const json = typeof remediation.json === 'string' ? remediation.json.trim() : '';
   const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
   const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
@@ -40,7 +44,9 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
     .filter(Boolean);
 
   if (title) lines.push(`Action requise: ${title}`);
+  if (endpoint) lines.push(`Endpoint exact Forge -> OpenClaw: ${endpoint}`);
   if (where) lines.push(`Ou le mettre: ${where}`);
+  if (configPath) lines.push(`Chemin de fichier detecte: ${configPath}`);
   if (instructions.length > 0) {
     lines.push('Etapes:');
     instructions.forEach((step, index) => lines.push(`${index + 1}. ${step}`));

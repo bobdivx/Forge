@@ -6,7 +6,9 @@ import {
   invokeOpenClawAgentTask,
   invokeOpenClawV1ChatFallback,
   getOpenClawToken,
+  getOpenClawGatewayBaseUrl,
 } from '../../lib/openclaw-gateway';
+import { getConfig } from '../../lib/config-db';
 
 const MAX_MESSAGE = 120_000;
 const execFileAsync = promisify(execFile);
@@ -61,14 +63,22 @@ type GatewayRemediation = {
   docs?: string;
 };
 
-function buildGatewayToolsRemediation(): GatewayRemediation {
+async function resolveOpenClawConfigPathHint(): Promise<string> {
+  const appDataDir = (await getConfig('dockerAppDataDir')).trim() || 'C:\\DATA\\AppData';
+  return `${appDataDir}/openclaw/openclaw.json`;
+}
+
+async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const invokeEndpoint = `${base}/tools/invoke`;
+  const configPath = await resolveOpenClawConfigPathHint();
   return {
     title: 'Activer les outils OpenClaw requis par Forge',
     where:
-      'Dans la configuration du gateway OpenClaw (fichier de config du service gateway, section "gateway.tools.allow"), puis redémarrer le service.',
+      `Dans le fichier de config OpenClaw (${configPath}), section "gateway.tools.allow", puis redémarrer le service gateway.`,
     instructions: [
       'Ouvrir la configuration du gateway OpenClaw.',
-      'Trouver la section gateway.tools.allow.',
+      `Modifier la section gateway.tools.allow utilisée par l’endpoint ${invokeEndpoint}.`,
       'Ajouter sessions_list, sessions_send et agents_invoke.',
       'Redémarrer le gateway OpenClaw.',
       'Revenir dans Forge > Discussion et renvoyer le message.',
@@ -283,7 +293,7 @@ export const POST: APIRoute = async ({ request }) => {
           ),
         ),
         ...(shouldAttachToolsRemediation(result.error, fallback.error, fallback2.error)
-          ? { remediation: buildGatewayToolsRemediation() }
+          ? { remediation: await buildGatewayToolsRemediation() }
           : {}),
         detail: {
           sessionsSend: result.detail,
@@ -310,7 +320,7 @@ export const POST: APIRoute = async ({ request }) => {
           ),
         ),
         ...(shouldAttachToolsRemediation(result.error, null, null)
-          ? { remediation: buildGatewayToolsRemediation() }
+          ? { remediation: await buildGatewayToolsRemediation() }
           : {}),
         detail: result.detail,
       }),
