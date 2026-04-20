@@ -53,6 +53,52 @@ function shouldRunFallbackChain(error: unknown, httpStatus?: number): boolean {
   );
 }
 
+type GatewayRemediation = {
+  title: string;
+  where: string;
+  instructions: string[];
+  json: string;
+  docs?: string;
+};
+
+function buildGatewayToolsRemediation(): GatewayRemediation {
+  return {
+    title: 'Activer les outils OpenClaw requis par Forge',
+    where:
+      'Dans la configuration du gateway OpenClaw (fichier de config du service gateway, section "gateway.tools.allow"), puis redémarrer le service.',
+    instructions: [
+      'Ouvrir la configuration du gateway OpenClaw.',
+      'Trouver la section gateway.tools.allow.',
+      'Ajouter sessions_list, sessions_send et agents_invoke.',
+      'Redémarrer le gateway OpenClaw.',
+      'Revenir dans Forge > Discussion et renvoyer le message.',
+    ],
+    json: JSON.stringify(
+      {
+        gateway: {
+          tools: {
+            allow: ['sessions_list', 'sessions_send', 'agents_invoke'],
+          },
+        },
+      },
+      null,
+      2,
+    ),
+    docs: 'https://openclaws.io/docs/gateway/tools-invoke-http-api',
+  };
+}
+
+function shouldAttachToolsRemediation(primary: unknown, fallback1: unknown, fallback2: unknown): boolean {
+  const all = [primary, fallback1, fallback2]
+    .map((x) => String(x || '').toLowerCase())
+    .join(' | ');
+  return (
+    all.includes('tool not available: sessions_send') ||
+    all.includes('tool not available: agents_invoke') ||
+    all.includes('sessions_send indisponible via http')
+  );
+}
+
 async function invokeDirectiveViaCli(agentId: string, message: string): Promise<{
   ok: boolean;
   via?: string;
@@ -236,6 +282,9 @@ export const POST: APIRoute = async ({ request }) => {
             'Envoi OpenClaw refusé — vérifiez URL gateway, token et exposition des endpoints API.',
           ),
         ),
+        ...(shouldAttachToolsRemediation(result.error, fallback.error, fallback2.error)
+          ? { remediation: buildGatewayToolsRemediation() }
+          : {}),
         detail: {
           sessionsSend: result.detail,
           agentsInvoke: fallback.detail,
@@ -260,6 +309,9 @@ export const POST: APIRoute = async ({ request }) => {
             'Envoi OpenClaw refusé — vérifiez URL gateway, token et exposition des endpoints API.',
           ),
         ),
+        ...(shouldAttachToolsRemediation(result.error, null, null)
+          ? { remediation: buildGatewayToolsRemediation() }
+          : {}),
         detail: result.detail,
       }),
       {

@@ -19,6 +19,41 @@ type ChatMessage = {
   at: string;
 };
 
+type GatewayRemediation = {
+  title?: string;
+  where?: string;
+  instructions?: unknown;
+  json?: string;
+  docs?: string;
+};
+
+function formatGatewayRemediation(remediation: GatewayRemediation | undefined): string {
+  if (!remediation || typeof remediation !== 'object') return '';
+  const lines: string[] = [];
+  const title = typeof remediation.title === 'string' ? remediation.title.trim() : '';
+  const where = typeof remediation.where === 'string' ? remediation.where.trim() : '';
+  const json = typeof remediation.json === 'string' ? remediation.json.trim() : '';
+  const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
+  const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
+  const instructions = instructionsRaw
+    .map((step) => (typeof step === 'string' ? step.trim() : ''))
+    .filter(Boolean);
+
+  if (title) lines.push(`Action requise: ${title}`);
+  if (where) lines.push(`Ou le mettre: ${where}`);
+  if (instructions.length > 0) {
+    lines.push('Etapes:');
+    instructions.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+  }
+  if (json) {
+    lines.push('JSON a copier-coller:');
+    lines.push(json);
+  }
+  if (docs) lines.push(`Documentation: ${docs}`);
+
+  return lines.join('\n');
+}
+
 const inputCls =
   'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none';
 
@@ -143,13 +178,16 @@ export default function DiscussionComposer() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway');
+        const baseErr = typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway';
+        const remediationText = formatGatewayRemediation(data.remediation as GatewayRemediation | undefined);
+        const fullErr = remediationText ? `${baseErr}\n\n${remediationText}` : baseErr;
+        setError(fullErr);
         setChat((c) => [
           ...c,
           {
             id: `${Date.now()}-e`,
             role: 'system',
-            text: typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway',
+            text: fullErr,
             at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           },
         ]);
