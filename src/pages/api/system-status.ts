@@ -52,11 +52,15 @@ export const GET: APIRoute = async () => {
 
     let diskUsage: number | null = null;
     let githubDiskUsage: number | null = null;
+    let unhealthyContainers: string[] = [];
     try {
       diskUsage = diskUsagePercentFromDf('/mnt/Docker');
       githubDiskUsage = diskUsagePercentFromDf('/mnt/GitHub');
+      
+      const unhealthy = execSync('docker ps --filter "health=unhealthy" --format "{{.Names}}"').toString();
+      unhealthyContainers = unhealthy.split('\n').filter(Boolean);
     } catch (e) {
-      console.error('Failed to fetch disk usage', e);
+      console.error('Failed to fetch system data', e);
     }
 
     const lastMaint = await db.select().from(Config).where(eq(Config.key, 'lastMaintenanceCycle')).get();
@@ -68,6 +72,7 @@ export const GET: APIRoute = async () => {
         uptime: os.uptime(),
         diskUsage,
         githubDiskUsage,
+        unhealthyContainers,
         platform: os.platform(),
         lastMaintenance: lastMaint?.value ?? null,
       }),
