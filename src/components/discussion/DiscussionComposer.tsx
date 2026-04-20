@@ -31,6 +31,7 @@ type GatewayRemediation = {
   curlTest?: string;
   powershellScript?: string;
   bashScript?: string;
+  openclawPrompt?: string;
   docs?: string;
 };
 
@@ -47,6 +48,8 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   const powershellScript =
     typeof remediation.powershellScript === 'string' ? remediation.powershellScript.trim() : '';
   const bashScript = typeof remediation.bashScript === 'string' ? remediation.bashScript.trim() : '';
+  const openclawPrompt =
+    typeof remediation.openclawPrompt === 'string' ? remediation.openclawPrompt.trim() : '';
   const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
   const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
   const instructions = instructionsRaw
@@ -77,6 +80,10 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   if (bashScript) {
     lines.push('Script auto (bash/python) :');
     lines.push(bashScript);
+  }
+  if (openclawPrompt) {
+    lines.push('Prompt a donner a OpenClaw :');
+    lines.push(openclawPrompt);
   }
   if (docs) lines.push(`Documentation: ${docs}`);
 
@@ -490,6 +497,19 @@ export default function DiscussionComposer() {
                         </button>
                       </div>
                       <pre class="mt-2 whitespace-pre-wrap">{m.remediation.bashScript || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Prompt à donner à OpenClaw</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.openclawPrompt || '')}
+                        >
+                          Copier prompt OpenClaw
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.openclawPrompt || ''}</pre>
                     </details>
                     <details class="bg-white/70 rounded-md p-2">
                       <summary class="cursor-pointer font-semibold">Voir test API (POST)</summary>

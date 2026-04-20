@@ -61,6 +61,7 @@ type GatewayRemediation = {
   configPath: string;
   where: string;
   instructions: string[];
+  openclawPrompt: string;
   curlTest: string;
   powershellScript: string;
   bashScript: string;
@@ -77,6 +78,16 @@ async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
   const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
   const invokeEndpoint = `${base}/tools/invoke`;
   const configPath = await resolveOpenClawConfigPathHint();
+  const openclawPrompt = [
+    'Applique cette correction de configuration OpenClaw gateway:',
+    `1) Ouvre le fichier ${configPath}`,
+    '2) Mets gateway.tools.allow avec sessions_list, sessions_send, agents_invoke',
+    "3) Sauvegarde le fichier puis redémarre le service gateway OpenClaw",
+    `4) Vérifie ensuite avec un POST sur ${invokeEndpoint} (tool=sessions_list)`,
+    '5) Confirme quand c’est OK',
+    '',
+    'JSON cible:',
+  ].join('\n');
   const jsonBlock = JSON.stringify(
     {
       gateway: {
@@ -103,6 +114,7 @@ async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
       'Tester avec un POST JSON (curl ci-dessous) pour valider la disponibilité réelle.',
       'Revenir dans Forge > Discussion et renvoyer le message.',
     ],
+    openclawPrompt: `${openclawPrompt}\n${jsonBlock}`,
     curlTest: [
       `curl -X POST '${invokeEndpoint}' \\`,
       "  -H 'Content-Type: application/json' \\",
