@@ -13,6 +13,27 @@ import { getConfig } from '../../lib/config-db';
 const MAX_MESSAGE = 120_000;
 const execFileAsync = promisify(execFile);
 
+function extractReplyFromGatewayDetail(detail: unknown): string {
+  if (detail == null || typeof detail !== 'object') return '';
+  const d = detail as Record<string, unknown>;
+  const direct = d.result;
+  if (direct && typeof direct === 'object') {
+    const r = direct as Record<string, unknown>;
+    if (typeof r.reply === 'string' && r.reply.trim()) return r.reply;
+    if (typeof r.output === 'string' && r.output.trim()) return r.output;
+    if (typeof r.text === 'string' && r.text.trim()) return r.text;
+  }
+  const content = d.content;
+  if (Array.isArray(content) && content.length > 0) {
+    const first = content[0];
+    if (first && typeof first === 'object') {
+      const t = (first as Record<string, unknown>).text;
+      if (typeof t === 'string' && t.trim()) return t;
+    }
+  }
+  return '';
+}
+
 function looksLikeHtmlPayload(v: unknown): boolean {
   if (typeof v !== 'string') return false;
   const s = v.trim().toLowerCase();
@@ -257,10 +278,19 @@ export const POST: APIRoute = async ({ request }) => {
   });
 
   if (result.ok) {
-    return new Response(JSON.stringify(result.detail ?? { ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const reply = extractReplyFromGatewayDetail(result.detail);
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        via: 'sessions_send',
+        result: reply ? { status: 'completed', reply } : { status: 'accepted' },
+        detail: result.detail ?? { ok: true },
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
 
   // Fallback robuste : si sessions_send est bloqué par la gateway,

@@ -18,6 +18,7 @@ type ChatMessage = {
   text: string;
   at: string;
   remediation?: GatewayRemediation;
+  isAck?: boolean;
 };
 
 type GatewayRemediation = {
@@ -254,10 +255,13 @@ export default function DiscussionComposer() {
       }
       const result = data.result as Record<string, unknown> | undefined;
       const reply = result && typeof result.reply === 'string' ? result.reply : '';
+      const deliveryAck = typeof data.delivery === 'string' ? data.delivery : '';
       const assistantText =
         reply && reply.trim()
           ? reply.slice(0, 8000)
-          : 'Message envoyé. Réponse synchrone vide — vérifiez la session OpenClaw.';
+          : deliveryAck && deliveryAck.trim()
+            ? deliveryAck.trim()
+            : 'Message envoyé. Réponse synchrone vide — vérifiez la session OpenClaw.';
       setChat((c) => [
         ...c,
         {
@@ -265,6 +269,7 @@ export default function DiscussionComposer() {
           role: 'assistant',
           text: assistantText,
           at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          isAck: !reply?.trim(),
         },
       ]);
       setMessage('');
@@ -406,7 +411,9 @@ export default function DiscussionComposer() {
                   m.role === 'user'
                     ? 'chat-bubble-success text-white'
                     : m.role === 'assistant'
-                      ? 'chat-bubble-neutral text-white'
+                      ? m.isAck
+                        ? 'chat-bubble-info text-white'
+                        : 'chat-bubble-neutral text-white'
                       : 'chat-bubble-warning text-gray-900'
                 }`}
               >
