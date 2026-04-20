@@ -28,6 +28,8 @@ type GatewayRemediation = {
   instructions?: unknown;
   json?: string;
   curlTest?: string;
+  powershellScript?: string;
+  bashScript?: string;
   docs?: string;
 };
 
@@ -41,6 +43,9 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   const configPath = typeof remediation.configPath === 'string' ? remediation.configPath.trim() : '';
   const json = typeof remediation.json === 'string' ? remediation.json.trim() : '';
   const curlTest = typeof remediation.curlTest === 'string' ? remediation.curlTest.trim() : '';
+  const powershellScript =
+    typeof remediation.powershellScript === 'string' ? remediation.powershellScript.trim() : '';
+  const bashScript = typeof remediation.bashScript === 'string' ? remediation.bashScript.trim() : '';
   const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
   const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
   const instructions = instructionsRaw
@@ -63,6 +68,14 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   if (curlTest) {
     lines.push('Test API (POST) a executer:');
     lines.push(curlTest);
+  }
+  if (powershellScript) {
+    lines.push('Script auto (PowerShell) :');
+    lines.push(powershellScript);
+  }
+  if (bashScript) {
+    lines.push('Script auto (bash/python) :');
+    lines.push(bashScript);
   }
   if (docs) lines.push(`Documentation: ${docs}`);
 

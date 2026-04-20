@@ -62,6 +62,8 @@ type GatewayRemediation = {
   where: string;
   instructions: string[];
   curlTest: string;
+  powershellScript: string;
+  bashScript: string;
   json: string;
   docs?: string;
 };
@@ -75,6 +77,17 @@ async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
   const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
   const invokeEndpoint = `${base}/tools/invoke`;
   const configPath = await resolveOpenClawConfigPathHint();
+  const jsonBlock = JSON.stringify(
+    {
+      gateway: {
+        tools: {
+          allow: ['sessions_list', 'sessions_send', 'agents_invoke'],
+        },
+      },
+    },
+    null,
+    2,
+  );
   return {
     title: 'Activer les outils OpenClaw requis par Forge',
     endpoint: invokeEndpoint,
@@ -98,17 +111,26 @@ async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
       "  -H 'Authorization: Bearer <OPENCLAW_TOKEN>' \\",
       "  --data '{\"tool\":\"sessions_list\",\"action\":\"json\",\"args\":{\"limit\":1,\"messageLimit\":0}}'",
     ].join('\n'),
-    json: JSON.stringify(
-      {
-        gateway: {
-          tools: {
-            allow: ['sessions_list', 'sessions_send', 'agents_invoke'],
-          },
-        },
-      },
-      null,
-      2,
-    ),
+    powershellScript: [
+      '$cfg = Get-Content -Raw "C:\\DATA\\AppData\\openclaw\\openclaw.json" | ConvertFrom-Json',
+      'if (-not $cfg.gateway) { $cfg | Add-Member -NotePropertyName gateway -NotePropertyValue (@{}) }',
+      'if (-not $cfg.gateway.tools) { $cfg.gateway | Add-Member -NotePropertyName tools -NotePropertyValue (@{}) }',
+      '$cfg.gateway.tools.allow = @("sessions_list","sessions_send","agents_invoke")',
+      '$cfg | ConvertTo-Json -Depth 50 | Set-Content "C:\\DATA\\AppData\\openclaw\\openclaw.json"',
+      '# puis redemarrer le service/container openclaw gateway',
+    ].join('\n'),
+    bashScript: [
+      "python3 - <<'PY'",
+      'import json',
+      "p='/DATA/AppData/openclaw/openclaw.json'",
+      "cfg=json.load(open(p,'r',encoding='utf-8'))",
+      "cfg.setdefault('gateway',{}).setdefault('tools',{})['allow']=['sessions_list','sessions_send','agents_invoke']",
+      "json.dump(cfg,open(p,'w',encoding='utf-8'),indent=2,ensure_ascii=False)",
+      "print('updated',p)",
+      'PY',
+      '# puis redemarrer le service/container openclaw gateway',
+    ].join('\n'),
+    json: jsonBlock,
     docs: 'https://openclaws.io/docs/gateway/tools-invoke-http-api',
   };
 }
