@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'preact/hooks';
 import TabBar from '../ui/TabBar';
 import AccountTab from './AccountTab';
-import OpenClawTab from './OpenClawTab';
 import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
-import InfraTab from './InfraTab';
+import IntegrationTab from './IntegrationTab';
 import MaintenanceTab from './MaintenanceTab';
 
 type Config = {
@@ -28,9 +27,8 @@ type AuthState = {
 
 const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
-  { id: 'openclaw', label: 'Connexion OpenClaw' },
+  { id: 'integration', label: 'Intégration' },
   { id: 'api', label: 'Jetons API' },
-  { id: 'infra', label: 'Infrastructure' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
 
@@ -268,13 +266,15 @@ export default function SettingsForm() {
             message={authMessage}
           />
         )}
-        {activeTab === 'openclaw' && (
-          <OpenClawTab
+        {activeTab === 'integration' && (
+          <IntegrationTab
             settings={settings}
             setSettings={setSettings}
             onSave={save}
             saving={saving}
             message={message}
+            reposHealth={reposHealth}
+            onRefreshHealth={refreshReposHealth}
           />
         )}
         {activeTab === 'api' && (
@@ -286,17 +286,6 @@ export default function SettingsForm() {
             onSave={saveApiSection}
             saving={saving}
             message={message}
-          />
-        )}
-        {activeTab === 'infra' && (
-          <InfraTab
-            settings={settings}
-            setSettings={setSettings}
-            onSave={save}
-            saving={saving}
-            message={message}
-            reposHealth={reposHealth}
-            onRefreshHealth={refreshReposHealth}
           />
         )}
         {activeTab === 'maintenance' && (
