@@ -31,20 +31,10 @@ function toLibsqlDatabaseUrl(raw) {
 }
 
 if (!process.env.ASTRO_DATABASE_FILE) {
-  const preferredDbFile = path.join(root, ".astro", "content.db");
-  const legacyDbFile = path.join(root, ".astro", "db.sqlite");
-  fs.mkdirSync(path.dirname(preferredDbFile), { recursive: true });
-  // Migration locale de compat: certains scripts plus anciens utilisaient db.sqlite.
-  // On bascule vers content.db (même valeur que Dockerfile/forge.yml) pour éviter
-  // de "perdre" les comptes entre deux commandes (dev/build/preview).
-  if (!fs.existsSync(preferredDbFile) && fs.existsSync(legacyDbFile)) {
-    try {
-      fs.copyFileSync(legacyDbFile, preferredDbFile);
-    } catch {
-      // best effort: on laisse Astro créer le fichier cible si copie impossible
-    }
-  }
-  process.env.ASTRO_DATABASE_FILE = pathToFileURL(preferredDbFile).href;
+  const canonicalDbFile = path.join(root, ".astro", "content.db");
+  fs.mkdirSync(path.dirname(canonicalDbFile), { recursive: true });
+  // Base locale unique: aucune dependance legacy.
+  process.env.ASTRO_DATABASE_FILE = pathToFileURL(canonicalDbFile).href;
 } else {
   process.env.ASTRO_DATABASE_FILE = toLibsqlDatabaseUrl(
     process.env.ASTRO_DATABASE_FILE
