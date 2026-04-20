@@ -310,6 +310,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: 'agents_invoke_fallback',
+          routedSessionKey: resolvedSessionKey,
           detail: fallback.detail ?? { accepted: true },
         }),
         {
@@ -327,6 +328,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: fallback2.via,
+          routedSessionKey: resolvedSessionKey,
           result: {
             status: 'completed',
             reply:
@@ -352,6 +354,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: fallback3.via,
+          routedSessionKey: resolvedSessionKey,
           result: { status: 'accepted' },
           detail: {
             sessionsSend: result.detail,

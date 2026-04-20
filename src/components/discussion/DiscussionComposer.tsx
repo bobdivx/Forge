@@ -24,6 +24,15 @@ type ChatMessage = {
   isAck?: boolean;
 };
 
+type RoutingDebugState = {
+  requestedSessionKey: string;
+  routedSessionKey: string;
+  polledSessionKey: string;
+  selectedSessionKey: string;
+  via: string;
+  lastReason: string;
+};
+
 type GatewayRemediation = {
   title?: string;
   endpoint?: string;
@@ -119,6 +128,7 @@ export default function DiscussionComposer() {
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [pollingReply, setPollingReply] = useState(false);
+  const [routingDebug, setRoutingDebug] = useState<RoutingDebugState | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const copyToClipboard = async (text: string) => {
@@ -145,8 +155,30 @@ export default function DiscussionComposer() {
         });
         const data = await res.json().catch(() => ({}));
         lastReason = typeof data.reason === 'string' ? data.reason : lastReason;
+        const selectedSessionKey =
+          typeof data.selectedSessionKey === 'string' ? data.selectedSessionKey.trim() : '';
+        setRoutingDebug((prev) =>
+          prev
+            ? {
+                ...prev,
+                selectedSessionKey: selectedSessionKey || prev.selectedSessionKey,
+                lastReason,
+              }
+            : prev,
+        );
         const reply = typeof data.reply === 'string' ? data.reply.trim() : '';
         if (reply) {
+          if (selectedSessionKey) {
+            setRoutingDebug((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    selectedSessionKey,
+                    lastReason: '',
+                  }
+                : prev,
+            );
+          }
           setChat((c) => {
             const next = [...c];
             for (let j = next.length - 1; j >= 0; j -= 1) {
@@ -189,6 +221,7 @@ export default function DiscussionComposer() {
             : m,
         ),
       );
+      setRoutingDebug((prev) => (prev ? { ...prev, lastReason } : prev));
     } catch {
       setChat((c) =>
         c.map((m) =>
@@ -336,6 +369,12 @@ export default function DiscussionComposer() {
       const deliveryAck = typeof data.delivery === 'string' ? data.delivery : '';
       const status = result && typeof result.status === 'string' ? result.status.toLowerCase() : '';
       const via = typeof data.via === 'string' ? data.via : '';
+      const routedSessionKey =
+        typeof data.routedSessionKey === 'string' && data.routedSessionKey.trim()
+          ? data.routedSessionKey.trim()
+          : typeof data.sessionKeyResolved === 'string' && data.sessionKeyResolved.trim()
+            ? data.sessionKeyResolved.trim()
+            : agentId;
       const assistantText =
         reply && reply.trim()
           ? reply.slice(0, 8000)
@@ -355,11 +394,25 @@ export default function DiscussionComposer() {
         },
       ]);
       if (!reply?.trim()) {
-        const pollSessionKey =
-          typeof data.sessionKeyResolved === 'string' && data.sessionKeyResolved.trim()
-            ? data.sessionKeyResolved.trim()
-            : agentId;
+        const pollSessionKey = routedSessionKey;
+        setRoutingDebug({
+          requestedSessionKey: agentId,
+          routedSessionKey,
+          polledSessionKey: pollSessionKey,
+          selectedSessionKey: '',
+          via,
+          lastReason: '',
+        });
         void pollAssistantReply(pollSessionKey, sentAtMs);
+      } else {
+        setRoutingDebug({
+          requestedSessionKey: agentId,
+          routedSessionKey,
+          polledSessionKey: '',
+          selectedSessionKey: '',
+          via,
+          lastReason: '',
+        });
       }
       setMessage('');
     } catch {
@@ -481,6 +534,19 @@ export default function DiscussionComposer() {
               {selectedProject && <span class="badge badge-outline badge-sm">Projet: {selectedProject.name}</span>}
               {selectedRequest && <span class="badge badge-outline badge-sm">Demande: #{selectedRequest.id}</span>}
             </div>
+          )}
+          {routingDebug && (
+            <details class="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
+              <summary class="cursor-pointer font-semibold text-gray-700">Debug routage session</summary>
+              <div class="mt-2 space-y-1 font-mono break-all">
+                <p>Demandée: {routingDebug.requestedSessionKey || 'n/a'}</p>
+                <p>Routée API: {routingDebug.routedSessionKey || 'n/a'}</p>
+                <p>Pollée: {routingDebug.polledSessionKey || 'n/a'}</p>
+                <p>Lue par poll: {routingDebug.selectedSessionKey || 'n/a'}</p>
+                <p>Via: {routingDebug.via || 'n/a'}</p>
+                <p>Raison pending: {routingDebug.lastReason || 'n/a'}</p>
+              </div>
+            </details>
           )}
         </div>
 
