@@ -42,12 +42,16 @@ export const GET: APIRoute = async () => {
     }
 
     const sessions = normalizeOpenClawSessions(result.data);
+    const isActuallyReachable = result.via !== '/health';
     return new Response(
         JSON.stringify({
-            reachable: true,
+            reachable: isActuallyReachable,
             gatewayUrl,
             sessionCount: sessions.length,
             via: result.via,
+            hint: !isActuallyReachable
+              ? 'Gateway joignable (/health) mais API sessions inaccessible. Vérifiez OPENCLAW_GATEWAY_URL, token et endpoints /tools/invoke.'
+              : undefined,
             openclawDebug: { ...configMeta, attempts: result.attempts, resolvedVia: result.via },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }

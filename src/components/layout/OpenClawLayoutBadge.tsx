@@ -7,11 +7,17 @@ export default function OpenClawLayoutBadge() {
 
   useEffect(() => {
     const load = () => {
-      fetch('/api/openclaw-health')
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 8000);
+
+      fetch('/api/openclaw-health', { signal: ctrl.signal })
         .then((r) => r.json())
         .then((d) => {
+          clearTimeout(timeout);
           setOk(Boolean(d.reachable));
-          const msg = [d.error, d.hint].filter(Boolean).join(' — ');
+          const msg = [d.error, d.hint, d.sessionCount === 0 ? 'Aucune session active détectée' : '']
+            .filter(Boolean)
+            .join(' — ');
           setDetail(typeof msg === 'string' ? msg : '');
           if (d.openclawDebug && typeof d.openclawDebug === 'object') {
             logForgeOpenClaw('GET /api/openclaw-health', {
@@ -31,9 +37,11 @@ export default function OpenClawLayoutBadge() {
             });
           }
         })
-        .catch(() => {
+        .catch((e) => {
+          clearTimeout(timeout);
           setOk(false);
-          setDetail('');
+          const isAbort = e && typeof e === 'object' && 'name' in e && String((e as { name?: string }).name) === 'AbortError';
+          setDetail(isAbort ? 'Timeout health API (>8s)' : '');
         });
     };
     load();
