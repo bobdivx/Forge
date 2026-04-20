@@ -1,11 +1,71 @@
 import type { APIRoute } from 'astro';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   invokeOpenClawSessionsSend,
   invokeOpenClawAgentTask,
   invokeOpenClawV1ChatFallback,
+  getOpenClawToken,
 } from '../../lib/openclaw-gateway';
 
 const MAX_MESSAGE = 120_000;
+const execFileAsync = promisify(execFile);
+
+async function invokeDirectiveViaCli(agentId: string, message: string): Promise<{
+  ok: boolean;
+  via?: string;
+  error?: string;
+}> {
+  const input = String(message || '').slice(0, MAX_MESSAGE);
+  const token = await getOpenClawToken().catch(() => '');
+
+  // 1) Essai CLI hôte
+  try {
+    await execFileAsync(
+      'openclaw',
+      ['task', '--agent', agentId, '--input', input],
+      {
+        timeout: 25_000,
+        env: {
+          ...process.env,
+          ...(token ? { OPENCLAW_GATEWAY_TOKEN: token } : {}),
+        },
+      },
+    );
+    return { ok: true, via: 'host-cli' };
+  } catch {
+    // fallback docker exec
+  }
+
+  // 2) Essai docker exec <openclaw> openclaw task ...
+  let container = 'openclaw';
+  try {
+    const { stdout } = await execFileAsync(
+      'docker',
+      ['ps', '--filter', 'name=openclaw', '--format', '{{.Names}}'],
+      { timeout: 6_000 },
+    );
+    const found = String(stdout || '')
+      .split('\n')
+      .map((s) => s.trim())
+      .find(Boolean);
+    if (found) container = found;
+  } catch {
+    // keep default name
+  }
+
+  try {
+    await execFileAsync(
+      'docker',
+      ['exec', container, 'openclaw', 'task', '--agent', agentId, '--input', input],
+      { timeout: 30_000 },
+    );
+    return { ok: true, via: `docker-exec(${container})` };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg.slice(0, 500) };
+  }
+}
 
 /**
  * Envoie un message utilisateur dans une session agent.
@@ -104,9 +164,29 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
+    const fallback3 = await invokeDirectiveViaCli(sessionKey, message);
+    if (fallback3.ok) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          via: fallback3.via,
+          result: { status: 'accepted' },
+          detail: {
+            sessionsSend: result.detail,
+            agentsInvoke: fallback.detail,
+            chatCompletion: fallback2.detail,
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
     return new Response(
       JSON.stringify({
-        error: fallback2.error || fallback.error || result.error,
+        error: fallback3.error || fallback2.error || fallback.error || result.error,
         detail: {
           sessionsSend: result.detail,
           agentsInvoke: fallback.detail,
@@ -114,18 +194,14 @@ export const POST: APIRoute = async ({ request }) => {
         },
       }),
       {
-        status:
-          (fallback2.httpStatus && fallback2.httpStatus >= 400 && fallback2.httpStatus) ||
-          (fallback.httpStatus && fallback.httpStatus >= 400 && fallback.httpStatus) ||
-          502,
+        status: 502,
         headers: { 'Content-Type': 'application/json' },
       },
     );
   }
 
   {
-    const status =
-      result.httpStatus === 404 ? 502 : result.httpStatus && result.httpStatus >= 400 ? result.httpStatus : 502;
+    const status = 502;
     return new Response(JSON.stringify({ error: result.error, detail: result.detail }), {
       status,
       headers: { 'Content-Type': 'application/json' },
