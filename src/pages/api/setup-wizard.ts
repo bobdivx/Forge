@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { readForgeSetupState } from '../../lib/forge-setup';
+import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
 
 const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubWebhookSecret',
@@ -70,6 +71,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   if (action === 'finish') {
     const payload = buildConfigPayload(body);
+    const rp = payload.forgeReposRoot?.trim();
+    if (rp) {
+      const check = validateForgeReposRootForSave(rp);
+      if (!check.ok) {
+        return new Response(JSON.stringify({ ok: false, error: check.error }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
     await setConfig(payload);
     await setConfig({ forgeSetupState: 'done' });
     return new Response(JSON.stringify({ ok: true, state: 'done' }), {

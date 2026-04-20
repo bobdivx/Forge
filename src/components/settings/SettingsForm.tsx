@@ -59,6 +59,18 @@ export default function SettingsForm() {
   const [authSaving, setAuthSaving] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
   const [customTokens, setCustomTokens] = useState<CustomTokenRow[]>([]);
+  const [reposHealth, setReposHealth] = useState<Record<string, unknown> | null>(null);
+
+  const refreshReposHealth = () => {
+    fetch('/api/forge-repos-health')
+      .then((r) => r.json())
+      .then((h) => setReposHealth(typeof h === 'object' && h ? h : null))
+      .catch(() => setReposHealth(null));
+  };
+
+  useEffect(() => {
+    refreshReposHealth();
+  }, []);
 
   useEffect(() => {
     Promise.all([fetch('/api/settings'), fetch('/api/custom-api-tokens'), fetch('/api/auth/me')])
@@ -122,11 +134,15 @@ export default function SettingsForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
+      const payload = await res.json().catch(() => ({}));
       if (res.ok) {
         const s = await fetch('/api/settings').then((r) => r.json());
         mergeSettingsFromServer(s);
+        refreshReposHealth();
       }
-      setMessage(res.ok ? 'Configurations sauvegardées !' : 'Erreur lors de la sauvegarde.');
+      setMessage(
+        res.ok ? 'Configurations sauvegardées !' : typeof payload.error === 'string' ? payload.error : 'Erreur lors de la sauvegarde.',
+      );
     } catch {
       setMessage('Erreur réseau.');
     } finally {
@@ -273,6 +289,8 @@ export default function SettingsForm() {
             onSave={save}
             saving={saving}
             message={message}
+            reposHealth={reposHealth}
+            onRefreshHealth={refreshReposHealth}
           />
         )}
         {activeTab === 'maintenance' && (
