@@ -12,6 +12,9 @@ type RequestItem = {
   createdAt: string;
 };
 type AgentRow = { id: string; name: string; status: string; model: string; raw?: { offline?: boolean; disabledInDb?: boolean } };
+const POLL_ATTEMPTS = 48; // 48 * 2.5s = ~2 minutes
+const POLL_INTERVAL_MS = 2500;
+
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -132,9 +135,8 @@ export default function DiscussionComposer() {
   const pollAssistantReply = async (sessionKey: string, afterMs: number) => {
     setPollingReply(true);
     try {
-      const attempts = 20;
-      for (let i = 0; i < attempts; i += 1) {
-        await new Promise((r) => setTimeout(r, 2500));
+      for (let i = 0; i < POLL_ATTEMPTS; i += 1) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         const res = await fetch('/api/discussion-poll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -172,7 +174,7 @@ export default function DiscussionComposer() {
           m.isAck
             ? {
                 ...m,
-                text: "Message transmis. L'agent n'a pas encore répondu (timeout de récupération).",
+                text: "Message transmis. L'agent est peut-être encore en cours (attente prolongée).",
               }
             : m,
         ),

@@ -23,7 +23,25 @@ function sessionMatches(raw: Record<string, unknown>, sessionKey: string): boole
   return candidates.some((v) => v && (v === want || v.includes(want)));
 }
 
-function pickLatestAssistantMessage(raw: Record<string, unknown>): { text: string; at?: string } | null {
+function parseMessageTimestampMs(o: Record<string, unknown>): number {
+  const n =
+    (typeof o.createdAt === 'number' ? o.createdAt : NaN) ||
+    (typeof o.created_at === 'number' ? o.created_at : NaN) ||
+    (typeof o.timestamp === 'number' ? o.timestamp : NaN);
+  if (Number.isFinite(n)) return Number(n);
+  const s =
+    (typeof o.createdAt === 'string' ? o.createdAt : '') ||
+    (typeof o.created_at === 'string' ? o.created_at : '') ||
+    (typeof o.timestamp === 'string' ? o.timestamp : '');
+  if (!s) return 0;
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function pickLatestAssistantMessage(
+  raw: Record<string, unknown>,
+  afterMs: number,
+): { text: string; at?: string } | null {
   const msgs = raw.messages;
   if (!Array.isArray(msgs) || msgs.length === 0) return null;
   for (let i = msgs.length - 1; i >= 0; i -= 1) {
@@ -42,6 +60,8 @@ function pickLatestAssistantMessage(raw: Record<string, unknown>): { text: strin
             : '';
     const text = content.trim();
     if (!text) continue;
+    const tsMs = parseMessageTimestampMs(o);
+    if (afterMs > 0 && tsMs > 0 && tsMs < afterMs) continue;
     const at =
       typeof o.createdAt === 'string'
         ? o.createdAt
@@ -55,9 +75,11 @@ function pickLatestAssistantMessage(raw: Record<string, unknown>): { text: strin
   return null;
 }
 
-export const GET: APIRoute = async ({ request, locals }) => {
-  const url = new URL(request.url);
-  const sessionKey = String(url.searchParams.get('sessionKey') || '').trim();
+export const POST: APIRoute = async ({ request, locals }) => {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const sessionKey = String(body.sessionKey || '').trim();
+  const afterMs =
+    typeof body.afterMs === 'number' && Number.isFinite(body.afterMs) ? Math.floor(body.afterMs) : 0;
   if (!sessionKey) {
     return new Response(JSON.stringify({ error: 'sessionKey requis' }), {
       status: 400,
@@ -91,7 +113,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  const msg = pickLatestAssistantMessage(raw);
+  const msg = pickLatestAssistantMessage(raw, afterMs);
   if (!msg) {
     return new Response(JSON.stringify({ ok: true, pending: true, reason: 'pas_de_reponse_assistant' }), {
       status: 200,
