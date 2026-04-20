@@ -100,6 +100,7 @@ const v1ModelsCheck = await fetchOpenClawJson(userEmail, '/v1/models');
 const healthCheck = await fetchOpenClawJson(userEmail, '/health');
 
 const openclawBlockers: string[] = [];
+const openclawWarnings: string[] = [];
 if (!gatewayRes.ok) {
   openclawBlockers.push(`Gateway sessions indisponible: ${gatewayError || 'erreur inconnue'}`);
 }
@@ -107,7 +108,13 @@ if (sessions.length === 0) {
   openclawBlockers.push('Aucune session active détectée (Discussion sera vide).');
 }
 for (const tc of toolChecks) {
-  if (!tc.ok) openclawBlockers.push(`Tool ${tc.tool} indisponible: ${tc.message}`);
+  if (!tc.ok) {
+    if (tc.tool === 'models_list') {
+      openclawWarnings.push(`Tool ${tc.tool} indisponible: ${tc.message} (non bloquant si modèles détectés via /v1/models ou fallback).`);
+    } else {
+      openclawBlockers.push(`Tool ${tc.tool} indisponible: ${tc.message}`);
+    }
+  }
 }
 if (!v1ModelsCheck.ok && availableModels.length === 0) {
   openclawBlockers.push(`Catalogue modèles indisponible: ${v1ModelsCheck.error || `HTTP ${v1ModelsCheck.status}`}`);
@@ -117,6 +124,9 @@ if (!agentRegistryOk) {
 }
 if (!catalogOk && availableModels.length === 0) {
   openclawBlockers.push('Aucun modèle détecté via OpenClaw/Ollama.');
+}
+if (v1ModelsCheck.ok && availableModels.length > 0) {
+  openclawWarnings.push('/v1/models répond 200 mais format/liste non exploitable par Forge ; fallback catalogue actif.');
 }
 
 // 4. Budget Status & Auto-Seeding (Robust approach)
@@ -268,7 +278,7 @@ const recentHeartbeats = (recentPulse.length > 0)
                             <li>Sessions détectées : <strong>{sessions.length}</strong></li>
                             <li>Agents Forge activés : <strong>{forgeIds.length}</strong></li>
                             <li>Modèles détectés : <strong>{availableModels.length}</strong></li>
-                            <li>/v1/models : <strong>{v1ModelsCheck.ok ? 'OK' : `KO (${v1ModelsCheck.status || 0})`}</strong></li>
+                            <li>/v1/models : <strong>{v1ModelsCheck.ok ? (availableModels.length > 0 ? 'Avertissement (200 + fallback actif)' : 'OK') : `KO (${v1ModelsCheck.status || 0})`}</strong></li>
                         </ul>
                     </div>
 
@@ -282,6 +292,14 @@ const recentHeartbeats = (recentPulse.length > 0)
                           <p class="text-[11px]">Le pipeline OpenClaw semble cohérent côté Forge.</p>
                         )}
                     </div>
+                    {openclawWarnings.length > 0 && (
+                      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <p class="font-bold mb-2">Avertissements (non bloquants)</p>
+                        <ul class="list-disc pl-5 space-y-1 text-[11px]">
+                          {openclawWarnings.map((w) => <li>{w}</li>)}
+                        </ul>
+                      </div>
+                    )}
                 </div>
             </div>
 
