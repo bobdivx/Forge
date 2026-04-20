@@ -24,7 +24,7 @@ export async function loadAstroDb() {
       lastErr = e;
       const msg = e instanceof Error ? e.message : String(e);
       if (SEED_HANDLER_NOT_READY.test(msg) && attempt < maxAttempts) {
-        await delay(Math.min(20 * attempt, 250));
+        await delay(Math.min(50 * attempt, 1000));
         continue;
       }
       throw e;
