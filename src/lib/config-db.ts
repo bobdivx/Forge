@@ -6,6 +6,13 @@ import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
 
 export type ForgeConfig = {
+  /**
+   * URL joignable **depuis les autres services** (OpenClaw Docker, cron, agents) pour appeler Forge.
+   * Ex. `http://forge-host:4321` ou `http://forge:4321`. Laissé vide → fallback env / défaut localhost.
+   */
+  forgePublicUrl: string;
+  /** Nom du contèneur Docker OpenClaw pour docker inspect/exec (vide = auto-détection name=openclaw). */
+  openclawContainerName: string;
   openclawGatewayUrl: string;
   openclawToken: string;
   /** URL de l’API Ollama (GET /api/tags), ex. http://host.docker.internal:11434 — même rôle que OLLAMA_HOST. */
@@ -28,6 +35,8 @@ export type ForgeConfig = {
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
 export const CONFIG_DEFAULTS: ForgeConfig = {
+  forgePublicUrl: '',
+  openclawContainerName: '',
   openclawGatewayUrl: '',
   openclawToken: '',
   ollamaUrl: '',

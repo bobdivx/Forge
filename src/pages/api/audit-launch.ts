@@ -13,6 +13,7 @@ import {
   getGatewayAuthHeaders,
 } from '../../lib/openclaw-gateway';
 import { getOllamaOriginResolved } from '../../lib/config-db';
+import { getForgeHookBaseUrl } from '../../lib/forge-hook-base-url';
 
 const execFileAsync = promisify(execFile);
 
@@ -42,27 +43,18 @@ function json(data: unknown, status = 200) {
   });
 }
 
-/** Base URL pour les instructions agents (POST /api/forge-hook). */
-function forgeHookBaseUrl(): string {
-  const u =
-    process.env.FORGE_HOOK_BASE_URL?.trim() ||
-    process.env.PUBLIC_FORGE_URL?.trim() ||
-    process.env.PUBLIC_SITE_URL?.trim();
-  if (u) return u.replace(/\/$/, '');
-  return 'http://127.0.0.1:4321';
-}
-
-// ── Rôles participants à l'audit ───────────────────────────────────────────────
-const AUDIT_ROLES: Array<{
+/** Rôles participants à l'audit (base URL = Forge joignable depuis les agents). */
+function buildAuditRoles(forgeHookBaseUrl: string): Array<{
   agentId: string;
   label: string;
   prompt: (projectName: string, projectPath: string) => string;
-}> = [
+}> {
+  const base = forgeHookBaseUrl.replace(/\/$/, '');
+  return [
   {
     agentId: 'CHEF_TECHNIQUE',
     label: 'Coordination & synthèse',
     prompt: (name, projPath) => {
-      const base = forgeHookBaseUrl();
       const hookCmd = (type: string, title: string, content: string, extra = '') =>
         `curl -s -X POST ${base}/api/forge-hook -H "Content-Type: application/json" -d '{"agentId":"CHEF_TECHNIQUE","type":"${type}","title":"${title}","content":"${content}","project":"${name}"${extra}}'`;
       return (
@@ -90,7 +82,6 @@ const AUDIT_ROLES: Array<{
     agentId: 'ANALYSTE_CODE',
     label: 'Qualité & dette technique',
     prompt: (name, projPath) => {
-      const base = forgeHookBaseUrl();
       return (
         `[AUDIT FORGE] Projet : "${name}" (chemin : ${projPath || '/mnt/GitHub/' + name})\n\n` +
         `Tu es ANALYSTE_CODE. RÈGLE : Effectue le travail toi-même, ne demande pas à l'utilisateur d'exécuter quoi que ce soit.\n\n` +
@@ -108,7 +99,6 @@ const AUDIT_ROLES: Array<{
     agentId: 'SECURITE_CODE',
     label: 'Sécurité & vulnérabilités',
     prompt: (name, projPath) => {
-      const base = forgeHookBaseUrl();
       return (
         `[AUDIT FORGE] Projet : "${name}" (chemin : ${projPath || '/mnt/GitHub/' + name})\n\n` +
         `Tu es SECURITE_CODE. RÈGLE : Effectue le travail toi-même, ne demande pas à l'utilisateur d'exécuter quoi que ce soit.\n\n` +
@@ -125,7 +115,6 @@ const AUDIT_ROLES: Array<{
     agentId: 'TESTEUR_QA',
     label: 'Tests & couverture',
     prompt: (name, projPath) => {
-      const base = forgeHookBaseUrl();
       return (
         `[AUDIT FORGE] Projet : "${name}" (chemin : ${projPath || '/mnt/GitHub/' + name})\n\n` +
         `Tu es TESTEUR_QA. RÈGLE : Effectue le travail toi-même, ne demande pas à l'utilisateur d'exécuter quoi que ce soit.\n\n` +
@@ -142,7 +131,6 @@ const AUDIT_ROLES: Array<{
     agentId: 'DEV_BACKEND',
     label: 'APIs & performance backend',
     prompt: (name, projPath) => {
-      const base = forgeHookBaseUrl();
       return (
         `[AUDIT FORGE] Projet : "${name}" (chemin : ${projPath || '/mnt/GitHub/' + name})\n\n` +
         `Tu es DEV_BACKEND. RÈGLE : Effectue le travail toi-même, ne demande pas à l'utilisateur d'exécuter quoi que ce soit.\n\n` +
@@ -159,7 +147,6 @@ const AUDIT_ROLES: Array<{
     agentId: 'DEV_FRONTEND',
     label: 'Frontend, UX & accessibilité',
     prompt: (name, projPath) => {
-      const base = forgeHookBaseUrl();
       return (
         `[AUDIT FORGE] Projet : "${name}" (chemin : ${projPath || '/mnt/GitHub/' + name})\n\n` +
         `Tu es DEV_FRONTEND. RÈGLE : Effectue le travail toi-même, ne demande pas à l'utilisateur d'exécuter quoi que ce soit.\n\n` +
@@ -172,7 +159,11 @@ const AUDIT_ROLES: Array<{
       );
     },
   },
-];
+  ];
+}
+
+/** Liste des rôles pour GET / métadonnées (prompts utilisent POST avec URL résolue Config/env). */
+const AUDIT_ROLES_FALLBACK = buildAuditRoles('http://127.0.0.1:4321');
 
 // ── Matching session OpenClaw ↔ agentId (simplifié vs agents.ts) ──────────────
 function normKey(s: string): string {
@@ -571,6 +562,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return json({ error: 'Corps JSON invalide' }, 400);
   }
 
+  const forgeHookBaseResolved = await getForgeHookBaseUrl();
+  const AUDIT_ROLES = buildAuditRoles(forgeHookBaseResolved);
+
   const projectName = String(body.projectName ?? '').trim();
   if (!projectName) return json({ error: 'projectName requis' }, 400);
 
@@ -625,7 +619,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // on envoie quand même au canal principal disponible.
   const defaultSessionKey = getDefaultSessionKey(rawSessions);
 
-  const hookBase = forgeHookBaseUrl();
+  const hookBase = forgeHookBaseResolved;
 
   for (const role of roles) {
     const prompt = role.prompt(projectName, projectPath);
@@ -763,6 +757,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 export const GET: APIRoute = async () => {
   return json({
-    roles: AUDIT_ROLES.map((r) => ({ agentId: r.agentId, label: r.label })),
+    roles: AUDIT_ROLES_FALLBACK.map((r) => ({ agentId: r.agentId, label: r.label })),
   });
 };

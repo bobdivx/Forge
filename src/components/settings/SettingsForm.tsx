@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'preact/hooks';
 import TabBar from '../ui/TabBar';
 import AccountTab from './AccountTab';
-import OpenClawTab from './OpenClawTab';
 import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
-import InfraTab from './InfraTab';
+import IntegrationTab from './IntegrationTab';
+import AgentModelsTab from './AgentModelsTab';
 import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
 
 type Config = {
+  forgePublicUrl: string;
+  openclawContainerName: string;
   forgeReposRoot: string;
+  forgeReposRootAgent: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
   githubToken: string;
@@ -28,9 +31,9 @@ type AuthState = {
 
 const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
-  { id: 'openclaw', label: 'Connexion OpenClaw' },
+  { id: 'integration', label: 'Intégration' },
   { id: 'api', label: 'Jetons API' },
-  { id: 'infra', label: 'Infrastructure' },
+  { id: 'models', label: 'Modèles agents' },
   { id: 'schedule', label: 'Horaires de travail' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
@@ -38,9 +41,12 @@ const TABS = [
 export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
-    forgeReposRoot:    '',
-    dockerYamlDir:     '',
-    dockerAppDataDir:  '',
+    forgePublicUrl: '',
+    openclawContainerName: '',
+    forgeReposRoot: '',
+    forgeReposRootAgent: '',
+    dockerYamlDir: '',
+    dockerAppDataDir: '',
     githubToken:       '',
     vercelToken:       '',
     githubWebhookSecret: '',
@@ -61,6 +67,18 @@ export default function SettingsForm() {
   const [authSaving, setAuthSaving] = useState(false);
   const [authMessage, setAuthMessage] = useState('');
   const [customTokens, setCustomTokens] = useState<CustomTokenRow[]>([]);
+  const [reposHealth, setReposHealth] = useState<Record<string, unknown> | null>(null);
+
+  const refreshReposHealth = () => {
+    fetch('/api/forge-repos-health')
+      .then((r) => r.json())
+      .then((h) => setReposHealth(typeof h === 'object' && h ? h : null))
+      .catch(() => setReposHealth(null));
+  };
+
+  useEffect(() => {
+    refreshReposHealth();
+  }, []);
 
   useEffect(() => {
     Promise.all([fetch('/api/settings'), fetch('/api/custom-api-tokens'), fetch('/api/auth/me')])
@@ -68,7 +86,13 @@ export default function SettingsForm() {
         const s = await settingsRes.json();
         setSettings((prev) => ({
           ...prev,
+          forgePublicUrl:
+            typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
+          openclawContainerName:
+            typeof s.openclawContainerName === 'string' ? s.openclawContainerName : prev.openclawContainerName,
           forgeReposRoot: s.forgeReposRoot || prev.forgeReposRoot,
+          forgeReposRootAgent:
+            typeof s.forgeReposRootAgent === 'string' ? s.forgeReposRootAgent : prev.forgeReposRootAgent,
           dockerYamlDir: s.dockerYamlDir || prev.dockerYamlDir,
           dockerAppDataDir: s.dockerAppDataDir || prev.dockerAppDataDir,
           githubToken: s.githubToken || '',
@@ -99,7 +123,13 @@ export default function SettingsForm() {
   const mergeSettingsFromServer = (s: Record<string, unknown>) => {
     setSettings((prev) => ({
       ...prev,
+      forgePublicUrl:
+        typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
+      openclawContainerName:
+        typeof s.openclawContainerName === 'string' ? s.openclawContainerName : prev.openclawContainerName,
       forgeReposRoot: String(s.forgeReposRoot || prev.forgeReposRoot),
+      forgeReposRootAgent:
+        typeof s.forgeReposRootAgent === 'string' ? s.forgeReposRootAgent : prev.forgeReposRootAgent,
       dockerYamlDir: String(s.dockerYamlDir || prev.dockerYamlDir),
       dockerAppDataDir: String(s.dockerAppDataDir || prev.dockerAppDataDir),
       githubToken: typeof s.githubToken === 'string' ? s.githubToken : prev.githubToken,
@@ -122,11 +152,15 @@ export default function SettingsForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
+      const payload = await res.json().catch(() => ({}));
       if (res.ok) {
         const s = await fetch('/api/settings').then((r) => r.json());
         mergeSettingsFromServer(s);
+        refreshReposHealth();
       }
-      setMessage(res.ok ? 'Configurations sauvegardées !' : 'Erreur lors de la sauvegarde.');
+      setMessage(
+        res.ok ? 'Configurations sauvegardées !' : typeof payload.error === 'string' ? payload.error : 'Erreur lors de la sauvegarde.',
+      );
     } catch {
       setMessage('Erreur réseau.');
     } finally {
@@ -246,13 +280,15 @@ export default function SettingsForm() {
             message={authMessage}
           />
         )}
-        {activeTab === 'openclaw' && (
-          <OpenClawTab
+        {activeTab === 'integration' && (
+          <IntegrationTab
             settings={settings}
             setSettings={setSettings}
             onSave={save}
             saving={saving}
             message={message}
+            reposHealth={reposHealth}
+            onRefreshHealth={refreshReposHealth}
           />
         )}
         {activeTab === 'api' && (
@@ -266,15 +302,7 @@ export default function SettingsForm() {
             message={message}
           />
         )}
-        {activeTab === 'infra' && (
-          <InfraTab
-            settings={settings}
-            setSettings={setSettings}
-            onSave={save}
-            saving={saving}
-            message={message}
-          />
-        )}
+        {activeTab === 'models' && <AgentModelsTab />}
         {activeTab === 'schedule' && <WorkScheduleTab />}
         {activeTab === 'maintenance' && (
           <MaintenanceTab onSync={syncProjects} syncing={syncing} message={message} />

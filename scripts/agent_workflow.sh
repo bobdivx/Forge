@@ -5,10 +5,14 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/forge_env.sh"
+
 PROJECT="${1:-}"
 TICKET="${2:-}"
-FORGE_API="http://127.0.0.1:4321/api"
-REPOS_ROOT="/mnt/GitHub"
+FORGE_API="$FORGE_API_URL"
+REPOS_ROOT="${FORGE_REPOS_ROOT:-/mnt/GitHub}"
 
 if [ -z "$PROJECT" ] || [ -z "$TICKET" ]; then
   echo "Usage: $0 <projet> <description>"
@@ -114,5 +118,5 @@ echo "  4. ANALYSTE_CODE → code review"
 echo "  5. EXPERT_GITHUB → PR vers main"
 echo "  6. CHEF_TECHNIQUE → validation et merge"
 echo ""
-echo "  Suivi en temps réel : http://127.0.0.1:4321/agents"
-echo "  Bugs remontés       : http://127.0.0.1:4321/orchestration"
+echo "  Suivi en temps réel : ${FORGE_BASE_URL}/agents"
+echo "  Bugs remontés       : ${FORGE_BASE_URL}/orchestration"

@@ -98,7 +98,13 @@ Toute action structurée des agents (anomalie page, dépendance, changement de s
 - Après résolution, **toujours** passer le statut à `resolved` / `installed` (ou `rejected` avec raison dans `content`).
 - Notifier l’agent demandeur via `message` ou en s’appuyant sur le journal `AgentMessage` (le hook enregistre déjà une copie vers `CHEF_TECHNIQUE`).
 
-URL de base des hooks (adapter le port si besoin) : `http://127.0.0.1:4321/api/forge-hook`.
+URL de base des hooks : définir **`FORGE_HOOK_BASE_URL`** si tu n’es pas sur la même machine que Forge (`http://forge-host:4321` depuis le conteneur OpenClaw avec `extra_hosts`). Sinon `http://127.0.0.1:4321/api/forge-hook`.
+
+### Reporting fiable (obligatoire pour chaque délégation)
+
+- Ne pas inventer des `curl` avec du JSON multi‑ligne fragile : utiliser **`scripts/forge-hook.sh`** (JSON généré proprement) après `source scripts/forge_env.sh`.
+- À chaque **`sessions_spawn`** ou équivalent : indiquer dans la tâche que l’agent doit **terminer par** un appel forge-hook type `completion` (et `taskId` si une `AgentTask` existe).
+- Si une mission ne crée aucune ligne dans Forge (bugs / tâches / messages), considérer l’échec de reporting et renvoyer l’agent vers `instructions/FORGE_API_CONTRACT.md`.
 
 ## Politique anti-saturation du contexte
 - Répondre de façon concise, orientée action, sans répétition des consignes système.

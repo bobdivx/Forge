@@ -1,12 +1,27 @@
-# Exemple de volumes à ajouter au service OpenClaw pour que les agents travaillent dans le dépôt Forge.
-# Après montage sur /forge, dans openclaw.json : agents.defaults.workspace = "/forge"
-# (redémarrer OpenClaw / gateway).
+# Exemple : OpenClaw monte le dépôt Forge et sait joindre l’API HTTP du dashboard (pas la SQLite directement).
 #
-# Adapte le chemin hôte : /mnt/GitHub/Forge, /media/GitHub/Forge, etc.
+# **Répertoire des applications (Paramètres Forge → `forgeReposRoot`) :**
+# Ce chemin doit être **identique à l’intérieur du conteneur OpenClaw** à celui que Forge utilise sur l’hôte,
+# sinon le dashboard liste des projets que les agents ne peuvent pas ouvrir. Pattern simple :
+#   volumes:
+#     - /media/GitHub:/media/GitHub:rw     # même chemin hôte → conteneur (recommandé)
+# Si vous montez les apps ailleurs (ex. `/forge/apps`), mettez **la même valeur** dans Paramètres Forge.
+#
+# 1. Volume workspace Forge : `/forge` → prompts et `scripts/forge-hook.sh`, `scripts/forge_env.sh`.
+# 2. Dans openclaw.json : `agents.defaults.workspace = "/forge"` (redémarrer la gateway).
+# 3. Variable **`FORGE_HOOK_BASE_URL`** : URL joignable depuis CE conteneur vers le port Forge (4321).
+#    - Forge sur l’hôte : ajouter `extra_hosts: ["forge-host:host-gateway"]` puis
+#      `FORGE_HOOK_BASE_URL=http://forge-host:4321`
+#    - Forge sur le même réseau Docker : utiliser `http://forge:4321` (nom du service compose).
+#
+# Adapte les chemins hôte : `/mnt/GitHub/Forge`, `/media/GitHub/Forge`, etc.
 #
 # services:
 #   openclaw:
+#     environment:
+#       - FORGE_HOOK_BASE_URL=http://forge-host:4321
+#     extra_hosts:
+#       - "forge-host:host-gateway"
 #     volumes:
 #       - /mnt/GitHub/Forge:/forge:rw
-#       # Données OpenClaw existantes (inchangé chez toi) :
 #       - /chemin/vers/AppData/openclaw:/home/node/.openclaw:rw

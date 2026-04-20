@@ -30,6 +30,7 @@ export function getReposRoot(): string {
 /**
  * Ordre : base (Paramètres utilisateur), puis FORGE_REPOS_ROOT (compose),
  * puis les chemins usuels qui existent.
+ * Résolu **sur la machine qui exécute Forge**. Les agents OpenClaw doivent voir le même stockage (bind mount).
  */
 export async function getReposRootResolved(): Promise<string> {
   let fromDb = '';
