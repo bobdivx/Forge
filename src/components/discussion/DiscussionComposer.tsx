@@ -105,6 +105,7 @@ export default function DiscussionComposer() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -112,7 +113,8 @@ export default function DiscussionComposer() {
     if (!text.trim()) return;
     try {
       await navigator.clipboard.writeText(text);
-      setError('Contenu copié dans le presse-papiers.');
+      setCopyFeedback('Copié dans le presse-papiers.');
+      setTimeout(() => setCopyFeedback(null), 1800);
     } catch {
       setError('Copie impossible automatiquement. Sélectionnez et copiez manuellement.');
     }
@@ -359,6 +361,11 @@ export default function DiscussionComposer() {
         {error && (
           <div class="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</div>
         )}
+        {copyFeedback && (
+          <div class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+            {copyFeedback}
+          </div>
+        )}
       </div>
 
       <div class="lg:col-span-8 bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-0 flex flex-col min-h-[70vh] max-h-[78vh] overflow-hidden">
@@ -447,15 +454,55 @@ export default function DiscussionComposer() {
 
                     <details class="bg-white/70 rounded-md p-2">
                       <summary class="cursor-pointer font-semibold">Voir JSON</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.json || '')}
+                        >
+                          Copier JSON
+                        </button>
+                      </div>
                       <pre class="mt-2 whitespace-pre-wrap">{m.remediation.json || ''}</pre>
                     </details>
                     <details class="bg-white/70 rounded-md p-2">
                       <summary class="cursor-pointer font-semibold">Voir script PowerShell</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.powershellScript || '')}
+                        >
+                          Copier script PowerShell
+                        </button>
+                      </div>
                       <pre class="mt-2 whitespace-pre-wrap">{m.remediation.powershellScript || ''}</pre>
                     </details>
                     <details class="bg-white/70 rounded-md p-2">
                       <summary class="cursor-pointer font-semibold">Voir script bash/python</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.bashScript || '')}
+                        >
+                          Copier script bash/python
+                        </button>
+                      </div>
                       <pre class="mt-2 whitespace-pre-wrap">{m.remediation.bashScript || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir test API (POST)</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.curlTest || '')}
+                        >
+                          Copier test POST
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.curlTest || ''}</pre>
                     </details>
                   </div>
                 )}
