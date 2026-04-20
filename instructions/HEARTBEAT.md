@@ -4,14 +4,18 @@ Exécuté par : `CHEF_TECHNIQUE` (Bob) ou `MAINTENANCE_REPO`
 Fréquence surveillance : toutes les 30 minutes
 Fréquence sauvegarde : 1 fois par jour à 02:00
 
+**URL Forge :** au début des blocs bash ci‑dessous, ajoute `source /chemin/Forge/scripts/forge_env.sh` (montage du repo) pour que `FORGE_API_URL` et `FORGE_HOOK_URL` suivent `FORGE_HOOK_BASE_URL` (Docker → `http://forge-host:4321`).
+
 ---
 
 ## Surveillance périodique (toutes les 30 min)
 
 ### 1. Vérifier les tâches et bugs en attente dans la Forge DB
 ```bash
+# source …/Forge/scripts/forge_env.sh   # recommandé
+FORGE_API="${FORGE_API_URL:-http://127.0.0.1:4321/api}"
 # Lire les tâches pending et bugs ouverts
-TASKS=$(curl -s http://127.0.0.1:4321/api/agent-tasks)
+TASKS=$(curl -s "${FORGE_API}/agent-tasks")
 PENDING=$(echo "$TASKS" | python3 -c "
 import json,sys
 data = json.load(sys.stdin)
@@ -25,7 +29,7 @@ echo "$PENDING"
 
 # Si tâches en attente → remonter à Bob
 if [ -n "$PENDING" ]; then
-  curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+  curl -s -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}" \
     -H "Content-Type: application/json" \
     -d "{
       \"agentId\": \"MAINTENANCE_REPO\",
@@ -45,7 +49,7 @@ for repo in /mnt/GitHub/*/; do
   UNCOMMITTED=$(git -C "$repo" status --short 2>/dev/null | wc -l)
   
   if [ "$UNCOMMITTED" -gt 0 ]; then
-    curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+    curl -s -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}" \
       -H "Content-Type: application/json" \
       -d "{
         \"agentId\": \"MAINTENANCE_REPO\",
@@ -74,7 +78,7 @@ except:
 " 2>/dev/null || echo "Gateway injoignable")
 
 if echo "$HEALTH" | grep -q "injoignable"; then
-  curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+  curl -s -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}" \
     -H "Content-Type: application/json" \
     -d "{
       \"agentId\": \"MAINTENANCE_REPO\",
@@ -89,7 +93,8 @@ fi
 
 ### 4. Vérifier la santé du dashboard Forge
 ```bash
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4321/api/forge-hook)
+FORGE_HOOK="${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$FORGE_HOOK")
 if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "405" ]; then
   # On s'envoie un message via un canal alternatif (fichier log)
   echo "[$(date)] ALERTE: Forge Dashboard down (HTTP $HTTP_CODE)" >> /mnt/GitHub/Forge/heartbeat.log
@@ -103,6 +108,9 @@ fi
 ```bash
 #!/bin/bash
 # Sauvegarde automatique de tous les repos
+
+# FORGE_HOOK_URL via forge_env.sh si OpenClaw / Docker
+FORGE_HOOK="${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}"
 
 SUCCESS=0
 FAILED=0
@@ -123,7 +131,7 @@ for repo in /mnt/GitHub/*/; do
     
     if git -C "$repo" push 2>/dev/null; then
       SUCCESS=$((SUCCESS + 1))
-      curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+      curl -s -X POST "$FORGE_HOOK" \
         -H "Content-Type: application/json" \
         -d "{
           \"agentId\": \"MAINTENANCE_REPO\",
@@ -134,7 +142,7 @@ for repo in /mnt/GitHub/*/; do
         }" > /dev/null
     else
       FAILED=$((FAILED + 1))
-      curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+      curl -s -X POST "$FORGE_HOOK" \
         -H "Content-Type: application/json" \
         -d "{
           \"agentId\": \"MAINTENANCE_REPO\",
@@ -149,7 +157,7 @@ for repo in /mnt/GitHub/*/; do
 done
 
 # Rapport final
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
+curl -s -X POST "$FORGE_HOOK" \
   -H "Content-Type: application/json" \
   -d "{
     \"agentId\": \"MAINTENANCE_REPO\",

@@ -16,6 +16,22 @@ Auth    : AUCUNE (réseau local uniquement)
 > `forge-host` résout vers le host Docker via `extra_hosts` dans OpenClaw.yaml.
 > Si tu utilises la CLI openclaw directement sur le host, utilise `127.0.0.1`.
 
+### Fiabilité : une seule URL, pas d’erreur réseau
+
+Les agents dans **Docker OpenClaw** ne doivent **pas** utiliser `127.0.0.1` pour joindre Forge : ça pointe vers le conteneur lui‑même. À la place :
+
+1. Définir **`FORGE_HOOK_BASE_URL`** (ex. `http://forge-host:4321`) dans l’environnement du service OpenClaw ou avant d’exécuter un script.
+2. **`source scripts/forge_env.sh`** depuis le dépôt Forge monté dans le workspace : exporte `FORGE_BASE_URL`, `FORGE_HOOK_URL`, `FORGE_API_URL`.
+3. Préférer **`scripts/forge-hook.sh`** pour poster vers forge-hook : le JSON est construit par Python (échappement correct, pas de corps tronqué).
+
+Exemple minimal :
+
+```bash
+export FORGE_HOOK_BASE_URL=http://forge-host:4321   # ou 127.0.0.1 depuis l’hôte uniquement
+source /chemin/vers/Forge/scripts/forge_env.sh
+./scripts/forge-hook.sh DEV_FRONTEND completion "Titre" "Détail du travail" '{"project":"MonRepo"}'
+```
+
 ### Body JSON obligatoire
 
 | Champ      | Type   | Obligatoire | Description |
