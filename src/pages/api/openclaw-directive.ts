@@ -31,6 +31,16 @@ function sanitizeErr(input: unknown, fallback: string): string {
   return s.slice(0, 600);
 }
 
+function errorForStatus(httpStatus: number | undefined, fallback: string): string {
+  if (httpStatus === 404) {
+    return 'Gateway OpenClaw répond 404 : URL gateway incorrecte ou endpoint API non exposé par ce service.';
+  }
+  if (httpStatus != null && httpStatus >= 500) {
+    return 'Gateway OpenClaw indisponible (5xx) — vérifiez reverse proxy, URL gateway et token.';
+  }
+  return fallback;
+}
+
 function shouldRunFallbackChain(error: unknown, httpStatus?: number): boolean {
   const s = String(error || '').toLowerCase();
   if (httpStatus === 404) return true;
@@ -221,7 +231,10 @@ export const POST: APIRoute = async ({ request }) => {
         error: sanitizeErr(
           // Priorité aux erreurs gateway (racine), puis seulement aux fallbacks CLI locaux.
           fallback2.error || fallback.error || result.error || fallback3.error,
-          'Gateway OpenClaw indisponible (502) — vérifiez URL gateway, reverse proxy et token.',
+          errorForStatus(
+            result.httpStatus,
+            'Envoi OpenClaw refusé — vérifiez URL gateway, token et exposition des endpoints API.',
+          ),
         ),
         detail: {
           sessionsSend: result.detail,
@@ -242,7 +255,10 @@ export const POST: APIRoute = async ({ request }) => {
       JSON.stringify({
         error: sanitizeErr(
           result.error,
-          'Gateway OpenClaw indisponible (502) — vérifiez URL gateway, reverse proxy et token.',
+          errorForStatus(
+            result.httpStatus,
+            'Envoi OpenClaw refusé — vérifiez URL gateway, token et exposition des endpoints API.',
+          ),
         ),
         detail: result.detail,
       }),
