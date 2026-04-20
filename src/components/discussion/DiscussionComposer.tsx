@@ -115,6 +115,7 @@ export default function DiscussionComposer() {
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [pollingReply, setPollingReply] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const copyToClipboard = async (text: string) => {
@@ -125,6 +126,70 @@ export default function DiscussionComposer() {
       setTimeout(() => setCopyFeedback(null), 1800);
     } catch {
       setError('Copie impossible automatiquement. Sélectionnez et copiez manuellement.');
+    }
+  };
+
+  const pollAssistantReply = async (sessionKey: string, afterMs: number) => {
+    setPollingReply(true);
+    try {
+      const attempts = 20;
+      for (let i = 0; i < attempts; i += 1) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const res = await fetch('/api/discussion-poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionKey, afterMs }),
+        });
+        const data = await res.json().catch(() => ({}));
+        const reply = typeof data.reply === 'string' ? data.reply.trim() : '';
+        if (reply) {
+          setChat((c) => {
+            const next = [...c];
+            for (let j = next.length - 1; j >= 0; j -= 1) {
+              if (next[j].isAck) {
+                next[j] = {
+                  ...next[j],
+                  role: 'assistant',
+                  isAck: false,
+                  text: reply.slice(0, 8000),
+                };
+                return next;
+              }
+            }
+            next.push({
+              id: `${Date.now()}-ap`,
+              role: 'assistant',
+              text: reply.slice(0, 8000),
+              at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            });
+            return next;
+          });
+          return;
+        }
+      }
+      setChat((c) =>
+        c.map((m) =>
+          m.isAck
+            ? {
+                ...m,
+                text: "Message transmis. L'agent n'a pas encore répondu (timeout de récupération).",
+              }
+            : m,
+        ),
+      );
+    } catch {
+      setChat((c) =>
+        c.map((m) =>
+          m.isAck
+            ? {
+                ...m,
+                text: "Message transmis. Impossible de récupérer la réponse en direct pour l'instant.",
+              }
+            : m,
+        ),
+      );
+    } finally {
+      setPollingReply(false);
     }
   };
 
@@ -193,6 +258,7 @@ export default function DiscussionComposer() {
     }
     setSending(true);
     setError(null);
+    const sentAtMs = Date.now();
     const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const userBubble: ChatMessage = {
       id: `${Date.now()}-u`,
@@ -276,6 +342,9 @@ export default function DiscussionComposer() {
           isAck: !reply?.trim(),
         },
       ]);
+      if (!reply?.trim()) {
+        void pollAssistantReply(agentId, sentAtMs);
+      }
       setMessage('');
     } catch {
       setError('Erreur réseau.');
@@ -297,7 +366,7 @@ export default function DiscussionComposer() {
   const offlineCount = agents.length - usableAgents.length;
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [chat, sending]);
+  }, [chat, sending, pollingReply]);
 
   if (loading) {
     return <div class="animate-pulse text-gray-400 py-12 text-center text-sm">Chargement du contexte…</div>;
@@ -540,9 +609,11 @@ export default function DiscussionComposer() {
               </div>
             </div>
           ))}
-          {sending && (
+          {(sending || pollingReply) && (
             <div class="chat chat-start">
-              <div class="chat-header text-[10px] text-gray-400 mb-1">Agent · en cours</div>
+              <div class="chat-header text-[10px] text-gray-400 mb-1">
+                Agent · {sending ? 'envoi' : 'réponse en cours'}
+              </div>
               <div class="chat-bubble chat-bubble-neutral text-white">
                 <span class="loading loading-dots loading-xs" />
               </div>
