@@ -41,9 +41,11 @@ function readApiError(data: Record<string, unknown> | null | undefined, fallback
 type Props = {
   initialTasks: MissionTask[];
   sessionKey: string;
+  /** Si renseigné, resynchronise le tableau avec `/api/swarm-agent-panel` (poll + événement forge-swarm-refresh). */
+  syncAgentId?: string;
 };
 
-export default function AgentMissionJournal({ initialTasks, sessionKey }: Props) {
+export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgentId }: Props) {
   const [tasks, setTasks] = useState<MissionTask[]>(initialTasks);
   const [openId, setOpenId] = useState<number | null>(null);
   const [editTask, setEditTask] = useState('');
@@ -60,6 +62,30 @@ export default function AgentMissionJournal({ initialTasks, sessionKey }: Props)
   useEffect(() => {
     if (openId === null) setDispatchSessionKey(sessionKey);
   }, [sessionKey, openId]);
+
+  useEffect(() => {
+    if (!syncAgentId) return;
+    const pull = () => {
+      void fetch(`/api/swarm-agent-panel?agentId=${encodeURIComponent(syncAgentId)}`)
+        .then((r) => r.json() as Promise<{ dbTasks?: MissionTask[] }>)
+        .then((d) => {
+          if (Array.isArray(d.dbTasks)) setTasks(d.dbTasks);
+        })
+        .catch(() => {});
+    };
+    pull();
+    const t = setInterval(pull, 14_000);
+    const onRefresh = (e: Event) => {
+      const id = (e as CustomEvent<{ agentId?: string }>).detail?.agentId;
+      if (id && id !== syncAgentId) return;
+      pull();
+    };
+    window.addEventListener('forge-swarm-refresh', onRefresh as EventListener);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('forge-swarm-refresh', onRefresh as EventListener);
+    };
+  }, [syncAgentId]);
 
   const selected = openId != null ? tasks.find((t) => t.id === openId) : null;
 

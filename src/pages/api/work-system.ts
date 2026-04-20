@@ -45,7 +45,12 @@ export const POST: APIRoute = async ({ request }) => {
 
   try {
     if (action === 'start') {
-      await manualStart(agentIds);
+      const workCycle = await manualStart(agentIds);
+      const status = await getWorkSystemStatus();
+      return new Response(JSON.stringify({ ok: true, workCycle, ...status }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     } else if (action === 'stop') {
       await manualStop();
     } else if (action === 'schedule') {
@@ -62,7 +67,7 @@ export const POST: APIRoute = async ({ request }) => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (e) {
+  } catch (e: unknown) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

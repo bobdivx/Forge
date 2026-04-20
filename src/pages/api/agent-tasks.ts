@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ request }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  const { agentId, task, status = 'pending' } = body ?? {};
+  const { agentId, task, input, status = 'pending' } = body ?? {};
   if (!agentId || !task) {
     return new Response(
       JSON.stringify({ error: 'agentId et task sont requis' }),
@@ -29,7 +29,14 @@ export const POST: APIRoute = async ({ request }) => {
     const now = new Date();
     const [inserted] = await db
       .insert(AgentTask)
-      .values({ agentId: String(agentId), task: String(task), status: String(status), createdAt: now, updatedAt: now })
+      .values({
+        agentId: String(agentId),
+        task: String(task),
+        input: input != null ? String(input) : undefined,
+        status: String(status),
+        createdAt: now,
+        updatedAt: now,
+      })
       .returning();
     return new Response(JSON.stringify({ ok: true, task: inserted }), {
       status: 201,

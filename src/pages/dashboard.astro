@@ -9,6 +9,7 @@ import DashProjectList from '../components/dashboard/DashProjectList';
 import DashAgentTeam from '../components/dashboard/DashAgentTeam';
 import DashAuditLog from '../components/dashboard/DashAuditLog';
 import DashSystemStatus from '../components/dashboard/DashSystemStatus';
+import DashWorkSystem from '../components/dashboard/DashWorkSystem';
 import { loadAstroDb } from '../lib/load-astro-db';
 
 let recentProjects = [];
@@ -47,6 +48,11 @@ try {
         Synchroniser
       </a>
     </div>
+  </div>
+
+  <!-- ── Système de travail (OpenClaw / swarm) ─── -->
+  <div class="mb-5">
+    <DashWorkSystem client:load />
   </div>
 
   <!-- ── Stats (4 cartes) ─────────────────────────── -->

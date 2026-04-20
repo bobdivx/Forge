@@ -32,6 +32,14 @@ export type WorkSystemStatus = {
   nextWindowAt: string | null;
 };
 
+/** Retour de `runWorkCycle` / `manualStart` pour affichage API (OpenClaw, budget). */
+export type WorkCycleResult = {
+  ok: boolean;
+  budgetBlocked?: string;
+  openClawErrors?: string[];
+  error?: string;
+};
+
 type WorkScheduleRow = {
   id: number;
   label: string;
@@ -226,23 +234,27 @@ async function dispatchPendingTasks(agentIds: string[]) {
   }
 }
 
-async function sendWorkDirective(agentIds: string[]) {
+/** Envoie la directive de début de session ; renvoie les erreurs OpenClaw (token, gateway, session). */
+async function sendWorkDirective(agentIds: string[]): Promise<string[]> {
+  const errors: string[] = [];
   const { db, Project } = await loadAstroDb();
   const activeProjects = await db.select().from(Project);
   const swarmProjects = activeProjects.filter(p => p.swarmEnabled === 1);
 
   const targets = agentIds.length ? agentIds : ['CHEF_TECHNIQUE'];
-  
-  let projectListMsg = "";
+
+  let projectListMsg = '';
   if (swarmProjects.length > 0) {
     const translatedPaths = await Promise.all(
-      swarmProjects.map(async p => `- ${p.name} (${await toAgentPath(p.path)})`)
+      swarmProjects.map(async (p) => `- ${p.name} (${await toAgentPath(p.path)})`),
     );
-    projectListMsg = "\n\n🎯 PROJETS ACTIFS POUR LE SWARM :\n" + 
+    projectListMsg =
+      '\n\n🎯 PROJETS ACTIFS POUR LE SWARM :\n' +
       translatedPaths.join('\n') +
-      "\n\nInstructions prioritaires : Analyse ces dossiers sur le NAS, identifie les manques et propose des améliorations ou commence les tâches en attente.";
+      '\n\nInstructions prioritaires : Analyse ces dossiers sur le NAS, identifie les manques et propose des améliorations ou commence les tâches en attente.';
   } else {
-    projectListMsg = "\n\n⚠️ AUCUN PROJET ACTIF. Reste en veille et surveille les nouvelles instructions générales.";
+    projectListMsg =
+      '\n\n⚠️ AUCUN PROJET ACTIF. Reste en veille et surveille les nouvelles instructions générales.';
   }
 
   const message =
@@ -252,11 +264,19 @@ async function sendWorkDirective(agentIds: string[]) {
 
   for (const sessionKey of targets.slice(0, 3)) {
     try {
-      await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
-    } catch {
-      /* silencieux */
+      const res = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
+      if (!res.ok) {
+        const line = `${sessionKey}: ${res.error || 'échec inconnu'}`;
+        errors.push(line);
+        await logHeartbeat('warn', `[work-scheduler] Directive non livrée — ${line}`);
+      }
+    } catch (e) {
+      const line = `${sessionKey}: ${String(e)}`;
+      errors.push(line);
+      await logHeartbeat('warn', `[work-scheduler] Directive exception — ${line}`);
     }
   }
+  return errors;
 }
 
 async function checkBudgetExceeded(): Promise<{ exceeded: boolean; info: string }> {
@@ -302,13 +322,13 @@ async function checkBudgetExceeded(): Promise<{ exceeded: boolean; info: string 
  *                     false si déclenché par la planification : après le cycle on repasse en `scheduled`
  *                     sinon le premier tick bloque tous les suivants (`tick` ignorait tout si `_state === 'running'`).
  */
-async function runWorkCycle(agentIds: string[], fromManual = false) {
-  if (_currentlyWorking) return;
+async function runWorkCycle(agentIds: string[], fromManual = false): Promise<WorkCycleResult> {
+  if (_currentlyWorking) return { ok: false };
 
   const { exceeded, info } = await checkBudgetExceeded();
   if (exceeded) {
     await logHeartbeat('warn', `Cycle annulé : ${info}`);
-    return;
+    return { ok: false, budgetBlocked: info };
   }
 
   _currentlyWorking = true;
@@ -331,12 +351,17 @@ async function runWorkCycle(agentIds: string[], fromManual = false) {
       createdAt: new Date(),
     });
 
-    await sendWorkDirective(agentIds);
+    const openClawErrors = await sendWorkDirective(agentIds);
     /** Crée des AgentTask pour les bugs ouverts, puis envoie toutes les tâches `pending`/`bug`. */
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingTasks(agentIds);
+    return { ok: true, openClawErrors };
   } catch (e) {
     await logHeartbeat('error', `Erreur cycle de travail : ${String(e)}`);
+    if (fromManual) {
+      _state = 'scheduled';
+    }
+    return { ok: false, error: String(e) };
   } finally {
     _currentlyWorking = false;
     if (!fromManual) {
@@ -436,19 +461,18 @@ export function stopScheduler() {
   }
 }
 
-/** Démarrage manuel — le système reste `running` jusqu'à un arrêt manuel ou fin de session. */
-export async function manualStart(agentIds: string[] = []) {
-  _state = 'running';
+/** Démarrage manuel — le système passe en `running` seulement après contrôle budget (voir `runWorkCycle`). */
+export async function manualStart(agentIds: string[] = []): Promise<WorkCycleResult> {
   let targets = agentIds;
 
   if (targets.length === 0) {
     const { loadAstroDb } = await import('./load-astro-db');
     const { db, AgentInstruction } = await loadAstroDb();
     const allAgents = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
-    targets = allAgents.map(a => a.agentId);
+    targets = allAgents.map((a) => a.agentId);
   }
 
-  await runWorkCycle(targets, true);
+  return await runWorkCycle(targets, true);
 }
 
 /** Arrêt manuel — repasse en mode `stopped` (les plages planifiées ne reprennent pas). */

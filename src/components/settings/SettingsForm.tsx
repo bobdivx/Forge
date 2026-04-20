@@ -80,6 +80,18 @@ export default function SettingsForm() {
     refreshReposHealth();
   }, []);
 
+  /** Ouvre l’onglet correspondant au hash (#schedule, #account, …). */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const applyHash = () => {
+      const h = window.location.hash.replace(/^#/, '').trim();
+      if (h && TABS.some((t) => t.id === h)) setActiveTab(h);
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
+
   useEffect(() => {
     Promise.all([fetch('/api/settings'), fetch('/api/custom-api-tokens'), fetch('/api/auth/me')])
       .then(async ([settingsRes, tokensRes, meRes]) => {

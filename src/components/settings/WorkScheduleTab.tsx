@@ -374,7 +374,29 @@ export default function WorkScheduleTab() {
       const d = await res.json().catch(() => ({}));
       if (res.ok) {
         setStatus(d);
-        setMsg(action === 'start' ? 'Travail démarré.' : action === 'stop' ? 'Système arrêté.' : 'Mode planifié activé.');
+        const wc = d.workCycle as
+          | {
+              ok?: boolean;
+              budgetBlocked?: string;
+              openClawErrors?: string[];
+              error?: string;
+            }
+          | undefined;
+        if (action === 'start') {
+          if (wc?.budgetBlocked) {
+            setMsg(`Erreur : le cycle n'a pas démarré — ${wc.budgetBlocked}`);
+          } else if (wc && wc.ok === false && wc.error) {
+            setMsg(`Erreur : ${wc.error}`);
+          } else if (wc?.openClawErrors?.length) {
+            setMsg(
+              `Attention : OpenClaw n'a pas reçu les directives (${wc.openClawErrors.join(' · ')}). Vérifiez le token, l'URL de la gateway et que sessions_send est autorisé.`,
+            );
+          } else {
+            setMsg('Travail démarré : directives envoyées vers OpenClaw.');
+          }
+        } else {
+          setMsg(action === 'stop' ? 'Système arrêté.' : 'Mode planifié activé.');
+        }
       } else {
         setMsg(d.error || 'Erreur.');
       }
