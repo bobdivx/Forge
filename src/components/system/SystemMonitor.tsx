@@ -6,7 +6,8 @@ export default function SystemMonitor() {
     cpuLoad: 0, 
     diskUsage: 0, 
     githubDiskUsage: 0,
-    unhealthyContainers: [] 
+    unhealthyContainers: [],
+    lastMaintenance: null
   });
 
   useEffect(() => {
@@ -61,6 +62,17 @@ export default function SystemMonitor() {
           </div>
         </div>
       ))}
+
+      {stats.lastMaintenance && (
+        <div class="pt-2 text-[9px] font-mono text-slate-600 text-right italic">
+          Dernière veille: {new Date(stats.lastMaintenance).toLocaleString('fr-FR', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit'
+          })}
+        </div>
+      )}
     </div>
   );
 }
