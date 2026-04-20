@@ -15,6 +15,7 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
   const payload: Partial<ForgeConfig> = {};
   const allowed: (keyof ForgeConfig)[] = [
     'forgePublicUrl',
+    'openclawContainerName',
     'openclawGatewayUrl',
     'openclawToken',
     'githubToken',

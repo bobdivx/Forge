@@ -8,6 +8,7 @@ import MaintenanceTab from './MaintenanceTab';
 
 type Config = {
   forgePublicUrl: string;
+  openclawContainerName: string;
   forgeReposRoot: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
@@ -37,6 +38,7 @@ export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
     forgePublicUrl: '',
+    openclawContainerName: '',
     forgeReposRoot:    '/media/Github',
     dockerYamlDir:     '/DATA/AppData',
     dockerAppDataDir:  '/DATA/AppData',
@@ -80,6 +82,8 @@ export default function SettingsForm() {
           ...prev,
           forgePublicUrl:
             typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
+          openclawContainerName:
+            typeof s.openclawContainerName === 'string' ? s.openclawContainerName : prev.openclawContainerName,
           forgeReposRoot: s.forgeReposRoot || prev.forgeReposRoot,
           dockerYamlDir: s.dockerYamlDir || prev.dockerYamlDir,
           dockerAppDataDir: s.dockerAppDataDir || prev.dockerAppDataDir,
@@ -112,6 +116,8 @@ export default function SettingsForm() {
       ...prev,
       forgePublicUrl:
         typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
+      openclawContainerName:
+        typeof s.openclawContainerName === 'string' ? s.openclawContainerName : prev.openclawContainerName,
       forgeReposRoot: String(s.forgeReposRoot || prev.forgeReposRoot),
       dockerYamlDir: String(s.dockerYamlDir || prev.dockerYamlDir),
       dockerAppDataDir: String(s.dockerAppDataDir || prev.dockerAppDataDir),

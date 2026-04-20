@@ -3,12 +3,26 @@ import SaveRow from '../ui/SaveRow';
 
 type Config = { forgeReposRoot: string; dockerYamlDir: string; dockerAppDataDir: string; [k: string]: string };
 
+type OpenClawMount = { source: string; destination: string; type: string; mode: string };
+
+type OpenClawProbe = {
+  attempted?: boolean;
+  skipReason?: string;
+  dockerError?: string;
+  containerName?: string | null;
+  mounts?: OpenClawMount[];
+  pathTested?: string;
+  pathExistsInContainer?: boolean;
+  likelyMountMatch?: boolean;
+};
+
 type ReposHealth = {
   status?: string;
   summary?: string;
   path?: string;
   gitReposFound?: number;
   openclawNote?: string;
+  openclawProbe?: OpenClawProbe;
 };
 
 type Props = {
@@ -34,6 +48,9 @@ export default function InfraTab({
 }: Props) {
   const st = reposHealth?.status ?? '';
   const healthyRepos = st === 'ok';
+  const probe = reposHealth?.openclawProbe;
+  const bindMounts = (probe?.mounts ?? []).filter((m) => m.type === 'bind' && m.destination);
+
   return (
     <div class="p-6 space-y-6">
       <div>
@@ -75,6 +92,57 @@ export default function InfraTab({
             )}
             {reposHealth.openclawNote && (
               <p class="text-[11px] opacity-90 border-t border-current/10 pt-2 mt-2">{reposHealth.openclawNote}</p>
+            )}
+            {probe?.attempted && (
+              <div class="border-t border-current/10 pt-3 mt-2 space-y-2">
+                <p class="font-semibold">
+                  OpenClaw (Docker){' '}
+                  {probe.containerName ? (
+                    <span class="font-mono font-normal">· {probe.containerName}</span>
+                  ) : null}
+                </p>
+                {probe.dockerError && (
+                  <p class="text-[11px] text-red-700 bg-red-50/80 rounded px-2 py-1">{probe.dockerError}</p>
+                )}
+                {probe.skipReason && !probe.dockerError && (
+                  <p class="text-[11px] opacity-90">{probe.skipReason}</p>
+                )}
+                {probe.pathTested && (
+                  <p class="text-[11px] font-mono break-all">
+                    Test dans le conteneur : <strong>{probe.pathTested}</strong> →{' '}
+                    {probe.pathExistsInContainer ? (
+                      <span class="text-emerald-700">présent</span>
+                    ) : (
+                      <span class="text-red-700">absent</span>
+                    )}
+                    {probe.likelyMountMatch ? ' · bind mount couvrant ce chemin' : ''}
+                  </p>
+                )}
+                {bindMounts.length > 0 && (
+                  <details class="text-[11px]">
+                    <summary class="cursor-pointer font-medium opacity-90">
+                      Volumes bind ({bindMounts.length}) — chemins vus dans le conteneur
+                    </summary>
+                    <ul class="mt-2 space-y-1 font-mono max-h-40 overflow-y-auto pl-3 list-disc">
+                      {bindMounts.slice(0, 24).map((m) => (
+                        <li key={m.destination}>
+                          <span class="text-emerald-800">{m.destination}</span>
+                          <span class="opacity-60"> ← </span>
+                          <span class="break-all">{m.source}</span>
+                        </li>
+                      ))}
+                      {bindMounts.length > 24 && <li>… {bindMounts.length - 24} autre(s)</li>}
+                    </ul>
+                  </details>
+                )}
+                {!probe.pathExistsInContainer && probe.attempted && probe.containerName && (
+                  <p class="text-[11px]">
+                    Corrigez le compose OpenClaw pour monter le dossier hôte des apps au même chemin que ci-dessus, ou
+                    ajustez « Répertoire des applications » pour qu’il corresponde à un <span class="font-mono">Destination</span>{' '}
+                    listé.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

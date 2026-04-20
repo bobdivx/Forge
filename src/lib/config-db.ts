@@ -11,6 +11,8 @@ export type ForgeConfig = {
    * Ex. `http://forge-host:4321` ou `http://forge:4321`. Laissé vide → fallback env / défaut localhost.
    */
   forgePublicUrl: string;
+  /** Nom du contèneur Docker OpenClaw pour docker inspect/exec (vide = auto-détection name=openclaw). */
+  openclawContainerName: string;
   openclawGatewayUrl: string;
   openclawToken: string;
   githubToken: string;
@@ -29,6 +31,7 @@ export type ForgeConfig = {
 
 export const CONFIG_DEFAULTS: ForgeConfig = {
   forgePublicUrl: '',
+  openclawContainerName: '',
   openclawGatewayUrl: 'http://127.0.0.1:24190',
   openclawToken: '',
   githubToken: '',
