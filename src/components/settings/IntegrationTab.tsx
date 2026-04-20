@@ -154,11 +154,13 @@ export default function IntegrationTab({
           subtitle="Le répertoire des applications doit être le même chemin absolu que les agents voient dans OpenClaw (bind mount identique hôte → conteneur, ex. /media/GitHub:/media/GitHub)."
         />
         <p class="text-[11px] text-gray-500 max-w-3xl mb-4 leading-relaxed">
-          La liste des volumes et le test dans OpenClaw ne passent pas par le navigateur : le{' '}
-          <strong>serveur Forge</strong> lance la commande <code class="font-mono text-gray-600">docker</code> sur la
-          machine où tourne Astro (même hôte que le démon Docker, ou conteneur Forge avec le socket{' '}
-          <code class="font-mono text-gray-600">/var/run/docker.sock</code> monté). Sur Vercel / sans Docker, la sonde
-          échoue : saisie manuelle ou variable <code class="font-mono text-gray-600">FORGE_DISABLE_OPENCLAW_PATH_PROBE=1</code>.
+          Forge et OpenClaw sont bien <strong>deux conteneurs différents</strong>, mais ils tournent en général sous le{' '}
+          <strong>même moteur Docker</strong> sur le NAS : le démon sur l’hôte connaît <em>tous</em> les conteneurs. Quand
+          le conteneur Forge exécute <code class="font-mono text-gray-600">docker inspect openclaw</code>, c’est via le
+          socket <code class="font-mono text-gray-600">/var/run/docker.sock</code> (ou équivalent) vers cet hôte — ce
+          n’est pas Forge qui « entre » dans le conteneur OpenClaw par le réseau applicatif. Sur Vercel / sans accès au
+          démon Docker, la sonde échoue : saisie manuelle ou{' '}
+          <code class="font-mono text-gray-600">FORGE_DISABLE_OPENCLAW_PATH_PROBE=1</code>.
         </p>
 
         {reposHealth && (
