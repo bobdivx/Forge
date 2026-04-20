@@ -12,6 +12,12 @@ type RequestItem = {
   createdAt: string;
 };
 type AgentRow = { id: string; name: string; status: string; model: string; raw?: { offline?: boolean; disabledInDb?: boolean } };
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  at: string;
+};
 
 const inputCls =
   'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none';
@@ -35,7 +41,8 @@ export default function DiscussionComposer() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastResponse, setLastResponse] = useState<string | null>(null);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancel = false;
@@ -85,6 +92,10 @@ export default function DiscussionComposer() {
     [requests, requestId],
   );
   const selectedAgent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId]);
+  const selectedProject = useMemo(
+    () => (projectIdNum != null && !Number.isNaN(projectIdNum) ? projects.find((p) => p.id === projectIdNum) : undefined),
+    [projects, projectIdNum],
+  );
 
   const send = async () => {
     const msg = message.trim();
@@ -98,7 +109,14 @@ export default function DiscussionComposer() {
     }
     setSending(true);
     setError(null);
-    setLastResponse(null);
+    const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const userBubble: ChatMessage = {
+      id: `${Date.now()}-u`,
+      role: 'user',
+      text: msg,
+      at: now,
+    };
+    setChat((c) => [...c, userBubble]);
     try {
       const blocks: string[] = [];
       if (selectedRequest) {
@@ -126,17 +144,44 @@ export default function DiscussionComposer() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway');
+        setChat((c) => [
+          ...c,
+          {
+            id: `${Date.now()}-e`,
+            role: 'system',
+            text: typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway',
+            at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
         return;
       }
       const result = data.result as Record<string, unknown> | undefined;
       const reply = result && typeof result.reply === 'string' ? result.reply : '';
-      if (reply) {
-        setLastResponse(reply.slice(0, 8000));
-      } else {
-        setLastResponse('Message envoyé. Réponse synchrone vide — vérifiez la session OpenClaw.');
-      }
+      const assistantText =
+        reply && reply.trim()
+          ? reply.slice(0, 8000)
+          : 'Message envoyé. Réponse synchrone vide — vérifiez la session OpenClaw.';
+      setChat((c) => [
+        ...c,
+        {
+          id: `${Date.now()}-a`,
+          role: 'assistant',
+          text: assistantText,
+          at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      setMessage('');
     } catch {
       setError('Erreur réseau.');
+      setChat((c) => [
+        ...c,
+        {
+          id: `${Date.now()}-e2`,
+          role: 'system',
+          text: 'Erreur réseau',
+          at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
     } finally {
       setSending(false);
     }
@@ -144,14 +189,17 @@ export default function DiscussionComposer() {
 
   const usableAgents = agents.filter(isSessionUsable);
   const offlineCount = agents.length - usableAgents.length;
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [chat, sending]);
 
   if (loading) {
     return <div class="animate-pulse text-gray-400 py-12 text-center text-sm">Chargement du contexte…</div>;
   }
 
   return (
-    <div class="max-w-3xl mx-auto space-y-8">
-      <div class="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-6 space-y-6">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-4 bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-6 space-y-6">
         <div>
           <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
             Application (optionnel)
@@ -218,47 +266,83 @@ export default function DiscussionComposer() {
               Clé session : {selectedAgent.id}
             </p>
           )}
-          {usableAgents.length > 0 && offlineCount > 0 && (
-            <p class="text-[11px] text-gray-500 mt-2">
-              {offlineCount} agent(s) désactivé(s) / offline masqué(s) de la liste.
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Votre message</label>
-          <textarea
-            class={`${inputCls} min-h-[160px] resize-y`}
-            placeholder="Ex. : Résume l’état du correctif pour la demande ci-dessus…"
-            value={message}
-            onInput={(e) => setMessage((e.target as HTMLTextAreaElement).value)}
-            disabled={sending}
-          />
         </div>
 
         {error && (
           <div class="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</div>
         )}
-
-        <button
-          type="button"
-          onClick={() => void send()}
-          disabled={sending || !message.trim() || !agentId}
-          class="w-full py-3 rounded-xl font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: '#175B37' }}
-        >
-          {sending ? 'Envoi…' : 'Envoyer au gateway OpenClaw'}
-        </button>
       </div>
 
-      {lastResponse && (
-        <div class="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-6">
-          <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Réponse (extrait)</h3>
-          <pre class="text-sm text-gray-700 whitespace-pre-wrap font-sans bg-gray-50 rounded-xl p-4 max-h-[480px] overflow-y-auto border border-gray-100">
-            {lastResponse}
-          </pre>
+      <div class="lg:col-span-8 bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-0 flex flex-col min-h-[70vh] max-h-[78vh] overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 bg-gray-50/70">
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Chat Discussion</p>
+          <p class="text-xs text-gray-500 mt-1">
+            Conversation directe avec l’agent sélectionné (style chat DaisyUI).
+          </p>
+          {(selectedAgent || selectedProject || selectedRequest) && (
+            <div class="mt-2 flex flex-wrap gap-1.5">
+              {selectedAgent && <span class="badge badge-outline badge-sm">Agent: {selectedAgent.name}</span>}
+              {selectedProject && <span class="badge badge-outline badge-sm">Projet: {selectedProject.name}</span>}
+              {selectedRequest && <span class="badge badge-outline badge-sm">Demande: #{selectedRequest.id}</span>}
+            </div>
+          )}
         </div>
-      )}
+
+        <div class="flex-1 overflow-y-auto p-4 space-y-3">
+          {chat.length === 0 && (
+            <div class="text-sm text-gray-400 text-center py-12">
+              Aucun message pour le moment. Saisissez une question ci-dessous.
+            </div>
+          )}
+          {chat.map((m) => (
+            <div key={m.id} class={`chat ${m.role === 'user' ? 'chat-end' : 'chat-start'}`}>
+              <div class="chat-header text-[10px] text-gray-400 mb-1">
+                {m.role === 'user' ? 'Vous' : m.role === 'assistant' ? 'Agent' : 'Système'} · {m.at}
+              </div>
+              <div
+                class={`chat-bubble whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'chat-bubble-success text-white'
+                    : m.role === 'assistant'
+                      ? 'chat-bubble-neutral text-white'
+                      : 'chat-bubble-warning text-gray-900'
+                }`}
+              >
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {sending && (
+            <div class="chat chat-start">
+              <div class="chat-header text-[10px] text-gray-400 mb-1">Agent · en cours</div>
+              <div class="chat-bubble chat-bubble-neutral text-white">
+                <span class="loading loading-dots loading-xs" />
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <div class="border-t border-gray-100 p-4 bg-white">
+          <div class="join w-full">
+            <textarea
+              class="textarea textarea-bordered join-item w-full min-h-[84px]"
+              placeholder="Ex. : Résume l’état du correctif pour la demande ci-dessus…"
+              value={message}
+              onInput={(e) => setMessage((e.target as HTMLTextAreaElement).value)}
+              disabled={sending}
+            />
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={sending || !message.trim() || !agentId}
+              class="btn btn-success join-item self-stretch rounded-l-none"
+            >
+              {sending ? 'Envoi…' : 'Envoyer'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
