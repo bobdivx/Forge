@@ -6,10 +6,34 @@ import {
   invokeOpenClawAgentTask,
   invokeOpenClawV1ChatFallback,
   getOpenClawToken,
+  getOpenClawGatewayBaseUrl,
+  resolveSessionsSendKey,
 } from '../../lib/openclaw-gateway';
+import { getConfig } from '../../lib/config-db';
 
 const MAX_MESSAGE = 120_000;
 const execFileAsync = promisify(execFile);
+
+function extractReplyFromGatewayDetail(detail: unknown): string {
+  if (detail == null || typeof detail !== 'object') return '';
+  const d = detail as Record<string, unknown>;
+  const direct = d.result;
+  if (direct && typeof direct === 'object') {
+    const r = direct as Record<string, unknown>;
+    if (typeof r.reply === 'string' && r.reply.trim()) return r.reply;
+    if (typeof r.output === 'string' && r.output.trim()) return r.output;
+    if (typeof r.text === 'string' && r.text.trim()) return r.text;
+  }
+  const content = d.content;
+  if (Array.isArray(content) && content.length > 0) {
+    const first = content[0];
+    if (first && typeof first === 'object') {
+      const t = (first as Record<string, unknown>).text;
+      if (typeof t === 'string' && t.trim()) return t;
+    }
+  }
+  return '';
+}
 
 function looksLikeHtmlPayload(v: unknown): boolean {
   if (typeof v !== 'string') return false;
@@ -50,6 +74,109 @@ function shouldRunFallbackChain(error: unknown, httpStatus?: number): boolean {
     s.includes('tool not available') ||
     s.includes('bad gateway') ||
     s.includes('gateway http 5')
+  );
+}
+
+type GatewayRemediation = {
+  title: string;
+  endpoint: string;
+  configPath: string;
+  where: string;
+  instructions: string[];
+  openclawPrompt: string;
+  curlTest: string;
+  powershellScript: string;
+  bashScript: string;
+  json: string;
+  docs?: string;
+};
+
+async function resolveOpenClawConfigPathHint(): Promise<string> {
+  const appDataDir = (await getConfig('dockerAppDataDir')).trim() || 'C:\\DATA\\AppData';
+  return `${appDataDir}/openclaw/openclaw.json`;
+}
+
+async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const invokeEndpoint = `${base}/tools/invoke`;
+  const configPath = await resolveOpenClawConfigPathHint();
+  const openclawPrompt = [
+    'Applique cette correction de configuration OpenClaw gateway:',
+    `1) Ouvre le fichier ${configPath}`,
+    '2) Mets gateway.tools.allow avec sessions_list, sessions_send, agents_invoke',
+    "3) Sauvegarde le fichier puis redémarre le service gateway OpenClaw",
+    `4) Vérifie ensuite avec un POST sur ${invokeEndpoint} (tool=sessions_list)`,
+    '5) Confirme quand c’est OK',
+    '',
+    'JSON cible:',
+  ].join('\n');
+  const jsonBlock = JSON.stringify(
+    {
+      gateway: {
+        tools: {
+          allow: ['sessions_list', 'sessions_send', 'agents_invoke'],
+        },
+      },
+    },
+    null,
+    2,
+  );
+  return {
+    title: 'Activer les outils OpenClaw requis par Forge',
+    endpoint: invokeEndpoint,
+    configPath,
+    where:
+      `Dans le fichier de config OpenClaw (${configPath}), section "gateway.tools.allow", puis redémarrer le service gateway.`,
+    instructions: [
+      'Ouvrir la configuration du gateway OpenClaw.',
+      `Modifier la section gateway.tools.allow utilisée par l’endpoint ${invokeEndpoint}.`,
+      'Ajouter sessions_list, sessions_send et agents_invoke.',
+      'Redémarrer le gateway OpenClaw.',
+      'Note: ouvrir /tools/invoke dans le navigateur fait un GET et peut répondre "Method Not Allowed" (normal).',
+      'Tester avec un POST JSON (curl ci-dessous) pour valider la disponibilité réelle.',
+      'Revenir dans Forge > Discussion et renvoyer le message.',
+    ],
+    openclawPrompt: `${openclawPrompt}\n${jsonBlock}`,
+    curlTest: [
+      `curl -X POST '${invokeEndpoint}' \\`,
+      "  -H 'Content-Type: application/json' \\",
+      "  -H 'Accept: application/json' \\",
+      "  -H 'X-Gateway-Token: <OPENCLAW_TOKEN>' \\",
+      "  -H 'Authorization: Bearer <OPENCLAW_TOKEN>' \\",
+      "  --data '{\"tool\":\"sessions_list\",\"action\":\"json\",\"args\":{\"limit\":1,\"messageLimit\":0}}'",
+    ].join('\n'),
+    powershellScript: [
+      '$cfg = Get-Content -Raw "C:\\DATA\\AppData\\openclaw\\openclaw.json" | ConvertFrom-Json',
+      'if (-not $cfg.gateway) { $cfg | Add-Member -NotePropertyName gateway -NotePropertyValue (@{}) }',
+      'if (-not $cfg.gateway.tools) { $cfg.gateway | Add-Member -NotePropertyName tools -NotePropertyValue (@{}) }',
+      '$cfg.gateway.tools.allow = @("sessions_list","sessions_send","agents_invoke")',
+      '$cfg | ConvertTo-Json -Depth 50 | Set-Content "C:\\DATA\\AppData\\openclaw\\openclaw.json"',
+      '# puis redemarrer le service/container openclaw gateway',
+    ].join('\n'),
+    bashScript: [
+      "python3 - <<'PY'",
+      'import json',
+      "p='/DATA/AppData/openclaw/openclaw.json'",
+      "cfg=json.load(open(p,'r',encoding='utf-8'))",
+      "cfg.setdefault('gateway',{}).setdefault('tools',{})['allow']=['sessions_list','sessions_send','agents_invoke']",
+      "json.dump(cfg,open(p,'w',encoding='utf-8'),indent=2,ensure_ascii=False)",
+      "print('updated',p)",
+      'PY',
+      '# puis redemarrer le service/container openclaw gateway',
+    ].join('\n'),
+    json: jsonBlock,
+    docs: 'https://openclaws.io/docs/gateway/tools-invoke-http-api',
+  };
+}
+
+function shouldAttachToolsRemediation(primary: unknown, fallback1: unknown, fallback2: unknown): boolean {
+  const all = [primary, fallback1, fallback2]
+    .map((x) => String(x || '').toLowerCase())
+    .join(' | ');
+  return (
+    all.includes('tool not available: sessions_send') ||
+    all.includes('tool not available: agents_invoke') ||
+    all.includes('sessions_send indisponible via http')
   );
 }
 
@@ -144,18 +271,31 @@ export const POST: APIRoute = async ({ request }) => {
       ? Math.floor(body.timeoutSeconds)
       : 120;
 
+  const resolvedSessionKey =
+    (await resolveSessionsSendKey(undefined, [sessionKey]).catch(() => null)) || sessionKey;
+
   const result = await invokeOpenClawSessionsSend({
-    sessionKey,
+    sessionKey: resolvedSessionKey,
     message,
     timeoutSeconds,
     asyncDelivery: false,
   });
 
   if (result.ok) {
-    return new Response(JSON.stringify(result.detail ?? { ok: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const reply = extractReplyFromGatewayDetail(result.detail);
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        via: 'sessions_send',
+        routedSessionKey: resolvedSessionKey,
+        result: reply ? { status: 'completed', reply } : { status: 'accepted' },
+        detail: result.detail ?? { ok: true },
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
 
   // Fallback robuste : si sessions_send est bloqué par la gateway,
@@ -170,6 +310,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: 'agents_invoke_fallback',
+          routedSessionKey: resolvedSessionKey,
           detail: fallback.detail ?? { accepted: true },
         }),
         {
@@ -187,6 +328,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: fallback2.via,
+          routedSessionKey: resolvedSessionKey,
           result: {
             status: 'completed',
             reply:
@@ -212,6 +354,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: fallback3.via,
+          routedSessionKey: resolvedSessionKey,
           result: { status: 'accepted' },
           detail: {
             sessionsSend: result.detail,
@@ -236,6 +379,9 @@ export const POST: APIRoute = async ({ request }) => {
             'Envoi OpenClaw refusé — vérifiez URL gateway, token et exposition des endpoints API.',
           ),
         ),
+        ...(shouldAttachToolsRemediation(result.error, fallback.error, fallback2.error)
+          ? { remediation: await buildGatewayToolsRemediation() }
+          : {}),
         detail: {
           sessionsSend: result.detail,
           agentsInvoke: fallback.detail,
@@ -260,6 +406,9 @@ export const POST: APIRoute = async ({ request }) => {
             'Envoi OpenClaw refusé — vérifiez URL gateway, token et exposition des endpoints API.',
           ),
         ),
+        ...(shouldAttachToolsRemediation(result.error, null, null)
+          ? { remediation: await buildGatewayToolsRemediation() }
+          : {}),
         detail: result.detail,
       }),
       {

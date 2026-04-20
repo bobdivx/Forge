@@ -41,17 +41,19 @@ export const GET: APIRoute = async () => {
       containerNameOverride: containerHint || undefined,
     });
     const openclawBindSuggestions = buildBindSuggestions(openclawProbe.mounts ?? []);
+    const openclawNote = !openclawProbe.attempted
+      ? 'Sonde OpenClaw désactivée ou Docker indisponible depuis ce serveur. Vérifiez manuellement les volumes du conteneur OpenClaw.'
+      : openclawProbe.dockerError
+        ? `Sonde OpenClaw incomplète: ${openclawProbe.dockerError}`
+        : openclawProbe.pathExistsInContainer
+          ? 'Le chemin est visible dans le conteneur OpenClaw (docker exec test -d).'
+          : 'Forge a pu appeler Docker mais le chemin est absent dans le conteneur — vérifiez les volumes bind (inspect) et le nom du conteneur.';
     return new Response(
       JSON.stringify({
         ...health,
         openclawProbe,
         openclawBindSuggestions,
-        openclawNote:
-          openclawProbe.attempted && openclawProbe.pathExistsInContainer
-            ? 'Le chemin est visible dans le conteneur OpenClaw (docker exec test -d).'
-            : openclawProbe.attempted
-              ? 'Forge a pu appeler Docker mais le chemin est absent dans le conteneur ou le conteneur est introuvable — vérifiez les volumes bind (inspect) et le nom du conteneur.'
-              : 'Sonde OpenClaw désactivée ou Docker indisponible depuis ce serveur. Vérifiez manuellement les volumes du conteneur OpenClaw.',
+        openclawNote,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );

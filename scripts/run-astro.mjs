@@ -31,9 +31,10 @@ function toLibsqlDatabaseUrl(raw) {
 }
 
 if (!process.env.ASTRO_DATABASE_FILE) {
-  const dbFile = path.join(root, ".astro", "db.sqlite");
-  fs.mkdirSync(path.dirname(dbFile), { recursive: true });
-  process.env.ASTRO_DATABASE_FILE = pathToFileURL(dbFile).href;
+  const canonicalDbFile = path.join(root, ".astro", "content.db");
+  fs.mkdirSync(path.dirname(canonicalDbFile), { recursive: true });
+  // Base locale unique: aucune dependance legacy.
+  process.env.ASTRO_DATABASE_FILE = pathToFileURL(canonicalDbFile).href;
 } else {
   process.env.ASTRO_DATABASE_FILE = toLibsqlDatabaseUrl(
     process.env.ASTRO_DATABASE_FILE

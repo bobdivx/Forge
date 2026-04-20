@@ -12,12 +12,96 @@ type RequestItem = {
   createdAt: string;
 };
 type AgentRow = { id: string; name: string; status: string; model: string; raw?: { offline?: boolean; disabledInDb?: boolean } };
+const POLL_ATTEMPTS = 48; // 48 * 2.5s = ~2 minutes
+const POLL_INTERVAL_MS = 2500;
+
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   text: string;
   at: string;
+  remediation?: GatewayRemediation;
+  isAck?: boolean;
 };
+
+type RoutingDebugState = {
+  requestedSessionKey: string;
+  routedSessionKey: string;
+  polledSessionKey: string;
+  selectedSessionKey: string;
+  via: string;
+  lastReason: string;
+};
+
+type GatewayRemediation = {
+  title?: string;
+  endpoint?: string;
+  endpointMethod?: string;
+  where?: string;
+  configPath?: string;
+  instructions?: unknown;
+  json?: string;
+  curlTest?: string;
+  powershellScript?: string;
+  bashScript?: string;
+  openclawPrompt?: string;
+  docs?: string;
+};
+
+function formatGatewayRemediation(remediation: GatewayRemediation | undefined): string {
+  if (!remediation || typeof remediation !== 'object') return '';
+  const lines: string[] = [];
+  const title = typeof remediation.title === 'string' ? remediation.title.trim() : '';
+  const endpoint = typeof remediation.endpoint === 'string' ? remediation.endpoint.trim() : '';
+  const endpointMethod = typeof remediation.endpointMethod === 'string' ? remediation.endpointMethod.trim() : '';
+  const where = typeof remediation.where === 'string' ? remediation.where.trim() : '';
+  const configPath = typeof remediation.configPath === 'string' ? remediation.configPath.trim() : '';
+  const json = typeof remediation.json === 'string' ? remediation.json.trim() : '';
+  const curlTest = typeof remediation.curlTest === 'string' ? remediation.curlTest.trim() : '';
+  const powershellScript =
+    typeof remediation.powershellScript === 'string' ? remediation.powershellScript.trim() : '';
+  const bashScript = typeof remediation.bashScript === 'string' ? remediation.bashScript.trim() : '';
+  const openclawPrompt =
+    typeof remediation.openclawPrompt === 'string' ? remediation.openclawPrompt.trim() : '';
+  const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
+  const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
+  const instructions = instructionsRaw
+    .map((step) => (typeof step === 'string' ? step.trim() : ''))
+    .filter(Boolean);
+
+  if (title) lines.push(`Action requise: ${title}`);
+  if (endpoint) lines.push(`Endpoint exact Forge -> OpenClaw: ${endpoint}`);
+  if (endpointMethod) lines.push(`Methode attendue: ${endpointMethod}`);
+  if (where) lines.push(`Ou le mettre: ${where}`);
+  if (configPath) lines.push(`Chemin de fichier detecte: ${configPath}`);
+  if (instructions.length > 0) {
+    lines.push('Etapes:');
+    instructions.forEach((step, index) => lines.push(`${index + 1}. ${step}`));
+  }
+  if (json) {
+    lines.push('JSON a copier-coller:');
+    lines.push(json);
+  }
+  if (curlTest) {
+    lines.push('Test API (POST) a executer:');
+    lines.push(curlTest);
+  }
+  if (powershellScript) {
+    lines.push('Script auto (PowerShell) :');
+    lines.push(powershellScript);
+  }
+  if (bashScript) {
+    lines.push('Script auto (bash/python) :');
+    lines.push(bashScript);
+  }
+  if (openclawPrompt) {
+    lines.push('Prompt a donner a OpenClaw :');
+    lines.push(openclawPrompt);
+  }
+  if (docs) lines.push(`Documentation: ${docs}`);
+
+  return lines.join('\n');
+}
 
 const inputCls =
   'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none';
@@ -41,8 +125,118 @@ export default function DiscussionComposer() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [pollingReply, setPollingReply] = useState(false);
+  const [routingDebug, setRoutingDebug] = useState<RoutingDebugState | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  const copyToClipboard = async (text: string) => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyFeedback('Copié dans le presse-papiers.');
+      setTimeout(() => setCopyFeedback(null), 1800);
+    } catch {
+      setError('Copie impossible automatiquement. Sélectionnez et copiez manuellement.');
+    }
+  };
+
+  const pollAssistantReply = async (sessionKey: string, afterMs: number) => {
+    setPollingReply(true);
+    try {
+      let lastReason = '';
+      for (let i = 0; i < POLL_ATTEMPTS; i += 1) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const res = await fetch('/api/discussion-poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionKey, afterMs }),
+        });
+        const data = await res.json().catch(() => ({}));
+        lastReason = typeof data.reason === 'string' ? data.reason : lastReason;
+        const selectedSessionKey =
+          typeof data.selectedSessionKey === 'string' ? data.selectedSessionKey.trim() : '';
+        setRoutingDebug((prev) =>
+          prev
+            ? {
+                ...prev,
+                selectedSessionKey: selectedSessionKey || prev.selectedSessionKey,
+                lastReason,
+              }
+            : prev,
+        );
+        const reply = typeof data.reply === 'string' ? data.reply.trim() : '';
+        if (reply) {
+          if (selectedSessionKey) {
+            setRoutingDebug((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    selectedSessionKey,
+                    lastReason: '',
+                  }
+                : prev,
+            );
+          }
+          setChat((c) => {
+            const next = [...c];
+            for (let j = next.length - 1; j >= 0; j -= 1) {
+              if (next[j].isAck) {
+                next[j] = {
+                  ...next[j],
+                  role: 'assistant',
+                  isAck: false,
+                  text: reply.slice(0, 8000),
+                };
+                return next;
+              }
+            }
+            next.push({
+              id: `${Date.now()}-ap`,
+              role: 'assistant',
+              text: reply.slice(0, 8000),
+              at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            });
+            return next;
+          });
+          return;
+        }
+      }
+      const reasonLabel =
+        lastReason === 'session_non_trouvee'
+          ? "session non trouvée"
+          : lastReason === 'pas_de_reponse_assistant'
+            ? 'pas encore de message assistant'
+            : lastReason === 'session_sans_messages'
+              ? 'session sans messages'
+              : lastReason || 'en attente prolongée';
+      setChat((c) =>
+        c.map((m) =>
+          m.isAck
+            ? {
+                ...m,
+                text: `Message transmis. Réponse toujours en attente (${reasonLabel}).`,
+              }
+            : m,
+        ),
+      );
+      setRoutingDebug((prev) => (prev ? { ...prev, lastReason } : prev));
+    } catch {
+      setChat((c) =>
+        c.map((m) =>
+          m.isAck
+            ? {
+                ...m,
+                text: "Message transmis. Impossible de récupérer la réponse en direct pour l'instant.",
+              }
+            : m,
+        ),
+      );
+    } finally {
+      setPollingReply(false);
+    }
+  };
 
   useEffect(() => {
     let cancel = false;
@@ -109,6 +303,7 @@ export default function DiscussionComposer() {
     }
     setSending(true);
     setError(null);
+    const sentAtMs = Date.now();
     const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const userBubble: ChatMessage = {
       id: `${Date.now()}-u`,
@@ -143,24 +338,51 @@ export default function DiscussionComposer() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway');
-        setChat((c) => [
-          ...c,
-          {
-            id: `${Date.now()}-e`,
-            role: 'system',
-            text: typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway',
-            at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
+        const baseErr = typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway';
+        const remediation = data.remediation as GatewayRemediation | undefined;
+        setError(baseErr);
+        setChat((c) => {
+          const next: ChatMessage[] = [
+            ...c,
+            {
+              id: `${Date.now()}-e`,
+              role: 'system',
+              text: baseErr,
+              at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            },
+          ];
+          if (remediation) {
+            next.push({
+              id: `${Date.now()}-guide`,
+              role: 'system',
+              text: 'Je peux te guider pas à pas. Choisis une méthode ci-dessous : JSON, PowerShell, ou bash/python.',
+              remediation,
+              at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            });
+          }
+          return next;
+        });
         return;
       }
       const result = data.result as Record<string, unknown> | undefined;
       const reply = result && typeof result.reply === 'string' ? result.reply : '';
+      const deliveryAck = typeof data.delivery === 'string' ? data.delivery : '';
+      const status = result && typeof result.status === 'string' ? result.status.toLowerCase() : '';
+      const via = typeof data.via === 'string' ? data.via : '';
+      const routedSessionKey =
+        typeof data.routedSessionKey === 'string' && data.routedSessionKey.trim()
+          ? data.routedSessionKey.trim()
+          : typeof data.sessionKeyResolved === 'string' && data.sessionKeyResolved.trim()
+            ? data.sessionKeyResolved.trim()
+            : agentId;
       const assistantText =
         reply && reply.trim()
           ? reply.slice(0, 8000)
-          : 'Message envoyé. Réponse synchrone vide — vérifiez la session OpenClaw.';
+          : deliveryAck && deliveryAck.trim()
+            ? deliveryAck.trim()
+            : status === 'accepted' || status === 'queued' || status === 'running'
+              ? `Message transmis a l'agent${via ? ` (${via})` : ''}. Reponse en cours...`
+              : 'Message transmis a l’agent. Reponse non immediate.';
       setChat((c) => [
         ...c,
         {
@@ -168,8 +390,30 @@ export default function DiscussionComposer() {
           role: 'assistant',
           text: assistantText,
           at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          isAck: !reply?.trim(),
         },
       ]);
+      if (!reply?.trim()) {
+        const pollSessionKey = routedSessionKey;
+        setRoutingDebug({
+          requestedSessionKey: agentId,
+          routedSessionKey,
+          polledSessionKey: pollSessionKey,
+          selectedSessionKey: '',
+          via,
+          lastReason: '',
+        });
+        void pollAssistantReply(pollSessionKey, sentAtMs);
+      } else {
+        setRoutingDebug({
+          requestedSessionKey: agentId,
+          routedSessionKey,
+          polledSessionKey: '',
+          selectedSessionKey: '',
+          via,
+          lastReason: '',
+        });
+      }
       setMessage('');
     } catch {
       setError('Erreur réseau.');
@@ -191,7 +435,7 @@ export default function DiscussionComposer() {
   const offlineCount = agents.length - usableAgents.length;
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [chat, sending]);
+  }, [chat, sending, pollingReply]);
 
   if (loading) {
     return <div class="animate-pulse text-gray-400 py-12 text-center text-sm">Chargement du contexte…</div>;
@@ -271,6 +515,11 @@ export default function DiscussionComposer() {
         {error && (
           <div class="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</div>
         )}
+        {copyFeedback && (
+          <div class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+            {copyFeedback}
+          </div>
+        )}
       </div>
 
       <div class="lg:col-span-8 bg-white rounded-[1.5rem] border border-gray-100 shadow-sm p-0 flex flex-col min-h-[70vh] max-h-[78vh] overflow-hidden">
@@ -285,6 +534,19 @@ export default function DiscussionComposer() {
               {selectedProject && <span class="badge badge-outline badge-sm">Projet: {selectedProject.name}</span>}
               {selectedRequest && <span class="badge badge-outline badge-sm">Demande: #{selectedRequest.id}</span>}
             </div>
+          )}
+          {routingDebug && (
+            <details class="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] text-gray-600">
+              <summary class="cursor-pointer font-semibold text-gray-700">Debug routage session</summary>
+              <div class="mt-2 space-y-1 font-mono break-all">
+                <p>Demandée: {routingDebug.requestedSessionKey || 'n/a'}</p>
+                <p>Routée API: {routingDebug.routedSessionKey || 'n/a'}</p>
+                <p>Pollée: {routingDebug.polledSessionKey || 'n/a'}</p>
+                <p>Lue par poll: {routingDebug.selectedSessionKey || 'n/a'}</p>
+                <p>Via: {routingDebug.via || 'n/a'}</p>
+                <p>Raison pending: {routingDebug.lastReason || 'n/a'}</p>
+              </div>
+            </details>
           )}
         </div>
 
@@ -304,17 +566,136 @@ export default function DiscussionComposer() {
                   m.role === 'user'
                     ? 'chat-bubble-success text-white'
                     : m.role === 'assistant'
-                      ? 'chat-bubble-neutral text-white'
+                      ? m.isAck
+                        ? 'chat-bubble-info text-white'
+                        : 'chat-bubble-neutral text-white'
                       : 'chat-bubble-warning text-gray-900'
                 }`}
               >
                 {m.text}
+                {m.remediation && (
+                  <div class="mt-3 space-y-2 text-xs">
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="btn btn-xs btn-outline"
+                        onClick={() => {
+                          setMessage('Je choisis la méthode JSON. Donne-moi les étapes minimales.');
+                          void copyToClipboard(m.remediation?.json || '');
+                        }}
+                      >
+                        Choisir JSON
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-xs btn-outline"
+                        onClick={() => {
+                          setMessage('Je choisis la méthode PowerShell. Guide-moi.');
+                          void copyToClipboard(m.remediation?.powershellScript || '');
+                        }}
+                      >
+                        Choisir PowerShell
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-xs btn-outline"
+                        onClick={() => {
+                          setMessage('Je choisis la méthode bash/python. Guide-moi.');
+                          void copyToClipboard(m.remediation?.bashScript || '');
+                        }}
+                      >
+                        Choisir bash/python
+                      </button>
+                    </div>
+
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Infos rapides</summary>
+                      <div class="mt-2 whitespace-pre-wrap">
+                        {formatGatewayRemediation({
+                          title: m.remediation.title,
+                          endpoint: m.remediation.endpoint,
+                          endpointMethod: m.remediation.endpointMethod,
+                          configPath: m.remediation.configPath,
+                          docs: m.remediation.docs,
+                        })}
+                      </div>
+                    </details>
+
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir JSON</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.json || '')}
+                        >
+                          Copier JSON
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.json || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir script PowerShell</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.powershellScript || '')}
+                        >
+                          Copier script PowerShell
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.powershellScript || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir script bash/python</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.bashScript || '')}
+                        >
+                          Copier script bash/python
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.bashScript || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Prompt à donner à OpenClaw</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.openclawPrompt || '')}
+                        >
+                          Copier prompt OpenClaw
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.openclawPrompt || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir test API (POST)</summary>
+                      <div class="mt-2">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-outline"
+                          onClick={() => void copyToClipboard(m.remediation?.curlTest || '')}
+                        >
+                          Copier test POST
+                        </button>
+                      </div>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.curlTest || ''}</pre>
+                    </details>
+                  </div>
+                )}
               </div>
             </div>
           ))}
-          {sending && (
+          {(sending || pollingReply) && (
             <div class="chat chat-start">
-              <div class="chat-header text-[10px] text-gray-400 mb-1">Agent · en cours</div>
+              <div class="chat-header text-[10px] text-gray-400 mb-1">
+                Agent · {sending ? 'envoi' : 'réponse en cours'}
+              </div>
               <div class="chat-bubble chat-bubble-neutral text-white">
                 <span class="loading loading-dots loading-xs" />
               </div>

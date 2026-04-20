@@ -1,4 +1,41 @@
 ---
-export const prerender = false;
-return Astro.redirect('/settings', 301);
+import DashboardLayout from '../layouts/DashboardLayout.astro';
 ---
+
+<DashboardLayout title="Aide" currentPath="/help">
+  <div class="max-w-5xl mx-auto p-4 py-8 space-y-6">
+    <header class="space-y-2">
+      <h1 class="text-3xl font-bold text-zinc-900">Aide Forge</h1>
+      <p class="text-zinc-500">
+        Guide rapide pour diagnostiquer Forge × OpenClaw et remettre la Discussion en service.
+      </p>
+    </header>
+
+    <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
+      <h2 class="text-lg font-semibold text-zinc-900">1) Vérifier la connectivité OpenClaw</h2>
+      <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
+        <li>Ouvrir <a class="underline" href="/health">/health</a> et vérifier <strong>sessions_list</strong> et <strong>agents_list</strong>.</li>
+        <li>Les 404 sur des endpoints alternatifs peuvent être normaux si un endpoint fonctionne.</li>
+        <li>Le champ important est l’<strong>endpoint actif</strong> et les <strong>blocages critiques</strong>.</li>
+      </ul>
+    </section>
+
+    <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
+      <h2 class="text-lg font-semibold text-zinc-900">2) Discussion : réponse asynchrone</h2>
+      <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
+        <li>Le message “transmis” signifie que l’envoi est accepté par OpenClaw.</li>
+        <li>La réponse arrive ensuite par polling asynchrone (bulle “réponse en cours”).</li>
+        <li>Une session existante peut être réutilisée (pas forcément une nouvelle session à chaque message).</li>
+      </ul>
+    </section>
+
+    <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
+      <h2 class="text-lg font-semibold text-zinc-900">3) Cas NAS / reverse proxy</h2>
+      <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
+        <li>Si les logs affichent “untrusted proxy”, configurer <code class="font-mono">gateway.trustedProxies</code>.</li>
+        <li>Si Docker est indisponible dans Forge (<code class="font-mono">spawn docker ENOENT</code>), la sonde conteneur ne peut pas fonctionner.</li>
+        <li>Dans ce cas, utiliser la saisie manuelle des chemins ou désactiver la sonde.</li>
+      </ul>
+    </section>
+  </div>
+</DashboardLayout>

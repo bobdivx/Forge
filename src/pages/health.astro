@@ -2,11 +2,20 @@
 // src/pages/health.astro
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import { loadAstroDb } from '../lib/load-astro-db';
-import { getOpenClawGatewayBaseUrl, fetchOpenClawSessionsPayload, normalizeOpenClawSessions, fetchOpenClawAgentsList, fetchOpenClawModelCatalog } from '../lib/openclaw-gateway';
+import {
+  getOpenClawGatewayBaseUrl,
+  fetchOpenClawSessionsPayload,
+  normalizeOpenClawSessions,
+  fetchOpenClawAgentsList,
+  fetchOpenClawModelCatalog,
+  fetchOpenClawJson,
+  getOpenClawClientDebugMeta,
+} from '../lib/openclaw-gateway';
 import { getAllConfig, getConfig } from '../lib/config-db';
 
 const config = await getAllConfig();
 const { db, AgentInstruction, ActivityLog, AgentBudget, Heartbeat, sql, desc } = await loadAstroDb();
+const ocDebug = await getOpenClawClientDebugMeta();
 
 // 1. Gateway Health & Auth
 const gatewayUrl = await getOpenClawGatewayBaseUrl();
@@ -17,6 +26,7 @@ const userEmail = Astro.locals.user?.email;
 const gatewayRes = await fetchOpenClawSessionsPayload(userEmail);
 const sessions = gatewayRes.ok ? normalizeOpenClawSessions(gatewayRes.data) : [];
 const gatewayError = !gatewayRes.ok ? gatewayRes.error : null;
+const gatewayAttempts = gatewayRes.attempts ?? [];
 
 const forgeAgents = await db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`);
 const forgeIds = forgeAgents.map(a => a.agentId.toLowerCase());
@@ -27,10 +37,13 @@ const connectedAgentsCount = forgeIds.filter(id => activeSessionIds.includes(id)
 
 // 3. Ollama Status & Model Catalog
 let availableModels: string[] = [];
+let agentRegistryOk = false;
+let catalogOk = false;
 try {
     // a. Discovery par les agents (traditionnel)
     const agentsRes = await fetchOpenClawAgentsList(userEmail);
     if (agentsRes.ok) {
+        agentRegistryOk = true;
         agentsRes.agents.forEach(a => availableModels.push(`openclaw/${a.id}`));
     }
     
@@ -38,6 +51,7 @@ try {
     const { fetchOpenClawModelCatalog } = await import('../lib/openclaw-gateway');
     const catalogRes = await fetchOpenClawModelCatalog(userEmail);
     if (catalogRes.ok) {
+        catalogOk = true;
         catalogRes.models.forEach(m => {
             const id = `openclaw/${m.id}`;
             if (!availableModels.includes(id)) availableModels.push(id);
@@ -49,6 +63,74 @@ try {
     }
 } catch (e) {
     console.error('[Health] Failed to sync models:', e);
+}
+
+// 3-bis. Outils gateway (diagnostic complet, read-only)
+const toolsProbePayloads = [
+  { key: 'sessions_list', body: { tool: 'sessions_list', action: 'json', args: { limit: 1, messageLimit: 0 } } },
+  { key: 'agents_list', body: { tool: 'agents_list', action: 'json', args: {} } },
+  { key: 'models_list', body: { tool: 'models_list', action: 'json', args: {} } },
+] as const;
+
+const toolChecks = await Promise.all(
+  toolsProbePayloads.map(async (probe) => {
+    const res = await fetchOpenClawJson(userEmail, '/tools/invoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(probe.body),
+    });
+    const dataObj = (res.data && typeof res.data === 'object') ? (res.data as Record<string, unknown>) : {};
+    const errMsg =
+      (dataObj.error && typeof dataObj.error === 'object'
+        ? String((dataObj.error as Record<string, unknown>).message ?? '')
+        : typeof dataObj.error === 'string'
+          ? dataObj.error
+          : '') || res.error || '';
+    const unavailable = /tool not available/i.test(errMsg);
+    return {
+      tool: probe.key,
+      ok: res.ok && !unavailable,
+      status: res.status,
+      message: unavailable ? errMsg : (res.ok ? 'OK' : (errMsg || `HTTP ${res.status}`)),
+    };
+  }),
+);
+
+const v1ModelsCheck = await fetchOpenClawJson(userEmail, '/v1/models');
+const healthCheck = await fetchOpenClawJson(userEmail, '/health');
+const resolvedSessionAttempt = gatewayAttempts.find((a) => a.ok && a.parsedCount > 0) ?? null;
+const noisySessionAttempts = gatewayAttempts.filter(
+  (a) => !resolvedSessionAttempt || a.via !== resolvedSessionAttempt.via,
+);
+
+const openclawBlockers: string[] = [];
+const openclawWarnings: string[] = [];
+if (!gatewayRes.ok) {
+  openclawBlockers.push(`Gateway sessions indisponible: ${gatewayError || 'erreur inconnue'}`);
+}
+if (sessions.length === 0) {
+  openclawBlockers.push('Aucune session active détectée (Discussion sera vide).');
+}
+for (const tc of toolChecks) {
+  if (!tc.ok) {
+    if (tc.tool === 'models_list') {
+      openclawWarnings.push(`Tool ${tc.tool} indisponible: ${tc.message} (non bloquant si modèles détectés via /v1/models ou fallback).`);
+    } else {
+      openclawBlockers.push(`Tool ${tc.tool} indisponible: ${tc.message}`);
+    }
+  }
+}
+if (!v1ModelsCheck.ok && availableModels.length === 0) {
+  openclawBlockers.push(`Catalogue modèles indisponible: ${v1ModelsCheck.error || `HTTP ${v1ModelsCheck.status}`}`);
+}
+if (!agentRegistryOk) {
+  openclawBlockers.push('agents_list non fonctionnel: Forge ne peut pas confirmer le registre d’agents OpenClaw.');
+}
+if (!catalogOk && availableModels.length === 0) {
+  openclawBlockers.push('Aucun modèle détecté via OpenClaw/Ollama.');
+}
+if (v1ModelsCheck.ok && availableModels.length > 0) {
+  openclawWarnings.push('/v1/models répond 200 mais format/liste non exploitable par Forge ; fallback catalogue actif.');
 }
 
 // 4. Budget Status & Auto-Seeding (Robust approach)
@@ -156,6 +238,97 @@ const recentHeartbeats = (recentPulse.length > 0)
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- OpenClaw Deep Diagnostics -->
+            <div class="bg-white border border-zinc-100 rounded-[2rem] p-8 shadow-sm h-full flex flex-col">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-bold text-zinc-900 px-2 border-l-4 border-emerald-500">Diagnostic OpenClaw complet</h2>
+                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">gateway + tools + sessions</span>
+                </div>
+
+                <div class="space-y-4 text-xs">
+                    <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-1">
+                        <p><strong>URL gateway :</strong> <span class="font-mono">{gatewayUrl}</span></p>
+                        <p><strong>Source URL :</strong> {ocDebug.urlSource}</p>
+                        <p><strong>Token configuré :</strong> {ocDebug.tokenConfigured ? 'oui' : 'non'} ({ocDebug.tokenSource})</p>
+                        <p><strong>/health :</strong> {healthCheck.ok ? 'OK' : `KO (${healthCheck.status || 0})`}</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-zinc-200 bg-white p-4">
+                        <p class="font-bold mb-2">Chemins API testés (sessions)</p>
+                        {resolvedSessionAttempt ? (
+                          <div class="space-y-2">
+                            <p class="text-[11px] text-emerald-700 font-mono">
+                              Endpoint retenu : {resolvedSessionAttempt.via} — HTTP {resolvedSessionAttempt.status} — ok ({resolvedSessionAttempt.parsedCount})
+                            </p>
+                            {noisySessionAttempts.length > 0 && (
+                              <details class="text-[11px]">
+                                <summary class="cursor-pointer text-zinc-500">
+                                  Détails techniques ({noisySessionAttempts.length} autres tentatives)
+                                </summary>
+                                <ul class="mt-2 space-y-1 font-mono">
+                                  {noisySessionAttempts.map((a) => (
+                                    <li class={a.ok ? 'text-emerald-700' : 'text-zinc-500'}>
+                                      {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        ) : (
+                          <ul class="space-y-1 font-mono text-[11px]">
+                            {gatewayAttempts.map((a) => (
+                              <li class={a.ok ? 'text-emerald-700' : 'text-rose-700'}>
+                                {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
+                              </li>
+                            ))}
+                            {gatewayAttempts.length === 0 && <li class="text-zinc-400">Aucun essai enregistré.</li>}
+                          </ul>
+                        )}
+                    </div>
+
+                    <div class="rounded-2xl border border-zinc-200 bg-white p-4">
+                        <p class="font-bold mb-2">Tools gateway</p>
+                        <ul class="space-y-1 font-mono text-[11px]">
+                            {toolChecks.map((tc) => (
+                                <li class={tc.ok ? 'text-emerald-700' : 'text-rose-700'}>
+                                    {tc.tool} — HTTP {tc.status} — {tc.ok ? 'OK' : tc.message}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    <div class="rounded-2xl border border-zinc-200 bg-white p-4">
+                        <p class="font-bold mb-2">Synthèse exécution</p>
+                        <ul class="space-y-1">
+                            <li>Sessions détectées : <strong>{sessions.length}</strong></li>
+                            <li>Agents Forge activés : <strong>{forgeIds.length}</strong></li>
+                            <li>Modèles détectés : <strong>{availableModels.length}</strong></li>
+                            <li>/v1/models : <strong>{v1ModelsCheck.ok ? (availableModels.length > 0 ? 'Avertissement (200 + fallback actif)' : 'OK') : `KO (${v1ModelsCheck.status || 0})`}</strong></li>
+                        </ul>
+                    </div>
+
+                    <div class={`rounded-2xl border p-4 ${openclawBlockers.length ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                        <p class="font-bold mb-2">{openclawBlockers.length ? 'Blocages détectés' : 'Aucun blocage OpenClaw détecté'}</p>
+                        {openclawBlockers.length > 0 ? (
+                          <ul class="list-disc pl-5 space-y-1 text-[11px]">
+                            {openclawBlockers.map((b) => <li>{b}</li>)}
+                          </ul>
+                        ) : (
+                          <p class="text-[11px]">Le pipeline OpenClaw semble cohérent côté Forge.</p>
+                        )}
+                    </div>
+                    {openclawWarnings.length > 0 && (
+                      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                        <p class="font-bold mb-2">Avertissements (non bloquants)</p>
+                        <ul class="list-disc pl-5 space-y-1 text-[11px]">
+                          {openclawWarnings.map((w) => <li>{w}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                </div>
+            </div>
+
             <!-- Activity Log -->
             <div class="bg-white border border-zinc-100 rounded-[2rem] p-8 shadow-sm h-full flex flex-col">
                 <div class="flex items-center justify-between mb-8">

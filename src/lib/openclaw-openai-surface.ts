@@ -354,7 +354,10 @@ export async function fetchOllamaTagNames(): Promise<{
 }> {
   const raw = await getOllamaOriginResolved();
   if (!raw) return { configured: false, names: [] };
-  const base = raw.replace(/\/$/, '');
+  let base = raw.replace(/\/$/, '');
+  // Beaucoup d'instances exposent une URL OpenAI (`.../v1`) dans les paramètres.
+  // Pour la surface Ollama native, on doit appeler /api/tags à la racine.
+  base = base.replace(/\/v1$/i, '').replace(/\/api$/i, '');
   const url = `${base}/api/tags`;
   try {
     const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
@@ -376,10 +379,26 @@ export async function fetchOllamaTagNames(): Promise<{
     const names = models.map((m) => String(m.name || '').trim()).filter(Boolean);
     return { configured: true, names };
   } catch (e: unknown) {
-    return {
-      configured: true,
-      names: [],
-      error: e instanceof Error ? e.message : 'Ollama injoignable',
-    };
+    // Fallback utile si l'URL paramétrée expose uniquement l'API OpenAI-compatible.
+    try {
+      const v1 = await fetch(`${base}/v1/models`, { method: 'GET', headers: { Accept: 'application/json' } });
+      const txt = await v1.text();
+      let payload: unknown = null;
+      try {
+        payload = txt ? JSON.parse(txt) : null;
+      } catch {
+        payload = null;
+      }
+      if (v1.ok) {
+        const data = (payload as { data?: Array<{ id?: string; name?: string }> } | null)?.data ?? [];
+        const names = data
+          .map((m) => String(m.name || m.id || '').trim())
+          .filter(Boolean);
+        if (names.length > 0) return { configured: true, names };
+      }
+    } catch {
+      // ignore fallback error, on retourne l'erreur principale
+    }
+    return { configured: true, names: [], error: e instanceof Error ? e.message : 'Ollama injoignable' };
   }
 }
