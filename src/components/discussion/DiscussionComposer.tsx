@@ -135,6 +135,7 @@ export default function DiscussionComposer() {
   const pollAssistantReply = async (sessionKey: string, afterMs: number) => {
     setPollingReply(true);
     try {
+      let lastReason = '';
       for (let i = 0; i < POLL_ATTEMPTS; i += 1) {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         const res = await fetch('/api/discussion-poll', {
@@ -143,6 +144,7 @@ export default function DiscussionComposer() {
           body: JSON.stringify({ sessionKey, afterMs }),
         });
         const data = await res.json().catch(() => ({}));
+        lastReason = typeof data.reason === 'string' ? data.reason : lastReason;
         const reply = typeof data.reply === 'string' ? data.reply.trim() : '';
         if (reply) {
           setChat((c) => {
@@ -169,12 +171,20 @@ export default function DiscussionComposer() {
           return;
         }
       }
+      const reasonLabel =
+        lastReason === 'session_non_trouvee'
+          ? "session non trouvée"
+          : lastReason === 'pas_de_reponse_assistant'
+            ? 'pas encore de message assistant'
+            : lastReason === 'session_sans_messages'
+              ? 'session sans messages'
+              : lastReason || 'en attente prolongée';
       setChat((c) =>
         c.map((m) =>
           m.isAck
             ? {
                 ...m,
-                text: "Message transmis. L'agent est peut-être encore en cours (attente prolongée).",
+                text: `Message transmis. Réponse toujours en attente (${reasonLabel}).`,
               }
             : m,
         ),

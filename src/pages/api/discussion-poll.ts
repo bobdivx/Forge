@@ -23,6 +23,60 @@ function sessionMatches(raw: Record<string, unknown>, sessionKey: string): boole
   return candidates.some((v) => v && (v === want || v.includes(want)));
 }
 
+function parseSessionUpdatedMs(raw: Record<string, unknown>): number {
+  const n =
+    (typeof raw.updatedAt === 'number' ? raw.updatedAt : NaN) ||
+    (typeof raw.updated_at === 'number' ? raw.updated_at : NaN) ||
+    (typeof raw.timestamp === 'number' ? raw.timestamp : NaN);
+  if (Number.isFinite(n)) return Number(n);
+  const s =
+    (typeof raw.updatedAt === 'string' ? raw.updatedAt : '') ||
+    (typeof raw.updated_at === 'string' ? raw.updated_at : '') ||
+    (typeof raw.timestamp === 'string' ? raw.timestamp : '');
+  if (!s) return 0;
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function sessionScore(raw: Record<string, unknown>, sessionKey: string): number {
+  const want = toUpper(sessionKey);
+  const key = toUpper(raw.key ?? raw.sessionKey ?? raw.session_key ?? '');
+  const display = toUpper(raw.displayName ?? raw.display_name ?? raw.label ?? raw.name ?? '');
+  const agent = toUpper(raw.agentId ?? raw.agent_id ?? '');
+
+  let score = 0;
+  if (key === want) score += 100;
+  if (display === want || agent === want) score += 90;
+  if (key.includes(want) || want.includes(key)) score += 70;
+  if (display.includes(want) || agent.includes(want)) score += 60;
+  // Les sessions webchat sont prioritaires pour la discussion UI.
+  if (key.startsWith('WEBCHAT:')) score += 25;
+  // Une session contenant des messages est en général la bonne cible.
+  if (Array.isArray(raw.messages) && raw.messages.length > 0) score += 15;
+  return score;
+}
+
+function resolveBestSession(
+  sessions: Record<string, unknown>[],
+  sessionKey: string,
+): Record<string, unknown> | null {
+  const candidates = sessions.filter((s) => sessionMatches(s, sessionKey));
+  if (candidates.length === 0) return null;
+  let best: Record<string, unknown> | null = null;
+  let bestScore = -1;
+  let bestUpdated = -1;
+  for (const s of candidates) {
+    const sc = sessionScore(s, sessionKey);
+    const ms = parseSessionUpdatedMs(s);
+    if (sc > bestScore || (sc === bestScore && ms > bestUpdated)) {
+      best = s;
+      bestScore = sc;
+      bestUpdated = ms;
+    }
+  }
+  return best;
+}
+
 function parseMessageTimestampMs(o: Record<string, unknown>): number {
   const n =
     (typeof o.createdAt === 'number' ? o.createdAt : NaN) ||
@@ -105,7 +159,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const sessions = normalizeOpenClawSessions(payload.data) as Record<string, unknown>[];
-  const raw = sessions.find((s) => sessionMatches(s, sessionKey));
+  const raw = resolveBestSession(sessions, sessionKey);
   if (!raw) {
     return new Response(JSON.stringify({ ok: true, pending: true, reason: 'session_non_trouvee' }), {
       status: 200,
@@ -115,10 +169,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const msg = pickLatestAssistantMessage(raw, afterMs);
   if (!msg) {
-    return new Response(JSON.stringify({ ok: true, pending: true, reason: 'pas_de_reponse_assistant' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        pending: true,
+        reason: 'pas_de_reponse_assistant',
+        selectedSessionKey: String(raw.key ?? raw.sessionKey ?? raw.session_key ?? ''),
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
 
   return new Response(
@@ -127,6 +189,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       pending: false,
       reply: msg.text,
       at: msg.at,
+      selectedSessionKey: String(raw.key ?? raw.sessionKey ?? raw.session_key ?? ''),
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   );
