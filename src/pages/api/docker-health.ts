@@ -3,7 +3,9 @@ import { execSync } from 'child_process';
 
 export const GET: APIRoute = async () => {
   try {
-    const output = execSync('docker ps -a --format "{{json .}}"').toString().trim();
+    const format = '{"ID":"{{.ID}}","Names":"{{.Names}}","Image":"{{.Image}}","Status":"{{.Status}}","State":"{{.State}}","Ports":"{{.Ports}}"}';
+    const output = execSync(`docker ps -a --format '${format}'`).toString().trim();
+    
     if (!output) {
       return new Response(JSON.stringify({ containers: [] }), {
         status: 200,
