@@ -11,6 +11,38 @@ import {
 const MAX_MESSAGE = 120_000;
 const execFileAsync = promisify(execFile);
 
+function looksLikeHtmlPayload(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  const s = v.trim().toLowerCase();
+  return s.startsWith('<!doctype html') || s.startsWith('<html');
+}
+
+function sanitizeErr(input: unknown, fallback: string): string {
+  if (typeof input !== 'string') return fallback;
+  const s = input.trim();
+  if (!s) return fallback;
+  if (looksLikeHtmlPayload(s)) return fallback;
+  if (/spawn\s+docker\s+enoent/i.test(s)) {
+    return 'Docker CLI indisponible sur le serveur Forge (fallback local non utilisable).';
+  }
+  if (/spawn\s+openclaw\s+enoent/i.test(s)) {
+    return 'CLI openclaw indisponible sur le serveur Forge (fallback local non utilisable).';
+  }
+  return s.slice(0, 600);
+}
+
+function shouldRunFallbackChain(error: unknown, httpStatus?: number): boolean {
+  const s = String(error || '').toLowerCase();
+  if (httpStatus === 404) return true;
+  if (httpStatus != null && httpStatus >= 500) return true;
+  return (
+    s.includes('sessions_send') ||
+    s.includes('tool not available') ||
+    s.includes('bad gateway') ||
+    s.includes('gateway http 5')
+  );
+}
+
 async function invokeDirectiveViaCli(agentId: string, message: string): Promise<{
   ok: boolean;
   via?: string;
@@ -118,7 +150,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   // Fallback robuste : si sessions_send est bloqué par la gateway,
   // essayer agents_invoke avec l'identifiant agent.
-  if (result.httpStatus === 404 || /sessions_send/i.test(String(result.error || ''))) {
+  if (shouldRunFallbackChain(result.error, result.httpStatus)) {
     const fallback = await invokeOpenClawAgentTask({
       agentId: sessionKey,
       message,
@@ -186,7 +218,11 @@ export const POST: APIRoute = async ({ request }) => {
 
     return new Response(
       JSON.stringify({
-        error: fallback3.error || fallback2.error || fallback.error || result.error,
+        error: sanitizeErr(
+          // Priorité aux erreurs gateway (racine), puis seulement aux fallbacks CLI locaux.
+          fallback2.error || fallback.error || result.error || fallback3.error,
+          'Gateway OpenClaw indisponible (502) — vérifiez URL gateway, reverse proxy et token.',
+        ),
         detail: {
           sessionsSend: result.detail,
           agentsInvoke: fallback.detail,
@@ -202,9 +238,18 @@ export const POST: APIRoute = async ({ request }) => {
 
   {
     const status = 502;
-    return new Response(JSON.stringify({ error: result.error, detail: result.detail }), {
+    return new Response(
+      JSON.stringify({
+        error: sanitizeErr(
+          result.error,
+          'Gateway OpenClaw indisponible (502) — vérifiez URL gateway, reverse proxy et token.',
+        ),
+        detail: result.detail,
+      }),
+      {
       status,
       headers: { 'Content-Type': 'application/json' },
-    });
+      },
+    );
   }
 };
