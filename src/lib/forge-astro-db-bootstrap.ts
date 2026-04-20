@@ -15,6 +15,8 @@ let bootstrapGate: Promise<void> | undefined;
 function resolveLocalDbFileHref(): string {
   const cwd = process.cwd();
   const envDb = process.env.ASTRO_DATABASE_FILE?.trim();
+  // Aligner le bootstrap runtime avec scripts/run-astro.mjs et Dockerfile/forge.yml :
+  // la base locale canonique est `.astro/content.db`.
   const defaultHref = pathToFileURL(join(cwd, '.astro', 'content.db')).href;
   return normalizeDatabaseUrl(envDb || '', defaultHref);
 }

@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       let error = 'Email ou mot de passe incorrect.';
       if (!anyAccount) {
         error =
-          'Aucun compte en base (table ForgeUser / fichier .astro/db.sqlite). Utilisez l’onglet « Créer un compte » ou restaurez une sauvegarde de la base.';
+          'Aucun compte en base (table ForgeUser / fichier .astro/content.db). Utilisez l’onglet « Créer un compte » ou restaurez une sauvegarde de la base.';
       } else if (!existing) {
         error = 'Aucun compte pour cet e-mail — vérifiez l’adresse ou créez un compte.';
       }
