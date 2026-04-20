@@ -98,6 +98,10 @@ const toolChecks = await Promise.all(
 
 const v1ModelsCheck = await fetchOpenClawJson(userEmail, '/v1/models');
 const healthCheck = await fetchOpenClawJson(userEmail, '/health');
+const resolvedSessionAttempt = gatewayAttempts.find((a) => a.ok && a.parsedCount > 0) ?? null;
+const noisySessionAttempts = gatewayAttempts.filter(
+  (a) => !resolvedSessionAttempt || a.via !== resolvedSessionAttempt.via,
+);
 
 const openclawBlockers: string[] = [];
 const openclawWarnings: string[] = [];
@@ -251,14 +255,36 @@ const recentHeartbeats = (recentPulse.length > 0)
 
                     <div class="rounded-2xl border border-zinc-200 bg-white p-4">
                         <p class="font-bold mb-2">Chemins API testés (sessions)</p>
-                        <ul class="space-y-1 font-mono text-[11px]">
+                        {resolvedSessionAttempt ? (
+                          <div class="space-y-2">
+                            <p class="text-[11px] text-emerald-700 font-mono">
+                              Endpoint retenu : {resolvedSessionAttempt.via} — HTTP {resolvedSessionAttempt.status} — ok ({resolvedSessionAttempt.parsedCount})
+                            </p>
+                            {noisySessionAttempts.length > 0 && (
+                              <details class="text-[11px]">
+                                <summary class="cursor-pointer text-zinc-500">
+                                  Détails techniques ({noisySessionAttempts.length} autres tentatives)
+                                </summary>
+                                <ul class="mt-2 space-y-1 font-mono">
+                                  {noisySessionAttempts.map((a) => (
+                                    <li class={a.ok ? 'text-emerald-700' : 'text-zinc-500'}>
+                                      {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        ) : (
+                          <ul class="space-y-1 font-mono text-[11px]">
                             {gatewayAttempts.map((a) => (
-                                <li class={a.ok ? 'text-emerald-700' : 'text-rose-700'}>
-                                    {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
-                                </li>
+                              <li class={a.ok ? 'text-emerald-700' : 'text-rose-700'}>
+                                {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
+                              </li>
                             ))}
                             {gatewayAttempts.length === 0 && <li class="text-zinc-400">Aucun essai enregistré.</li>}
-                        </ul>
+                          </ul>
+                        )}
                     </div>
 
                     <div class="rounded-2xl border border-zinc-200 bg-white p-4">
