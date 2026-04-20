@@ -1,6 +1,13 @@
 # Exemple : OpenClaw monte le dépôt Forge et sait joindre l’API HTTP du dashboard (pas la SQLite directement).
 #
-# 1. Volume workspace : `/forge` → prompts et `scripts/forge-hook.sh`, `scripts/forge_env.sh`.
+# **Répertoire des applications (Paramètres Forge → `forgeReposRoot`) :**
+# Ce chemin doit être **identique à l’intérieur du conteneur OpenClaw** à celui que Forge utilise sur l’hôte,
+# sinon le dashboard liste des projets que les agents ne peuvent pas ouvrir. Pattern simple :
+#   volumes:
+#     - /media/GitHub:/media/GitHub:rw     # même chemin hôte → conteneur (recommandé)
+# Si vous montez les apps ailleurs (ex. `/forge/apps`), mettez **la même valeur** dans Paramètres Forge.
+#
+# 1. Volume workspace Forge : `/forge` → prompts et `scripts/forge-hook.sh`, `scripts/forge_env.sh`.
 # 2. Dans openclaw.json : `agents.defaults.workspace = "/forge"` (redémarrer la gateway).
 # 3. Variable **`FORGE_HOOK_BASE_URL`** : URL joignable depuis CE conteneur vers le port Forge (4321).
 #    - Forge sur l’hôte : ajouter `extra_hosts: ["forge-host:host-gateway"]` puis

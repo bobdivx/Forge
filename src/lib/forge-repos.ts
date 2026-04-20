@@ -8,7 +8,11 @@ export function getReposRoot(): string {
   return process.env.FORGE_REPOS_ROOT?.trim() || '/media/Github';
 }
 
-/** Préfère la valeur enregistrée en base (Paramètres), puis l’env, puis défaut. */
+/**
+ * Préfère la valeur enregistrée en base (Paramètres), puis l’env, puis défaut.
+ * Ce chemin est résolu **sur la machine qui exécute Forge**. Les agents OpenClaw doivent avoir le même
+ * répertoire visible (bind mount au même chemin absolu dans le conteneur que sur l’hôte, ou ajuster Paramètres).
+ */
 export async function getReposRootResolved(): Promise<string> {
   try {
     const fromDb = (await getConfig('forgeReposRoot')).trim();
