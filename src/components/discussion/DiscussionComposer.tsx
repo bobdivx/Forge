@@ -256,12 +256,16 @@ export default function DiscussionComposer() {
       const result = data.result as Record<string, unknown> | undefined;
       const reply = result && typeof result.reply === 'string' ? result.reply : '';
       const deliveryAck = typeof data.delivery === 'string' ? data.delivery : '';
+      const status = result && typeof result.status === 'string' ? result.status.toLowerCase() : '';
+      const via = typeof data.via === 'string' ? data.via : '';
       const assistantText =
         reply && reply.trim()
           ? reply.slice(0, 8000)
           : deliveryAck && deliveryAck.trim()
             ? deliveryAck.trim()
-            : 'Message envoyé. Réponse synchrone vide — vérifiez la session OpenClaw.';
+            : status === 'accepted' || status === 'queued' || status === 'running'
+              ? `Message transmis a l'agent${via ? ` (${via})` : ''}. Reponse en cours...`
+              : 'Message transmis a l’agent. Reponse non immediate.';
       setChat((c) => [
         ...c,
         {
