@@ -17,6 +17,7 @@ type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
   text: string;
   at: string;
+  remediation?: GatewayRemediation;
 };
 
 type GatewayRemediation = {
@@ -106,6 +107,16 @@ export default function DiscussionComposer() {
   const [error, setError] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  const copyToClipboard = async (text: string) => {
+    if (!text.trim()) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setError('Contenu copié dans le presse-papiers.');
+    } catch {
+      setError('Copie impossible automatiquement. Sélectionnez et copiez manuellement.');
+    }
+  };
 
   useEffect(() => {
     let cancel = false;
@@ -207,18 +218,29 @@ export default function DiscussionComposer() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const baseErr = typeof data.error === 'string' ? data.error : 'Échec envoi vers le gateway';
-        const remediationText = formatGatewayRemediation(data.remediation as GatewayRemediation | undefined);
-        const fullErr = remediationText ? `${baseErr}\n\n${remediationText}` : baseErr;
-        setError(fullErr);
-        setChat((c) => [
-          ...c,
-          {
-            id: `${Date.now()}-e`,
-            role: 'system',
-            text: fullErr,
-            at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
+        const remediation = data.remediation as GatewayRemediation | undefined;
+        setError(baseErr);
+        setChat((c) => {
+          const next: ChatMessage[] = [
+            ...c,
+            {
+              id: `${Date.now()}-e`,
+              role: 'system',
+              text: baseErr,
+              at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            },
+          ];
+          if (remediation) {
+            next.push({
+              id: `${Date.now()}-guide`,
+              role: 'system',
+              text: 'Je peux te guider pas à pas. Choisis une méthode ci-dessous : JSON, PowerShell, ou bash/python.',
+              remediation,
+              at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            });
+          }
+          return next;
+        });
         return;
       }
       const result = data.result as Record<string, unknown> | undefined;
@@ -375,6 +397,68 @@ export default function DiscussionComposer() {
                 }`}
               >
                 {m.text}
+                {m.remediation && (
+                  <div class="mt-3 space-y-2 text-xs">
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="btn btn-xs btn-outline"
+                        onClick={() => {
+                          setMessage('Je choisis la méthode JSON. Donne-moi les étapes minimales.');
+                          void copyToClipboard(m.remediation?.json || '');
+                        }}
+                      >
+                        Choisir JSON
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-xs btn-outline"
+                        onClick={() => {
+                          setMessage('Je choisis la méthode PowerShell. Guide-moi.');
+                          void copyToClipboard(m.remediation?.powershellScript || '');
+                        }}
+                      >
+                        Choisir PowerShell
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-xs btn-outline"
+                        onClick={() => {
+                          setMessage('Je choisis la méthode bash/python. Guide-moi.');
+                          void copyToClipboard(m.remediation?.bashScript || '');
+                        }}
+                      >
+                        Choisir bash/python
+                      </button>
+                    </div>
+
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Infos rapides</summary>
+                      <div class="mt-2 whitespace-pre-wrap">
+                        {formatGatewayRemediation({
+                          title: m.remediation.title,
+                          endpoint: m.remediation.endpoint,
+                          endpointMethod: m.remediation.endpointMethod,
+                          configPath: m.remediation.configPath,
+                          docs: m.remediation.docs,
+                        })}
+                      </div>
+                    </details>
+
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir JSON</summary>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.json || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir script PowerShell</summary>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.powershellScript || ''}</pre>
+                    </details>
+                    <details class="bg-white/70 rounded-md p-2">
+                      <summary class="cursor-pointer font-semibold">Voir script bash/python</summary>
+                      <pre class="mt-2 whitespace-pre-wrap">{m.remediation.bashScript || ''}</pre>
+                    </details>
+                  </div>
+                )}
               </div>
             </div>
           ))}
