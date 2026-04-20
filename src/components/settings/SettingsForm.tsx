@@ -3,6 +3,7 @@ import TabBar from '../ui/TabBar';
 import AccountTab from './AccountTab';
 import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
 import IntegrationTab from './IntegrationTab';
+import AgentModelsTab from './AgentModelsTab';
 import MaintenanceTab from './MaintenanceTab';
 
 type Config = {
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
   { id: 'integration', label: 'Intégration' },
   { id: 'api', label: 'Jetons API' },
+  { id: 'models', label: 'Modèles agents' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
 
@@ -288,6 +290,7 @@ export default function SettingsForm() {
             message={message}
           />
         )}
+        {activeTab === 'models' && <AgentModelsTab />}
         {activeTab === 'maintenance' && (
           <MaintenanceTab onSync={syncProjects} syncing={syncing} message={message} />
         )}
