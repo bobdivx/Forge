@@ -305,7 +305,19 @@ export default function SettingsForm() {
         {activeTab === 'models' && <AgentModelsTab />}
         {activeTab === 'schedule' && <WorkScheduleTab />}
         {activeTab === 'maintenance' && (
-          <MaintenanceTab onSync={syncProjects} syncing={syncing} message={message} />
+          <MaintenanceTab
+            onSync={syncProjects}
+            syncing={syncing}
+            message={message}
+            onOpenClawRepaired={async () => {
+              try {
+                const s = await fetch('/api/settings').then((r) => r.json());
+                mergeSettingsFromServer(s);
+              } catch {
+                /* ignore */
+              }
+            }}
+          />
         )}
       </div>
     </div>

@@ -2,7 +2,51 @@
  * Appels au gateway OpenClaw.
  * Priorité : variables d’environnement, puis table Config (Astro DB).
  */
-// // import { getConfig } from './config-db';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const GATEWAY_HTTP_TIMEOUT_MS = 1_500;
+
+export type OpenClawLocalDiskConfig = {
+  path: string;
+  gatewayPort?: number;
+  gatewayToken?: string;
+  trustedProxies: string[];
+};
+
+export async function readOpenClawLocalConfigFile(): Promise<OpenClawLocalDiskConfig | null> {
+  const { getConfig } = await import('./config-db');
+  const appDataDir = (await getConfig('dockerAppDataDir')).trim();
+  const probePaths = [
+    appDataDir ? path.join(appDataDir, 'openclaw', 'openclaw.json') : '',
+    'X:/AppData/openclaw/openclaw.json',
+    'C:/DATA/AppData/openclaw/openclaw.json',
+    '/DATA/AppData/openclaw/openclaw.json',
+  ].filter(Boolean);
+
+  for (const p of probePaths) {
+    if (!fs.existsSync(p)) continue;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(p, 'utf-8')) as Record<string, unknown>;
+      const gw = (parsed.gateway as Record<string, unknown>) || {};
+      const auth = (gw.auth as Record<string, unknown>) || {};
+      const port = Number(gw.port);
+      const trustedProxies = Array.isArray(gw.trustedProxies)
+        ? gw.trustedProxies.map((v) => String(v ?? '')).filter(Boolean)
+        : [];
+      return {
+        path: p,
+        gatewayPort: Number.isFinite(port) && port > 0 && port < 65536 ? port : undefined,
+        gatewayToken:
+          typeof auth.token === 'string' && auth.token.trim() ? auth.token.trim() : undefined,
+        trustedProxies,
+      };
+    } catch {
+      /* ignore and try next */
+    }
+  }
+  return null;
+}
 
 export async function getOpenClawGatewayBaseUrl(): Promise<string> {
   const env = process.env.OPENCLAW_GATEWAY_URL?.trim();
@@ -10,8 +54,101 @@ export async function getOpenClawGatewayBaseUrl(): Promise<string> {
   const { getConfig } = await import('./config-db');
   const fromDb = (await getConfig('openclawGatewayUrl')).trim();
   if (fromDb) return fromDb.replace(/\/$/, '');
-  /* Aligné sur les défauts Paramètres / seed (souvent 24190 en self-host). */
-  return 'http://127.0.0.1:24190';
+  const localCfg = await readOpenClawLocalConfigFile();
+  if (localCfg?.gatewayPort) return `http://127.0.0.1:${localCfg.gatewayPort}`;
+  /* Aligné sur la config OpenClaw locale (gateway.port = 18789). */
+  return 'http://127.0.0.1:18789';
+}
+
+function normalizeBaseUrl(raw: string): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s);
+    if (!/^https?:$/i.test(u.protocol)) return '';
+    return `${u.protocol}//${u.host}`.replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function extractIpv4Candidates(values: unknown[]): string[] {
+  const out: string[] = [];
+  for (const v of values) {
+    const s = String(v ?? '').trim();
+    if (!s) continue;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) out.push(s);
+    const cidr = s.match(/^(\d{1,3}(?:\.\d{1,3}){3})\/\d{1,2}$/);
+    if (cidr?.[1]) out.push(cidr[1]);
+  }
+  return [...new Set(out)];
+}
+
+async function discoverGatewayBaseUrlCandidates(): Promise<string[]> {
+  const out: string[] = [];
+  const push = (u: string) => {
+    const n = normalizeBaseUrl(u);
+    if (n && !out.includes(n)) out.push(n);
+  };
+
+  const { getConfig } = await import('./config-db');
+  const envUrl = process.env.OPENCLAW_GATEWAY_URL?.trim() || '';
+  const dbUrl = (await getConfig('openclawGatewayUrl')).trim();
+  const appDataDir = (await getConfig('dockerAppDataDir')).trim();
+
+  if (envUrl) push(envUrl);
+  if (dbUrl) {
+    push(dbUrl);
+    // Compat historique : plusieurs installs ont migré 24190 -> 18789.
+    try {
+      const u = new URL(dbUrl);
+      if (u.port === '24190') {
+        u.port = '18789';
+        push(u.toString());
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const localCfg = await readOpenClawLocalConfigFile();
+  if (localCfg) {
+    const p = localCfg.gatewayPort || 18789;
+    push(`http://127.0.0.1:${p}`);
+    push(`http://localhost:${p}`);
+    if (p !== 24190) {
+      push('http://127.0.0.1:24190');
+      push('http://localhost:24190');
+    }
+    if (p !== 18789) {
+      push('http://127.0.0.1:18789');
+      push('http://localhost:18789');
+    }
+    const hosts = extractIpv4Candidates(localCfg.trustedProxies);
+    for (const h of hosts) {
+      push(`http://${h}:${p}`);
+      push(`http://${h}:18789`);
+      push(`http://${h}:24190`);
+    }
+  } else if (appDataDir) {
+    // Garde-fou : dossier configuré mais fichier absent -> on tente quand même les ports usuels.
+    push('http://127.0.0.1:18789');
+    push('http://127.0.0.1:24190');
+  }
+
+  if (!out.length) {
+    push('http://127.0.0.1:18789');
+    push('http://127.0.0.1:24190');
+    push('http://localhost:18789');
+    push('http://localhost:24190');
+  }
+
+  return out;
+}
+
+export async function getOpenClawGatewayCandidateBases(): Promise<string[]> {
+  const candidates = await discoverGatewayBaseUrlCandidates();
+  return candidates.length ? candidates : ['http://127.0.0.1:18789'];
 }
 
 export async function getOpenClawToken(): Promise<string> {
@@ -20,6 +157,8 @@ export async function getOpenClawToken(): Promise<string> {
   const { getConfig } = await import('./config-db');
   const fromDb = (await getConfig('openclawToken')).trim();
   if (fromDb) return fromDb;
+  const localCfg = await readOpenClawLocalConfigFile();
+  if (localCfg?.gatewayToken) return localCfg.gatewayToken;
   /* Aligné sur le défaut CasaOS/OpenClaw sur ZimaOS */
   return 'casaos';
 }
@@ -212,6 +351,91 @@ export function getGatewayAuthHeaders(token: string): Record<string, string> {
   };
 }
 
+/**
+ * Sonde une paire URL + jeton (diagnostic / réparation) : GET /health puis POST /tools/invoke (sessions_list).
+ * Ne lit pas la table Config : sert à tester des combinaisons avant écriture.
+ */
+export async function probeOpenClawGatewayRepairPair(
+  gatewayBaseUrl: string,
+  token: string,
+): Promise<{
+  ok: boolean;
+  healthOk: boolean;
+  invokeOk: boolean;
+  sessionCount: number;
+  error?: string;
+}> {
+  const base = String(gatewayBaseUrl || '').trim().replace(/\/$/, '');
+  const tok = String(token || '').trim();
+  if (!base || !/^https?:\/\//i.test(base)) {
+    return {
+      ok: false,
+      healthOk: false,
+      invokeOk: false,
+      sessionCount: 0,
+      error: 'URL invalide (http ou https requis).',
+    };
+  }
+  const signal = () => AbortSignal.timeout(GATEWAY_HTTP_TIMEOUT_MS);
+  let healthOk = false;
+  try {
+    const healthRes = await fetch(`${base}/health`, {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...(tok ? getGatewayAuthHeaders(tok) : {}) },
+      signal: signal(),
+    });
+    healthOk = healthRes.ok;
+    if (!healthOk) {
+      return {
+        ok: false,
+        healthOk: false,
+        invokeOk: false,
+        sessionCount: 0,
+        error: `HTTP ${healthRes.status} sur /health`,
+      };
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Erreur réseau';
+    return { ok: false, healthOk: false, invokeOk: false, sessionCount: 0, error: msg };
+  }
+
+  const invokeBody = buildSessionsListInvokeBody({ limit: 12, messageLimit: 0 });
+  try {
+    const res = await fetch(`${base}/tools/invoke`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(tok ? getGatewayAuthHeaders(tok) : {}),
+      },
+      body: invokeBody,
+      signal: signal(),
+    });
+    const text = await res.text();
+    let data: unknown = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = { raw: text };
+    }
+    if (!res.ok) {
+      const d = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+      const nested = d.error && typeof d.error === 'object' ? (d.error as { message?: string }).message : '';
+      const err =
+        (typeof d.error === 'string' ? d.error : '') ||
+        (typeof nested === 'string' ? nested : '') ||
+        (typeof d.message === 'string' ? d.message : '') ||
+        `HTTP ${res.status}`;
+      return { ok: false, healthOk: true, invokeOk: false, sessionCount: 0, error: err };
+    }
+    const sessions = normalizeOpenClawSessions(data);
+    return { ok: true, healthOk: true, invokeOk: true, sessionCount: sessions.length };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Erreur réseau';
+    return { ok: false, healthOk: true, invokeOk: false, sessionCount: 0, error: msg };
+  }
+}
+
 const MAX_SESSIONS_SEND_MESSAGE = 120_000;
 
 export type InvokeSessionsSendResult = {
@@ -251,8 +475,7 @@ export async function invokeOpenClawSessionsSend(params: {
   if (!token) {
     return { ok: false, error: 'Token OpenClaw manquant (OPENCLAW_GATEWAY_TOKEN ou table Config).' };
   }
-  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
-  const url = `${base}/tools/invoke`;
+  const bases = await getOpenClawGatewayCandidateBases();
   const message = params.message.slice(0, MAX_SESSIONS_SEND_MESSAGE);
 
   let args: Record<string, unknown>;
@@ -273,70 +496,73 @@ export async function invokeOpenClawSessionsSend(params: {
     args = { sessionKey: params.sessionKey, message, timeoutSeconds: ts };
   }
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...getGatewayAuthHeaders(token),
-      },
-      body: JSON.stringify({
-        tool: 'sessions_send',
-        action: 'json',
-        args,
-        sessionKey: params.sessionKey,
-        dryRun: false,
-      }),
-    });
-
-    const text = await res.text();
-    let data: Record<string, unknown> = {};
+  let lastErr: InvokeSessionsSendResult = { ok: false, error: 'Gateway injoignable' };
+  for (const base of bases) {
+    const url = `${base.replace(/\/$/, '')}/tools/invoke`;
     try {
-      data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-    } catch {
-      data = { raw: text };
-    }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...getGatewayAuthHeaders(token),
+        },
+        body: JSON.stringify({
+          tool: 'sessions_send',
+          action: 'json',
+          args,
+          sessionKey: params.sessionKey,
+          dryRun: false,
+        }),
+      });
 
-    if (res.status === 404) {
-      return {
-        ok: false,
-        httpStatus: 404,
-        error:
-          'Outil sessions_send indisponible via HTTP (souvent bloqué par défaut). Dans la config OpenClaw gateway, ajoutez par exemple : gateway.tools.allow: ["sessions_send"] — voir https://openclaws.io/docs/gateway/tools-invoke-http-api',
-        detail: data,
-      };
-    }
+      const text = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch {
+        data = { raw: text };
+      }
 
-    if (!res.ok) {
-      const errMsg =
-        (data.error as { message?: string } | undefined)?.message ||
-        (typeof data.error === 'string' ? data.error : '') ||
-        (typeof data.message === 'string' ? data.message : '') ||
-        (typeof data.raw === 'string' ? String(data.raw).slice(0, 600) : '') ||
-        `Gateway HTTP ${res.status}`;
-      return { ok: false, httpStatus: res.status, error: errMsg, detail: data };
-    }
+      if (res.status === 404) {
+        lastErr = {
+          ok: false,
+          httpStatus: 404,
+          error:
+            'Outil sessions_send indisponible via HTTP (souvent bloqué par défaut). Dans la config OpenClaw gateway, ajoutez par exemple : gateway.tools.allow: ["sessions_send"] — voir https://openclaws.io/docs/gateway/tools-invoke-http-api',
+          detail: data,
+        };
+        continue;
+      }
 
-    if (data.ok === false) {
-      const errMsg =
-        (data.error as { message?: string } | undefined)?.message ||
-        (typeof data.error === 'string' ? data.error : '') ||
-        (typeof data.message === 'string' ? data.message : '') ||
-        'Gateway a refusé la directive';
-      return { ok: false, httpStatus: 400, error: errMsg, detail: data };
-    }
+      if (!res.ok) {
+        const errMsg =
+          (data.error as { message?: string } | undefined)?.message ||
+          (typeof data.error === 'string' ? data.error : '') ||
+          (typeof data.message === 'string' ? data.message : '') ||
+          (typeof data.raw === 'string' ? String(data.raw).slice(0, 600) : '') ||
+          `Gateway HTTP ${res.status}`;
+        lastErr = { ok: false, httpStatus: res.status, error: `${errMsg} (url=${base})`, detail: data };
+        continue;
+      }
 
-    return { ok: true, detail: data };
-  } catch (e: unknown) {
-    const baseUrl = await getOpenClawGatewayBaseUrl();
-    const hostOnly = baseUrl.replace(/^(https?:\/\/[^/?#]+).*/i, '$1');
-    const msg = e instanceof Error ? e.message : 'Erreur réseau';
-    return {
-      ok: false,
-      error: `${msg} — gateway configuré : ${hostOnly}. Si Forge tourne ailleurs que le gateway, définissez OPENCLAW_GATEWAY_URL.`,
-    };
+      if (data.ok === false) {
+        const errMsg =
+          (data.error as { message?: string } | undefined)?.message ||
+          (typeof data.error === 'string' ? data.error : '') ||
+          (typeof data.message === 'string' ? data.message : '') ||
+          'Gateway a refusé la directive';
+        lastErr = { ok: false, httpStatus: 400, error: `${errMsg} (url=${base})`, detail: data };
+        continue;
+      }
+
+      return { ok: true, detail: data };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur réseau';
+      lastErr = { ok: false, error: `${msg} (url=${base})` };
+    }
   }
+  return lastErr;
 }
 
 /**
@@ -351,30 +577,32 @@ export async function invokeOpenClawAgentTask(params: {
   if (!token) {
     return { ok: false, error: 'Token OpenClaw manquant (OPENCLAW_GATEWAY_TOKEN ou table Config).' };
   }
-  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
-  const url = `${base}/tools/invoke`;
+  const bases = await getOpenClawGatewayCandidateBases();
 
   const agentId = String(params.agentId || '').trim();
   if (!agentId) return { ok: false, error: 'agentId requis' };
   const message = String(params.message || '').slice(0, MAX_SESSIONS_SEND_MESSAGE);
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...getGatewayAuthHeaders(token),
-      },
-      body: JSON.stringify({
-        tool: 'agents_invoke',
-        action: 'json',
-        args: {
-          agentId,
-          input: message,
+  let lastErr: InvokeAgentTaskResult = { ok: false, error: 'Gateway injoignable' };
+  for (const base of bases) {
+    const url = `${base.replace(/\/$/, '')}/tools/invoke`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...getGatewayAuthHeaders(token),
         },
-      }),
-    });
+        body: JSON.stringify({
+          tool: 'agents_invoke',
+          action: 'json',
+          args: {
+            agentId,
+            input: message,
+          },
+        }),
+      });
 
     const text = await res.text();
     let data: Record<string, unknown> = {};
@@ -384,29 +612,33 @@ export async function invokeOpenClawAgentTask(params: {
       data = { raw: text };
     }
 
-    if (!res.ok) {
+      if (!res.ok) {
       const errMsg =
         (data.error as { message?: string } | undefined)?.message ||
         (typeof data.error === 'string' ? data.error : '') ||
         (typeof data.message === 'string' ? data.message : '') ||
         `Gateway HTTP ${res.status}`;
-      return { ok: false, httpStatus: res.status, error: errMsg, detail: data };
-    }
+        lastErr = { ok: false, httpStatus: res.status, error: `${errMsg} (url=${base})`, detail: data };
+        continue;
+      }
 
-    if (data.ok === false) {
+      if (data.ok === false) {
       const errMsg =
         (data.error as { message?: string } | undefined)?.message ||
         (typeof data.error === 'string' ? data.error : '') ||
         (typeof data.message === 'string' ? data.message : '') ||
         'agents_invoke refusé';
-      return { ok: false, httpStatus: 400, error: errMsg, detail: data };
-    }
+        lastErr = { ok: false, httpStatus: 400, error: `${errMsg} (url=${base})`, detail: data };
+        continue;
+      }
 
-    return { ok: true, detail: data };
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Erreur réseau';
-    return { ok: false, error: msg };
+      return { ok: true, detail: data };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur réseau';
+      lastErr = { ok: false, error: `${msg} (url=${base})` };
+    }
   }
+  return lastErr;
 }
 
 /**
@@ -421,16 +653,17 @@ export async function invokeOpenClawV1ChatFallback(params: {
   if (!token) {
     return { ok: false, error: 'Token OpenClaw manquant (OPENCLAW_GATEWAY_TOKEN ou table Config).' };
   }
-  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
-  const url = `${base}/v1/chat/completions`;
+  const bases = await getOpenClawGatewayCandidateBases();
   const input = String(params.message || '').slice(0, MAX_SESSIONS_SEND_MESSAGE);
   const agentId = String(params.agentId || '').trim();
   const modelTarget = /^openclaw\//i.test(agentId) ? agentId : `openclaw/${agentId}`;
 
   const callV1 = async (
+    baseUrl: string,
     model: string,
     extraHeaders?: Record<string, string>,
   ): Promise<InvokeV1ChatFallbackResult> => {
+    const url = `${baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -463,24 +696,25 @@ export async function invokeOpenClawV1ChatFallback(params: {
           (typeof data.error === 'string' ? data.error : '') ||
           (typeof data.message === 'string' ? data.message : '') ||
           `Gateway HTTP ${res.status}`;
-        return { ok: false, httpStatus: res.status, error: errMsg, detail: data };
+        return { ok: false, httpStatus: res.status, error: `${errMsg} (url=${baseUrl})`, detail: data };
       }
 
       return { ok: true, detail: data, via: model };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur réseau';
-      return { ok: false, error: msg };
+      return { ok: false, error: `${msg} (url=${baseUrl})` };
     }
   };
 
-  const first = await callV1(modelTarget);
-  if (first.ok) return first;
-
-  // Fallback complémentaire : route par défaut + header du backend model.
-  const second = await callV1('openclaw/default', { 'x-openclaw-model': agentId });
-  if (second.ok) return { ...second, via: `openclaw/default→${agentId}` };
-
-  return second.error ? second : first;
+  let lastErr: InvokeV1ChatFallbackResult = { ok: false, error: 'Gateway injoignable' };
+  for (const base of bases) {
+    const first = await callV1(base, modelTarget);
+    if (first.ok) return first;
+    const second = await callV1(base, 'openclaw/default', { 'x-openclaw-model': agentId });
+    if (second.ok) return { ...second, via: `openclaw/default→${agentId}` };
+    lastErr = second.error ? second : first;
+  }
+  return lastErr;
 }
 
 export async function fetchOpenClawJson(
@@ -488,76 +722,93 @@ export async function fetchOpenClawJson(
   path: string,
   init?: RequestInit
 ): Promise<{ ok: boolean; status: number; data: unknown; error?: string }> {
-  try {
-    const token = (await getOpenClawToken()).trim();
-    const base = await getOpenClawGatewayBaseUrl();
+  const token = (await getOpenClawToken()).trim();
+  const authHeaders = token ? getGatewayAuthHeaders(token) : {};
+  const candidates = await getOpenClawGatewayCandidateBases();
+  let last: { ok: boolean; status: number; data: unknown; error?: string } = {
+    ok: false,
+    status: 0,
+    data: null,
+    error: 'Gateway injoignable',
+  };
+
+  for (const base of candidates) {
     const url = `${base}${path.startsWith('/') ? path : `/${path}`}`;
-    const authHeaders = token ? getGatewayAuthHeaders(token) : {};
-    
-    const res = await fetch(url, {
-      ...init,
-      headers: {
-        'Accept': 'application/json',
-        ...authHeaders,
-        ...(init?.headers as Record<string, string>),
-      },
-    });
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: init?.signal ?? AbortSignal.timeout(GATEWAY_HTTP_TIMEOUT_MS),
+        headers: {
+          'Accept': 'application/json',
+          ...authHeaders,
+          ...(init?.headers as Record<string, string>),
+        },
+      });
 
-    const contentType = res.headers.get('content-type') || '';
-    const text = await res.text();
-    let data: unknown = null;
-    let isJson = false;
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+      let data: unknown = null;
+      let isJson = false;
 
-    if (contentType.includes('application/json')) {
-        try { 
-            data = JSON.parse(text); 
-            isJson = true;
-        } catch { 
-            data = { raw: text }; 
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(text);
+          isJson = true;
+        } catch {
+          data = { raw: text };
         }
-    } else {
+      } else {
         data = { raw: text };
-    }
+      }
 
-    if (!res.ok || !isJson) {
-      const d = data as Record<string, unknown>;
-      const rawErr = d?.error ?? d?.message ?? d?.detail ?? null;
-      let baseErr =
-        typeof rawErr === 'string'
-          ? rawErr
-          : rawErr != null && typeof rawErr === 'object'
-            ? ((rawErr as Record<string, unknown>).message != null
-                ? String((rawErr as Record<string, unknown>).message)
-                : JSON.stringify(rawErr))
-            : `HTTP ${res.status}`;
-      
-      // Si on a reçu quelque chose qui ressemble à du JSON malgré un mauvais Content-Type
-      if (!isJson && text.trim().startsWith('{')) {
+      if (!res.ok || !isJson) {
+        const d = data as Record<string, unknown>;
+        const rawErr = d?.error ?? d?.message ?? d?.detail ?? null;
+        let baseErr =
+          typeof rawErr === 'string'
+            ? rawErr
+            : rawErr != null && typeof rawErr === 'object'
+              ? ((rawErr as Record<string, unknown>).message != null
+                  ? String((rawErr as Record<string, unknown>).message)
+                  : JSON.stringify(rawErr))
+              : `HTTP ${res.status}`;
+
+        if (!isJson && text.trim().startsWith('{')) {
           try {
-              data = JSON.parse(text);
-              return { ok: true, status: res.status, data };
-          } catch {}
-      }
+            data = JSON.parse(text);
+            return { ok: true, status: res.status, data };
+          } catch {
+            /* ignore */
+          }
+        }
 
-      if (!isJson && res.ok) {
+        if (!isJson && res.ok) {
           baseErr = `Réponse non-JSON (${contentType || 'inconnu'}) sur port ${new URL(url).port || '80'}.`;
-      }
+        }
 
-      const hint401 =
-        res.status === 401 && !token
-          ? ' — renseignez le token dans Paramètres → Connexion OpenClaw.'
-          : '';
-          
-      return {
-        ok: false, status: res.status, data,
-        error: `${baseErr}${hint401}`,
-      };
+        const hint401 =
+          res.status === 401 && !token
+            ? ' — renseignez le token dans Paramètres → Connexion OpenClaw.'
+            : '';
+
+        last = {
+          ok: false,
+          status: res.status,
+          data,
+          error: `${baseErr}${hint401} (url=${base})`,
+        };
+        // 401/403 => URL probablement correcte, inutile d'essayer d'autres hôtes.
+        if (res.status === 401 || res.status === 403) return last;
+        continue;
+      }
+      return { ok: true, status: res.status, data };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Gateway injoignable';
+      last = { ok: false, status: 0, data: null, error: `${msg} (url=${base})` };
     }
-    return { ok: true, status: res.status, data };
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Gateway injoignable';
-    return { ok: false, status: 0, data: null, error: msg };
   }
+
+  return last;
 }
 
 /** Déplie les réponses `{ ok: true, result: … }` (ex. POST /tools/invoke). */
@@ -863,6 +1114,7 @@ export async function probeOpenClawGatewayDraft(
         ...(tok ? getGatewayAuthHeaders(tok) : {}),
       },
       body: invokeBody,
+      signal: AbortSignal.timeout(GATEWAY_HTTP_TIMEOUT_MS),
     });
     const text = await res.text();
     let data: unknown = null;

@@ -8,7 +8,6 @@ import DashProposals from '../components/dashboard/DashProposals';
 import DashProjectList from '../components/dashboard/DashProjectList';
 import DashAgentTeam from '../components/dashboard/DashAgentTeam';
 import DashAuditLog from '../components/dashboard/DashAuditLog';
-import DashForgeLogs from '../components/dashboard/DashForgeLogs';
 import DashSystemStatus from '../components/dashboard/DashSystemStatus';
 import { loadAstroDb } from '../lib/load-astro-db';
 
@@ -55,14 +54,9 @@ try {
     <DashStatsRow client:load serverProjectTotal={projectTotalCount} />
   </div>
 
-  <!-- ── Ligne 2 : Activité (6/12) | Logs (6/12) ── -->
-  <div class="grid grid-cols-12 gap-5 mb-5">
-    <div class="col-span-12 lg:col-span-6">
-      <DashActivity client:load />
-    </div>
-    <div class="col-span-12 lg:col-span-6">
-      <DashForgeLogs client:load />
-    </div>
+  <!-- ── Ligne 2 : Activité ── -->
+  <div class="mb-5">
+    <DashActivity client:load />
   </div>
 
   <!-- ── Ligne 3 : Projets (6/12) | Propositions (6/12) ── -->

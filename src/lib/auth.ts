@@ -164,9 +164,13 @@ export async function hasUser(): Promise<boolean> {
 
 export async function getUser(email: string) {
   const normalized = String(email || '').trim().toLowerCase();
-  const { db, ForgeUser } = await loadAstroDb();
-  const rows = await db.select().from(ForgeUser).where(eq(ForgeUser.email, normalized));
-  return rows[0] ?? null;
+  try {
+    const { db, ForgeUser } = await loadAstroDb();
+    const rows = await db.select().from(ForgeUser).where(eq(ForgeUser.email, normalized));
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function registerOrReplaceUser(email: string, password: string): Promise<void> {
@@ -224,11 +228,15 @@ export async function replaceAccountCredentials(
 }
 
 export async function verifyCredentials(email: string, password: string): Promise<boolean> {
-  await migrateLegacyAuthOnce();
-  const user = await getUser(email);
-  if (!user?.passwordHash || !user?.salt) return false;
-  const calculated = hashPassword(password, user.salt);
-  return calculated === user.passwordHash;
+  try {
+    await migrateLegacyAuthOnce();
+    const user = await getUser(email);
+    if (!user?.passwordHash || !user?.salt) return false;
+    const calculated = hashPassword(password, user.salt);
+    return calculated === user.passwordHash;
+  } catch {
+    return false;
+  }
 }
 
 export async function createSessionToken(email: string): Promise<string> {

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import {
   getOpenClawGatewayBaseUrl,
   getOpenClawToken,
+  fetchOpenClawJson,
   fetchOpenClawSessionsPayload,
   normalizeOpenClawSessions,
   getOpenClawClientDebugMeta,
@@ -23,11 +24,26 @@ function isLoopbackGateway(url: string): boolean {
 export const GET: APIRoute = async () => {
   let gatewayUrl = 'unconfigured';
   try {
-    const token = await getOpenClawToken();
     gatewayUrl = await getOpenClawGatewayBaseUrl();
     const configMeta = await getOpenClawClientDebugMeta();
+    const health = await fetchOpenClawJson(undefined, '/health');
+    if (!health.ok) {
+      return new Response(
+        JSON.stringify({
+          reachable: false,
+          gatewayUrl,
+          sessionCount: 0,
+          error: health.error || 'Gateway injoignable',
+          openclawDebug: { ...configMeta, attempts: [{ via: '/health', ok: false, status: health.status, parsedCount: 0 }] },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-    const result = await fetchOpenClawSessionsPayload(undefined);
+    const result = await fetchOpenClawSessionsPayload(undefined, {
+      invokeOnly: true,
+      sessionsListArgs: { limit: 40, messageLimit: 0 },
+    });
     if (!result.ok) {
         return new Response(
             JSON.stringify({

@@ -316,6 +316,28 @@ const HeartbeatRun = defineTable({
 });
 
 /**
+ * Fiches « membre d’équipe » pour les **sessions OpenClaw** (clé = sessionKey renvoyée par le gateway).
+ * Les champs sont optionnels : si vides, l’UI retombe sur l’inférence (nom brut, rôle, initiales).
+ */
+const OpenClawAgentProfile = defineTable({
+  columns: {
+    /** Clé de session OpenClaw (identifiant unique côté gateway, ex. CHEF_TECHNIQUE ou clé longue). */
+    sessionKey: column.text({ primaryKey: true }),
+    /** Nom affiché dans Forge (remplace le nom dérivé OpenClaw). */
+    displayName: column.text({ optional: true }),
+    /** Titre de rôle affiché (remplace l’inférence depuis le nom / modèle). */
+    roleTitle: column.text({ optional: true }),
+    /** Courte bio / note d’équipe (Markdown simple ou texte). */
+    bio: column.text({ optional: true }),
+    /** URL HTTPS d’avatar (optionnel). */
+    avatarUrl: column.text({ optional: true }),
+    /** Émoji d’avatar (optionnel, ex. 🤖) — utilisé si pas d’URL. */
+    avatarEmoji: column.text({ optional: true }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
  * Demandes d’approbation (Human-in-the-Loop) — inspirées de Paperclip.
  * Les agents peuvent soumettre une demande qui bloque une action critique.
  * Statuts : pending | approved | rejected
@@ -358,5 +380,6 @@ export default defineDb({
     AgentBudget,
     ActivityLog,
     HeartbeatRun,
+    OpenClawAgentProfile,
   },
 });

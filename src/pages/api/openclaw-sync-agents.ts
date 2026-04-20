@@ -10,14 +10,19 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getConfig } from '../../lib/config-db';
 import { loadAstroDb } from '../../lib/load-astro-db';
+import { fetchOpenClawAgentsList } from '../../lib/openclaw-gateway';
 
 async function resolveOpenClawJsonCandidates(): Promise<string[]> {
   const appDataDir = (await getConfig('dockerAppDataDir')).trim() || 'C:\\DATA\\AppData';
   const base = appDataDir.replace(/[\\/]+$/, '');
-  return [
+  const candidates = [
     join(base, 'openclaw', 'openclaw.json'),
     join(base, 'AppData', 'openclaw', 'openclaw.json'),
+    'X:/AppData/openclaw/openclaw.json',
+    'C:/DATA/AppData/openclaw/openclaw.json',
+    '/DATA/AppData/openclaw/openclaw.json',
   ];
+  return [...new Set(candidates)];
 }
 
 async function resolveOpenClawJsonPath(): Promise<{ path: string; candidates: string[] }> {
@@ -65,33 +70,53 @@ export const GET: APIRoute = async () => {
     const exists = existsSync(path);
     const forgeAgentIds = await getForgeAgentIds();
     const container = detectOpenClawContainer();
+    const agentsRes = await fetchOpenClawAgentsList(undefined);
+    const gatewayCurrentIds = agentsRes.agents.map((a) => a.id);
+    const currentIds = exists
+      ? (() => {
+          const config = readOpenClawJson(path);
+          const agents = (config.agents ?? {}) as Record<string, unknown>;
+          const currentList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
+          return currentList.map((a) => a.id).filter((id) => typeof id === 'string');
+        })()
+      : gatewayCurrentIds;
 
-    if (!exists) {
+    if (!exists && !agentsRes.ok) {
       return new Response(
         JSON.stringify({
           ok: false,
           error: `Config introuvable : ${path}`,
+          gatewayError:
+            agentsRes.error || `Lecture API impossible (HTTP ${agentsRes.status || 0} sur agents_list).`,
           triedPaths: candidates,
           forgeAgents: forgeAgentIds,
+          current: [],
           container,
         }),
         { status: 200 },
       );
     }
-
-    const config = readOpenClawJson(path);
-    const agents = (config.agents ?? {}) as Record<string, unknown>;
-    const currentList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
-    const currentIds = currentList.map((a) => a.id);
+    const forgeSet = new Set(forgeAgentIds);
+    const currentSet = new Set(currentIds);
 
     return new Response(JSON.stringify({
       ok: true,
-      path,
+      mode: exists ? 'file+api' : 'api-readonly',
+      path: exists ? path : null,
       container,
+      gateway: {
+        ok: agentsRes.ok,
+        status: agentsRes.status,
+        error: agentsRes.error,
+      },
       current: currentIds,
       forgeAgents: forgeAgentIds,
-      toAdd: forgeAgentIds.filter(id => !currentIds.includes(id)),
-      upToDate: forgeAgentIds.every(id => currentIds.includes(id)),
+      toAdd: forgeAgentIds.filter((id) => !currentSet.has(id)),
+      notInForge: currentIds.filter((id) => !forgeSet.has(id)),
+      upToDate: forgeAgentIds.every((id) => currentSet.has(id)),
+      warning: !exists
+        ? `Config locale introuvable (${path}) ; aperçu basé sur agents_list (API gateway).`
+        : undefined,
     }), { status: 200 });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
@@ -106,7 +131,13 @@ export const POST: APIRoute = async ({ request }) => {
     const now = new Date();
 
     if (!existsSync(path)) {
-      throw new Error(`Chemin de configuration openclaw.json inaccessible : ${path}. Chemins testés: ${candidates.join(', ')}`);
+      const agentsRes = await fetchOpenClawAgentsList(undefined);
+      const gatewayHint = agentsRes.ok
+        ? `API gateway joignable (${agentsRes.agents.length} agents détectés via agents_list), mais aucun outil d'écriture des agents n'est exposé: la synchronisation nécessite un accès au fichier openclaw.json.`
+        : `API gateway non exploitable pour la synchronisation (${agentsRes.error || `HTTP ${agentsRes.status || 0}`}).`;
+      throw new Error(
+        `Chemin de configuration openclaw.json inaccessible : ${path}. Chemins testés: ${candidates.join(', ')}. ${gatewayHint}`,
+      );
     }
 
     const config = readOpenClawJson(path);

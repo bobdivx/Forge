@@ -83,6 +83,7 @@ function PingBadge({ result, loading }: { result: PingResult | null; loading: bo
 
 type SyncPreview = {
   ok: boolean;
+  mode?: 'file+api' | 'api-readonly';
   path?: string;
   container?: string | null;
   current?: string[];
@@ -92,6 +93,7 @@ type SyncPreview = {
   notInForge?: string[];
   upToDate?: boolean;
   error?: string;
+  warning?: string;
 };
 
 export default function AgentModelMatrix() {
@@ -330,7 +332,7 @@ export default function AgentModelMatrix() {
           <div>
             <p class="text-xs font-semibold text-gray-800">Synchroniser les agents vers OpenClaw</p>
             <p class="text-[10px] text-gray-400 mt-0.5">
-              Écrit la liste des agents Forge dans <span class="font-mono">openclaw.json</span> et redémarre le conteneur.
+              Vérifie via API gateway (<span class="font-mono">agents_list</span>) puis, si nécessaire, met à jour <span class="font-mono">openclaw.json</span> et redémarre le conteneur.
             </p>
           </div>
           <button
@@ -351,10 +353,15 @@ export default function AgentModelMatrix() {
               <p class="text-xs text-red-600 font-mono">{syncPreview.error}</p>
             ) : (
               <>
+                {syncPreview.warning && (
+                  <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                    {syncPreview.warning}
+                  </p>
+                )}
                 <div class="flex flex-wrap gap-4 text-xs">
                   <div>
                     <span class="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Fichier</span>
-                    <code class="font-mono text-[10px] bg-gray-100 px-2 py-0.5 rounded">{syncPreview.path}</code>
+                    <code class="font-mono text-[10px] bg-gray-100 px-2 py-0.5 rounded">{syncPreview.path ?? 'non disponible (mode API)'}</code>
                   </div>
                   <div>
                     <span class="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Conteneur</span>

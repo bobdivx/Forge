@@ -4,11 +4,11 @@
  * `scripts/forge-recreate-local-db.mjs` (hors bundle Vite : chemins internes @astrojs/db OK).
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { sql } from 'drizzle-orm';
 import { normalizeDatabaseUrl } from '@astrojs/db/runtime';
-import { loadAstroDb } from './load-astro-db';
 
 let bootstrapGate: Promise<void> | undefined;
 
@@ -56,13 +56,23 @@ function syncTablesViaNodeScript(dbHref: string): void {
   }
 }
 
-async function forgeUserVisibleViaAstroDb(): Promise<boolean> {
+/**
+ * Vérifie la présence de la table ForgeUser via le client SQLite (même chemin que les scripts),
+ * sans passer par `import('astro:db')` (qui peut échouer temporairement au redémarrage SSR
+ * → « seed handler not loaded yet »). Sinon le bootstrap pensait la DB « cassée » et lançait
+ * `forge-recreate-local-db` (DROP de toutes les tables) puis vidait les comptes.
+ */
+async function directSqliteForgeUserProbe(dbHref: string): Promise<'ok' | 'missing' | 'unknown'> {
   try {
-    const { db, ForgeUser } = await loadAstroDb();
-    await db.select().from(ForgeUser).limit(1);
-    return true;
-  } catch {
-    return false;
+    const { createClient } = await import('@astrojs/db/db-client/libsql-node.js');
+    const db = createClient({ url: dbHref });
+    await db.run(sql`SELECT 1 FROM ForgeUser LIMIT 1`);
+    return 'ok';
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no such table/i.test(msg) && /ForgeUser/i.test(msg)) return 'missing';
+    console.warn('[forge] Probe SQLite ForgeUser (non bloquant):', e);
+    return 'unknown';
   }
 }
 
@@ -85,39 +95,32 @@ async function runBootstrap(): Promise<void> {
     console.warn('[forge] Échec synchronisation schéma Astro DB:', e);
   }
 
-  if (await forgeUserVisibleViaAstroDb()) return;
+  let probe = await directSqliteForgeUserProbe(dbHref);
+  if (probe === 'ok' || probe === 'unknown') return;
 
   try {
-    console.warn('[forge] Schéma Astro DB absent — recréation des tables vers', dbHref);
+    console.warn('[forge] Table ForgeUser absente (SQLite) — recréation du schéma vers', dbHref);
     recreateTablesViaNodeScript(dbHref);
   } catch (e) {
     console.warn('[forge] Échec recréation schéma (1ʳᵉ tentative):', e);
   }
 
-  if (await forgeUserVisibleViaAstroDb()) return;
+  probe = await directSqliteForgeUserProbe(dbHref);
+  if (probe === 'ok' || probe === 'unknown') return;
 
   try {
-    if (existsSync(filePath)) unlinkSync(filePath);
+    console.warn('[forge] ForgeUser toujours absent après recréation — nouvelle sync IF NOT EXISTS.');
+    syncTablesViaNodeScript(dbHref);
   } catch (e) {
-    console.warn('[forge] Impossible de supprimer le SQLite:', filePath, e);
-  }
-  try {
-    mkdirSync(dirname(filePath), { recursive: true });
-  } catch {
-    /* ignore */
+    console.error('[forge] Échec sync après recréation:', e);
   }
 
-  try {
-    console.warn('[forge] Nouvelle recréation des tables après réinitialisation du fichier.');
-    recreateTablesViaNodeScript(dbHref);
-  } catch (e) {
-    console.error('[forge] Échec recréation schéma (2ᵉ tentative):', e);
-  }
-
-  if (!(await forgeUserVisibleViaAstroDb())) {
+  probe = await directSqliteForgeUserProbe(dbHref);
+  if (probe !== 'ok') {
     console.error(
-      '[forge] ForgeUser toujours absent après recréation. Vérifiez ASTRO_DATABASE_FILE (build + run) ' +
-        'et que `db/config.ts` + `scripts/forge-recreate-local-db.mjs` sont présents dans l’image.',
+      '[forge] ForgeUser toujours illisible après recréation/sync. Vérifiez ASTRO_DATABASE_FILE (build + run), ' +
+        'les permissions du volume `.astro`, et que `db/config.ts` + `scripts/forge-recreate-local-db.mjs` sont présents. ' +
+        'Le fichier SQLite n’est plus supprimé automatiquement pour éviter la perte de comptes.',
     );
   }
 }

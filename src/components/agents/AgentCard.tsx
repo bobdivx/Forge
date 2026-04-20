@@ -1,3 +1,6 @@
+import TeamAvatar from './TeamAvatar';
+import type { AgentTeamProfile } from '../../lib/agent-profile';
+
 type TaskStats = {
   total: number;
   completed: number;
@@ -22,53 +25,14 @@ type Agent = {
 type Props = {
   agent: Agent;
   taskStats?: TaskStats;
+  teamProfile: AgentTeamProfile;
 };
 
-const AVATAR_COLORS = [
-  'bg-blue-100 text-blue-600',
-  'bg-violet-100 text-violet-600',
-  'bg-green-100 text-green-600',
-  'bg-yellow-100 text-yellow-600',
-  'bg-red-100 text-red-500',
-  'bg-cyan-100 text-cyan-600',
-  'bg-indigo-100 text-indigo-600',
-] as const;
+export { formatAgentName, getAgentRole } from '../../lib/agent-profile';
 
-function getAvatarColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-export function formatAgentName(name: string): string {
-  if (name.includes('subagent:')) {
-    const parts = name.split(':');
-    return 'Sub-Agent (' + (parts.pop() || '').slice(0, 8) + ')';
-  }
-  return name
-    .replace('telegram:g-agent-', '').replace('agent:', '').replace(':main', '').replace(/-/g, ' ')
-    .split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
-}
-
-export function getAgentRole(name: string): string {
-  const n = name.toLowerCase();
-  if (n.includes('architecte') || n.includes('architect')) return 'Architecte Logiciel';
-  if (n.includes('dev') && n.includes('front')) return 'Dev Frontend';
-  if (n.includes('dev') && n.includes('back')) return 'Dev Backend';
-  if (n.includes('dev')) return 'Développeur';
-  if (n.includes('test') || n.includes('qa')) return 'Testeur QA';
-  if (n.includes('infra')) return 'Infra Tech';
-  if (n.includes('securit') || n.includes('security')) return 'Sécurité';
-  if (n.includes('prompt') || n.includes('maitre') || n.includes('maître')) return 'Maître Orchestrateur';
-  if (n.includes('analyste') || n.includes('analyst')) return 'Analyste Code';
-  if (n.includes('redacteur') || n.includes('doc')) return 'Rédacteur Doc';
-  if (n.includes('veille')) return 'Veille Technologique';
-  if (n.includes('github') || n.includes('git')) return 'Expert GitHub';
-  if (n.includes('script') || n.includes('automate')) return 'Scripteur Automate';
-  if (n.includes('hardware') || n.includes('ingenieur')) return 'Ingénieur Hardware';
-  if (n.includes('maintenance')) return 'Maintenance Repo';
-  if (n.includes('subagent')) return 'Sous-agent';
-  return 'Agent IA';
+function truncateText(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 1))}…`;
 }
 
 function ProgressBar({ value, max }: { value: number; max: number }) {
@@ -80,79 +44,104 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-export default function AgentCard({ agent, taskStats }: Props) {
-  const avatarClass = getAvatarColor(agent.name);
-  const displayName = formatAgentName(agent.name);
-  const role = getAgentRole(agent.name);
-  const isActive = agent.status === 'actif';
+export default function AgentCard({ agent, taskStats, teamProfile }: Props) {
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-  const modelShort = agent.model ? agent.model.split('/').pop()?.slice(0, 22) ?? '—' : '—';
+  const presenceDot =
+    teamProfile.presence === 'online'
+      ? 'bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.25)]'
+      : teamProfile.presence === 'offline'
+        ? 'bg-gray-300'
+        : 'bg-amber-400';
+
+  const swarmHref = `/swarm/${encodeURIComponent(agent.id)}`;
 
   return (
-    <a
-      href={'/swarm/' + encodeURIComponent(agent.id)}
-      class="group block bg-white border border-gray-100 rounded-[1.5rem] p-5 hover:shadow-md hover:border-gray-200 transition-all duration-200 shadow-sm no-underline text-inherit"
-    >
-      <div class="flex items-start justify-between mb-4">
-        <div class="flex items-center gap-3">
-          <div class={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-base shrink-0 ${avatarClass}`}>
-            {displayName.charAt(0).toUpperCase()}
+    <div class="group flex flex-col overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white shadow-sm transition-all duration-200 hover:border-gray-200 hover:shadow-md">
+      <a href={swarmHref} class="block flex-1 p-5 text-inherit no-underline">
+        <div class="mb-4 flex items-start justify-between gap-2">
+          <div class="flex min-w-0 flex-1 items-center gap-3">
+            <div class="relative shrink-0">
+              <TeamAvatar profile={teamProfile} size="md" class="shadow-inner ring-2 ring-white" />
+              <span
+                class={`absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white ${presenceDot}`}
+                title={teamProfile.presenceLabel}
+                aria-hidden="true"
+              />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <h3 class="truncate text-sm font-bold text-gray-900 transition-colors group-hover:text-[#175B37]">
+                  {teamProfile.displayName}
+                </h3>
+                <span class="shrink-0 rounded-full bg-[#E9F3EB] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#175B37]">
+                  OpenClaw
+                </span>
+              </div>
+              <p class="mt-0.5 truncate text-[10px] text-gray-500">{teamProfile.role}</p>
+              <p class="mt-0.5 truncate font-mono text-[9px] text-gray-400" title={agent.id}>
+                {truncateText(agent.id, 44)}
+              </p>
+            </div>
           </div>
-          <div class="min-w-0">
-            <h3 class="font-bold text-gray-900 text-sm truncate max-w-[150px] group-hover:text-[#175B37] transition-colors">{displayName}</h3>
-            <p class="text-[10px] text-gray-400 mt-0.5 truncate max-w-[150px]">{role}</p>
+          <div class="flex shrink-0 flex-col items-end gap-0.5">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500">{teamProfile.presenceLabel}</span>
+            <span class="text-[9px] font-mono text-gray-400">{teamProfile.modelShort}</span>
           </div>
         </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <span class={`w-2 h-2 rounded-full ${isActive ? 'animate-pulse' : 'bg-gray-300'}`} style={isActive ? 'background:#3BAE61' : undefined} />
-          <span class="text-[10px] font-bold uppercase tracking-wider" style={isActive ? 'color:#3BAE61' : 'color:#9CA3AF'}>
-            {isActive ? 'Actif' : 'Veille'}
-          </span>
+
+        {teamProfile.bio ? (
+          <p class="mb-4 line-clamp-2 text-[11px] leading-snug text-gray-600">{teamProfile.bio}</p>
+        ) : null}
+
+        <div class="mb-4 grid grid-cols-3 gap-2">
+          {[
+            { v: stats.total, label: 'Tâches', color: '#1F2937' },
+            { v: stats.completed, label: 'Terminées', color: '#3BAE61' },
+            { v: stats.failed, label: 'Erreurs', color: '#EF4444' },
+          ].map(({ v, label, color }) => (
+            <div key={label} class="rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+              <div class="text-base font-bold tabular-nums" style={{ color }}>
+                {v}
+              </div>
+              <div class="mt-0.5 text-[9px] uppercase tracking-wider text-gray-400">{label}</div>
+            </div>
+          ))}
         </div>
-      </div>
 
-      <div class="flex items-center gap-2 mb-4">
-        <svg class="w-3.5 h-3.5 text-gray-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-        </svg>
-        <span class="text-[11px] font-mono text-gray-400 truncate">{modelShort}</span>
-      </div>
-
-      <div class="grid grid-cols-3 gap-2 mb-4">
-        {[
-          { v: stats.total,     label: 'Tâches',    color: '#1F2937' },
-          { v: stats.completed, label: 'Terminées', color: '#3BAE61' },
-          { v: stats.failed,    label: 'Erreurs',   color: '#EF4444' },
-        ].map(({ v, label, color }) => (
-          <div key={label} class="bg-gray-50 rounded-xl p-2 text-center border border-gray-100">
-            <div class="text-base font-bold tabular-nums" style={{ color }}>{v}</div>
-            <div class="text-[9px] uppercase text-gray-400 tracking-wider mt-0.5">{label}</div>
+        {stats.total > 0 && (
+          <div class="mb-4">
+            <div class="mb-1 flex items-center justify-between">
+              <span class="text-[10px] text-gray-400">Complétion</span>
+              <span class="text-[10px] font-mono text-gray-600">{completionPct}%</span>
+            </div>
+            <ProgressBar value={stats.completed} max={stats.total} />
           </div>
-        ))}
-      </div>
-
-      {stats.total > 0 && (
-        <div class="mb-4">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-[10px] text-gray-400">Complétion</span>
-            <span class="text-[10px] font-mono text-gray-600">{completionPct}%</span>
-          </div>
-          <ProgressBar value={stats.completed} max={stats.total} />
-        </div>
-      )}
-
-      <div class="pt-3 border-t border-gray-100 flex items-center justify-between">
-        <span class="text-[10px] text-gray-400">{((agent.totalTokens ?? 0) / 1000).toFixed(1)}K tokens</span>
-        {(agent.estimatedCostUsd ?? 0) > 0 && (
-          <span class="text-[10px] font-mono font-bold" style="color:#3BAE61">${agent.estimatedCostUsd!.toFixed(3)}</span>
         )}
-        <div class="text-gray-400 group-hover:text-[#175B37] group-hover:translate-x-0.5 transition-all">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
+
+        <div class="flex items-center justify-between border-t border-gray-100 pt-3">
+          <span class="text-[10px] text-gray-400">{((agent.totalTokens ?? 0) / 1000).toFixed(1)}K tokens</span>
+          {(agent.estimatedCostUsd ?? 0) > 0 && (
+            <span class="text-[10px] font-mono font-bold" style={{ color: '#3BAE61' }}>
+              ${agent.estimatedCostUsd!.toFixed(3)}
+            </span>
+          )}
+          <div class="text-gray-400 transition-all group-hover:translate-x-0.5 group-hover:text-[#175B37]">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </div>
         </div>
+      </a>
+
+      <div class="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5">
+        <a href="/discussion" class="text-[11px] font-semibold text-[#175B37] transition hover:underline">
+          Messagerie Forge
+        </a>
+        <span class="max-w-[55%] truncate text-right font-mono text-[9px] text-gray-400" title={agent.id}>
+          {truncateText(agent.id, 28)}
+        </span>
       </div>
-    </a>
+    </div>
   );
 }

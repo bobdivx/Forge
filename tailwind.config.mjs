@@ -4,6 +4,25 @@ export default {
   content: ['./src/**/*.{astro,html,js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      keyframes: {
+        'fade-up': {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'shimmer': {
+          '0%': { backgroundPosition: '200% 0' },
+          '100%': { backgroundPosition: '-200% 0' },
+        },
+      },
+      animation: {
+        'fade-up': 'fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'fade-in': 'fade-in 0.35s ease-out both',
+        'shimmer': 'shimmer 1.6s ease-in-out infinite',
+      },
       boxShadow: {
         'neon-card':
           'inset 0 1px 0 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(34,211,238,0.12), 0 0 28px rgba(34,211,238,0.14), 0 24px 56px -12px rgba(0,0,0,0.55)',

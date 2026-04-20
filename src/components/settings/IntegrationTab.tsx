@@ -146,6 +146,7 @@ export default function IntegrationTab({
               class={inputCls}
             />
           </FormField>
+
           <FormField
             label="URL API Ollama"
             hint="GET /api/tags (ex. http://host.docker.internal:11434). Utilisée par les sondes modèles / audit."
