@@ -57,8 +57,11 @@ function shouldRunFallbackChain(error: unknown, httpStatus?: number): boolean {
 
 type GatewayRemediation = {
   title: string;
+  endpoint: string;
+  configPath: string;
   where: string;
   instructions: string[];
+  curlTest: string;
   json: string;
   docs?: string;
 };
@@ -74,6 +77,8 @@ async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
   const configPath = await resolveOpenClawConfigPathHint();
   return {
     title: 'Activer les outils OpenClaw requis par Forge',
+    endpoint: invokeEndpoint,
+    configPath,
     where:
       `Dans le fichier de config OpenClaw (${configPath}), section "gateway.tools.allow", puis redémarrer le service gateway.`,
     instructions: [
@@ -81,8 +86,18 @@ async function buildGatewayToolsRemediation(): Promise<GatewayRemediation> {
       `Modifier la section gateway.tools.allow utilisée par l’endpoint ${invokeEndpoint}.`,
       'Ajouter sessions_list, sessions_send et agents_invoke.',
       'Redémarrer le gateway OpenClaw.',
+      'Note: ouvrir /tools/invoke dans le navigateur fait un GET et peut répondre "Method Not Allowed" (normal).',
+      'Tester avec un POST JSON (curl ci-dessous) pour valider la disponibilité réelle.',
       'Revenir dans Forge > Discussion et renvoyer le message.',
     ],
+    curlTest: [
+      `curl -X POST '${invokeEndpoint}' \\`,
+      "  -H 'Content-Type: application/json' \\",
+      "  -H 'Accept: application/json' \\",
+      "  -H 'X-Gateway-Token: <OPENCLAW_TOKEN>' \\",
+      "  -H 'Authorization: Bearer <OPENCLAW_TOKEN>' \\",
+      "  --data '{\"tool\":\"sessions_list\",\"action\":\"json\",\"args\":{\"limit\":1,\"messageLimit\":0}}'",
+    ].join('\n'),
     json: JSON.stringify(
       {
         gateway: {

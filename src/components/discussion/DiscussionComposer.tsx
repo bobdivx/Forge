@@ -22,10 +22,12 @@ type ChatMessage = {
 type GatewayRemediation = {
   title?: string;
   endpoint?: string;
+  endpointMethod?: string;
   where?: string;
   configPath?: string;
   instructions?: unknown;
   json?: string;
+  curlTest?: string;
   docs?: string;
 };
 
@@ -34,9 +36,11 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   const lines: string[] = [];
   const title = typeof remediation.title === 'string' ? remediation.title.trim() : '';
   const endpoint = typeof remediation.endpoint === 'string' ? remediation.endpoint.trim() : '';
+  const endpointMethod = typeof remediation.endpointMethod === 'string' ? remediation.endpointMethod.trim() : '';
   const where = typeof remediation.where === 'string' ? remediation.where.trim() : '';
   const configPath = typeof remediation.configPath === 'string' ? remediation.configPath.trim() : '';
   const json = typeof remediation.json === 'string' ? remediation.json.trim() : '';
+  const curlTest = typeof remediation.curlTest === 'string' ? remediation.curlTest.trim() : '';
   const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
   const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
   const instructions = instructionsRaw
@@ -45,6 +49,7 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
 
   if (title) lines.push(`Action requise: ${title}`);
   if (endpoint) lines.push(`Endpoint exact Forge -> OpenClaw: ${endpoint}`);
+  if (endpointMethod) lines.push(`Methode attendue: ${endpointMethod}`);
   if (where) lines.push(`Ou le mettre: ${where}`);
   if (configPath) lines.push(`Chemin de fichier detecte: ${configPath}`);
   if (instructions.length > 0) {
@@ -54,6 +59,10 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   if (json) {
     lines.push('JSON a copier-coller:');
     lines.push(json);
+  }
+  if (curlTest) {
+    lines.push('Test API (POST) a executer:');
+    lines.push(curlTest);
   }
   if (docs) lines.push(`Documentation: ${docs}`);
 
