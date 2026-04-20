@@ -25,6 +25,8 @@ type OpenClawProbe = {
   likelyMountMatch?: boolean;
 };
 
+type BindSuggestion = { hostPath: string; containerPath: string };
+
 type ReposHealth = {
   status?: string;
   summary?: string;
@@ -32,6 +34,7 @@ type ReposHealth = {
   gitReposFound?: number;
   openclawNote?: string;
   openclawProbe?: OpenClawProbe;
+  openclawBindSuggestions?: BindSuggestion[];
 };
 
 type Props = {
@@ -70,6 +73,10 @@ export default function IntegrationTab({
   const healthyRepos = st === 'ok';
   const probe = reposHealth?.openclawProbe;
   const bindMounts = (probe?.mounts ?? []).filter((m) => m.type === 'bind' && m.destination);
+  const suggestions: BindSuggestion[] = Array.isArray(reposHealth?.openclawBindSuggestions)
+    ? (reposHealth.openclawBindSuggestions as BindSuggestion[])
+    : [];
+  const datalistId = 'forge-repos-root-suggestions';
 
   return (
     <div class="p-6 space-y-10">
@@ -232,17 +239,61 @@ export default function IntegrationTab({
         <div class="space-y-4 max-w-3xl">
           <FormField
             label="Répertoire des applications"
-            hint="Un sous-dossier = une app (clone Git). Doit exister ici et dans le conteneur OpenClaw."
+            hint="Chemin sur la machine où tourne Forge (= hôte du bind, colonne Source). Un sous-dossier = une app. Cliquez une suggestion ci-dessous ou saisissez à la main après « Actualiser » si Docker est joignable."
           >
             <input
               type="text"
+              list={suggestions.length ? datalistId : undefined}
               value={settings.forgeReposRoot}
               onInput={(e) =>
                 setSettings({ ...settings, forgeReposRoot: (e.target as HTMLInputElement).value })
               }
               class={inputCls}
             />
+            {suggestions.length > 0 && (
+              <datalist id={datalistId}>
+                {suggestions.map((s) => (
+                  <option key={s.hostPath} value={s.hostPath}>
+                    {`OpenClaw : ${s.containerPath}`}
+                  </option>
+                ))}
+              </datalist>
+            )}
           </FormField>
+          {suggestions.length > 0 && (
+            <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3">
+              <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                Dossiers montés (bind) — même chemin hôte que dans OpenClaw
+              </p>
+              <ul class="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                {suggestions.map((s) => (
+                  <li key={`${s.hostPath}:${s.containerPath}`}>
+                    <button
+                      type="button"
+                      onClick={() => setSettings({ ...settings, forgeReposRoot: s.hostPath })}
+                      class={`w-full text-left text-xs font-mono rounded-lg px-3 py-2 border transition-colors ${
+                        settings.forgeReposRoot.trim() === s.hostPath
+                          ? 'border-[#175B37] bg-[#E9F3EB] text-[#0B2717]'
+                          : 'border-gray-200 bg-white hover:border-gray-300 text-gray-800'
+                      }`}
+                    >
+                      <span class="block text-[11px] text-gray-500 mb-0.5">Hôte (Forge) — à enregistrer</span>
+                      <span class="text-emerald-900">{s.hostPath}</span>
+                      <span class="block text-[10px] text-gray-500 mt-1">
+                        dans OpenClaw : <span class="text-gray-700">{s.containerPath}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {probe?.attempted && suggestions.length === 0 && !probe.dockerError && (
+            <p class="text-[11px] text-gray-500">
+              Aucun bind mount listé (conteneur sans volumes typiques ou inspect incomplet). Saisie manuelle ou
+              vérifiez le nom du conteneur.
+            </p>
+          )}
           <FormField label="Dossier Docker YAML" hint="Repère pour vos stacks sur le NAS.">
             <input
               type="text"
