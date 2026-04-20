@@ -13,6 +13,7 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
 function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig> {
   const payload: Partial<ForgeConfig> = {};
   const allowed: (keyof ForgeConfig)[] = [
+    'forgePublicUrl',
     'openclawGatewayUrl',
     'openclawToken',
     'githubToken',

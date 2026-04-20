@@ -7,6 +7,7 @@ import InfraTab from './InfraTab';
 import MaintenanceTab from './MaintenanceTab';
 
 type Config = {
+  forgePublicUrl: string;
   forgeReposRoot: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
@@ -35,6 +36,7 @@ const TABS = [
 export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
+    forgePublicUrl: '',
     forgeReposRoot:    '/media/Github',
     dockerYamlDir:     '/DATA/AppData',
     dockerAppDataDir:  '/DATA/AppData',
@@ -64,6 +66,8 @@ export default function SettingsForm() {
         const s = await settingsRes.json();
         setSettings((prev) => ({
           ...prev,
+          forgePublicUrl:
+            typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
           forgeReposRoot: s.forgeReposRoot || prev.forgeReposRoot,
           dockerYamlDir: s.dockerYamlDir || prev.dockerYamlDir,
           dockerAppDataDir: s.dockerAppDataDir || prev.dockerAppDataDir,
@@ -94,6 +98,8 @@ export default function SettingsForm() {
   const mergeSettingsFromServer = (s: Record<string, unknown>) => {
     setSettings((prev) => ({
       ...prev,
+      forgePublicUrl:
+        typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
       forgeReposRoot: String(s.forgeReposRoot || prev.forgeReposRoot),
       dockerYamlDir: String(s.dockerYamlDir || prev.dockerYamlDir),
       dockerAppDataDir: String(s.dockerAppDataDir || prev.dockerAppDataDir),

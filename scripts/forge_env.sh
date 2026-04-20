@@ -4,11 +4,25 @@
 # Définissez avant d'inclure ce fichier (optionnel) :
 #   export FORGE_HOOK_BASE_URL=http://forge-host:4321
 #
-# Détection automatique si vide :
+# Si vide : lecture de **forgePublicUrl** renseigné dans Paramètres → Connexion OpenClaw
+# (GET /api/agent-api-secrets, joignable depuis cette machine — souvent http://127.0.0.1:4321 sur l’hôte).
+# Surcharge : FORGE_AGENT_SECRETS_ENDPOINT=https://…/api/agent-api-secrets
+#
+# Détection automatique ensuite :
 #   • FORGE_HOOK_BASE_URL (priorité — même convention que Forge audit-launch et .env serveur)
 #   • PUBLIC_FORGE_URL puis PUBLIC_SITE_URL (secours Astro)
 #   • Si la commande tourne dans un conteneur avec extra_hosts forge-host → http://forge-host:4321
 #   • Sinon → http://127.0.0.1:4321 (Forge sur la même machine que le shell)
+
+if [ -z "${FORGE_HOOK_BASE_URL:-}" ] && [ -z "${PUBLIC_FORGE_URL:-}" ] && [ -z "${PUBLIC_SITE_URL:-}" ]; then
+  _EP="${FORGE_AGENT_SECRETS_ENDPOINT:-http://127.0.0.1:4321/api/agent-api-secrets}"
+  if command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    _FP="$(curl -sf "$_EP" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('forgePublicUrl') or '').strip())" 2>/dev/null || true)"
+    if [ -n "${_FP:-}" ]; then
+      export FORGE_HOOK_BASE_URL="$_FP"
+    fi
+  fi
+fi
 
 if [ -n "${FORGE_HOOK_BASE_URL:-}" ]; then
   export FORGE_BASE_URL="${FORGE_HOOK_BASE_URL%/}"

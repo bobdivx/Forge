@@ -24,6 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     const payload: Partial<ForgeConfig> = {};
     const allowed: (keyof ForgeConfig)[] = [
+      'forgePublicUrl',
       'openclawGatewayUrl', 'openclawToken',
       'githubToken', 'vercelToken', 'githubWebhookSecret',
       'forgeReposRoot', 'dockerYamlDir', 'dockerAppDataDir',

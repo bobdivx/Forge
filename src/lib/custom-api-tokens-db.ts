@@ -104,6 +104,8 @@ export async function syncCustomTokensFromClient(items: CustomTokenItemInput[]):
 
 /** Bundle pour les agents (réseau local) : jetons Config + personnalisés. */
 export async function getAgentApiSecretsBundle(): Promise<{
+  /** URL dashboard Forge joignable depuis les agents (hooks / APIs). Vide si non renseigné — scripts utilisent encore env / défaut. */
+  forgePublicUrl: string;
   githubToken: string;
   vercelToken: string;
   openclawToken: string;
@@ -118,6 +120,7 @@ export async function getAgentApiSecretsBundle(): Promise<{
     if (r.key && r.secret) custom[r.key] = r.secret;
   }
   return {
+    forgePublicUrl: config.forgePublicUrl || '',
     githubToken: config.githubToken || '',
     vercelToken: config.vercelToken || '',
     openclawToken: config.openclawToken || '',

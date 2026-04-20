@@ -1,7 +1,12 @@
 import FormField from '../ui/FormField';
 import SaveRow from '../ui/SaveRow';
 
-type Config = { openclawGatewayUrl: string; openclawToken: string; [k: string]: string };
+type Config = {
+  forgePublicUrl: string;
+  openclawGatewayUrl: string;
+  openclawToken: string;
+  [k: string]: string;
+};
 
 type Props = {
   settings: Config;
@@ -24,6 +29,20 @@ export default function OpenClawTab({ settings, setSettings, onSave, saving, mes
           <code class="text-gray-500">localhost</code> ne fonctionne pas si Forge tourne sur Vercel ou un autre serveur distant.
         </p>
         <div class="space-y-4">
+          <FormField
+            label="URL Forge joignable par les agents (hooks)"
+            hint="Basée vue « depuis OpenClaw », pas depuis le navigateur (ex. http://forge-host:4321 avec extra_hosts, ou http://forge:4321 sur le réseau compose). Vide = secours variables d'environnement / localhost."
+          >
+            <input
+              type="url"
+              placeholder="http://forge-host:4321 ou laisser vide pour défaut"
+              value={settings.forgePublicUrl}
+              onInput={(e) =>
+                setSettings({ ...settings, forgePublicUrl: (e.target as HTMLInputElement).value })
+              }
+              class={inputCls}
+            />
+          </FormField>
           <FormField
             label="URL du gateway"
             hint="Adresse où OpenClaw écoute (défaut seed / config : 24190)."

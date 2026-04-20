@@ -20,9 +20,10 @@ Auth    : AUCUNE (réseau local uniquement)
 
 Les agents dans **Docker OpenClaw** ne doivent **pas** utiliser `127.0.0.1` pour joindre Forge : ça pointe vers le conteneur lui‑même. À la place :
 
-1. Définir **`FORGE_HOOK_BASE_URL`** (ex. `http://forge-host:4321`) dans l’environnement du service OpenClaw ou avant d’exécuter un script.
-2. **`source scripts/forge_env.sh`** depuis le dépôt Forge monté dans le workspace : exporte `FORGE_BASE_URL`, `FORGE_HOOK_URL`, `FORGE_API_URL`.
-3. Préférer **`scripts/forge-hook.sh`** pour poster vers forge-hook : le JSON est construit par Python (échappement correct, pas de corps tronqué).
+1. **Paramètres → Connexion OpenClaw → « URL Forge joignable par les agents »** (`forgePublicUrl` en base, aussi retournée par `GET /api/agent-api-secrets`). C’est la source recommandée : pas besoin de redéployer Docker pour changer l’URL.
+2. Secours : **`FORGE_HOOK_BASE_URL`** dans l’environnement du service OpenClaw ou `.env` (prioritaire sur la valeur Paramètres pour CI / overrides).
+3. **`source scripts/forge_env.sh`** : si aucune variable n’est posée, le script tente de lire `forgePublicUrl` via `curl` vers `/api/agent-api-secrets` (fonctionne sur l’hôte où Forge écoute en local).
+4. Préférer **`scripts/forge-hook.sh`** pour poster vers forge-hook : le JSON est construit par Python (échappement correct, pas de corps tronqué).
 
 Exemple minimal :
 
