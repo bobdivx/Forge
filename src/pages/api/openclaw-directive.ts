@@ -1,11 +1,15 @@
 import type { APIRoute } from 'astro';
-import { invokeOpenClawSessionsSend, invokeOpenClawAgentTask } from '../../lib/openclaw-gateway';
+import {
+  invokeOpenClawSessionsSend,
+  invokeOpenClawAgentTask,
+  invokeOpenClawV1ChatFallback,
+} from '../../lib/openclaw-gateway';
 
 const MAX_MESSAGE = 120_000;
 
 /**
  * Envoie un message utilisateur dans une session agent.
- * Priorité: sessions_send ; fallback: agents_invoke quand sessions_send est bloqué en gateway.
+ * Priorité: sessions_send ; fallback: agents_invoke ; fallback final: v1/chat/completions.
  */
 export const POST: APIRoute = async ({ request }) => {
   let body: { sessionKey?: string; message?: string; timeoutSeconds?: number };
@@ -72,13 +76,48 @@ export const POST: APIRoute = async ({ request }) => {
         },
       );
     }
+    const fallback2 = await invokeOpenClawV1ChatFallback({
+      agentId: sessionKey,
+      message,
+    });
+    if (fallback2.ok) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          via: fallback2.via,
+          result: {
+            status: 'completed',
+            reply:
+              (() => {
+                const choices = (fallback2.detail as { choices?: unknown } | undefined)?.choices;
+                if (!Array.isArray(choices) || choices.length === 0) return '';
+                const first = choices[0] as { message?: { content?: unknown } } | undefined;
+                return typeof first?.message?.content === 'string' ? first.message.content : '';
+              })(),
+          },
+          detail: { sessionsSend: result.detail, agentsInvoke: fallback.detail },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
     return new Response(
       JSON.stringify({
-        error: fallback.error || result.error,
-        detail: { sessionsSend: result.detail, agentsInvoke: fallback.detail },
+        error: fallback2.error || fallback.error || result.error,
+        detail: {
+          sessionsSend: result.detail,
+          agentsInvoke: fallback.detail,
+          chatCompletion: fallback2.detail,
+        },
       }),
       {
-        status: fallback.httpStatus && fallback.httpStatus >= 400 ? fallback.httpStatus : 502,
+        status:
+          (fallback2.httpStatus && fallback2.httpStatus >= 400 && fallback2.httpStatus) ||
+          (fallback.httpStatus && fallback.httpStatus >= 400 && fallback.httpStatus) ||
+          502,
         headers: { 'Content-Type': 'application/json' },
       },
     );

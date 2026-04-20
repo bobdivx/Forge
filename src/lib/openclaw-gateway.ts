@@ -228,6 +228,14 @@ export type InvokeAgentTaskResult = {
   httpStatus?: number;
 };
 
+export type InvokeV1ChatFallbackResult = {
+  ok: boolean;
+  error?: string;
+  detail?: unknown;
+  httpStatus?: number;
+  via?: string;
+};
+
 /**
  * POST /tools/invoke — outil `sessions_send` (même charge utile que /api/openclaw-directive).
  * `asyncDelivery: false` par défaut : timeout 120 s, sans `args.async` (compat gateway maximale).
@@ -399,6 +407,80 @@ export async function invokeOpenClawAgentTask(params: {
     const msg = e instanceof Error ? e.message : 'Erreur réseau';
     return { ok: false, error: msg };
   }
+}
+
+/**
+ * Dernier fallback sans tool invoke : POST /v1/chat/completions.
+ * Tente d'abord `openclaw/<agentId>`, puis `openclaw/default` avec header `x-openclaw-model`.
+ */
+export async function invokeOpenClawV1ChatFallback(params: {
+  agentId: string;
+  message: string;
+}): Promise<InvokeV1ChatFallbackResult> {
+  const token = (await getOpenClawToken()).trim();
+  if (!token) {
+    return { ok: false, error: 'Token OpenClaw manquant (OPENCLAW_GATEWAY_TOKEN ou table Config).' };
+  }
+  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const url = `${base}/v1/chat/completions`;
+  const input = String(params.message || '').slice(0, MAX_SESSIONS_SEND_MESSAGE);
+  const agentId = String(params.agentId || '').trim();
+  const modelTarget = /^openclaw\//i.test(agentId) ? agentId : `openclaw/${agentId}`;
+
+  const callV1 = async (
+    model: string,
+    extraHeaders?: Record<string, string>,
+  ): Promise<InvokeV1ChatFallbackResult> => {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...getGatewayAuthHeaders(token),
+          ...(extraHeaders || {}),
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: input }],
+          stream: false,
+          temperature: 0.2,
+          max_tokens: 512,
+        }),
+      });
+
+      const text = await res.text();
+      let data: Record<string, unknown> = {};
+      try {
+        data = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      } catch {
+        data = { raw: text };
+      }
+
+      if (!res.ok) {
+        const errMsg =
+          (data.error as { message?: string } | undefined)?.message ||
+          (typeof data.error === 'string' ? data.error : '') ||
+          (typeof data.message === 'string' ? data.message : '') ||
+          `Gateway HTTP ${res.status}`;
+        return { ok: false, httpStatus: res.status, error: errMsg, detail: data };
+      }
+
+      return { ok: true, detail: data, via: model };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur réseau';
+      return { ok: false, error: msg };
+    }
+  };
+
+  const first = await callV1(modelTarget);
+  if (first.ok) return first;
+
+  // Fallback complémentaire : route par défaut + header du backend model.
+  const second = await callV1('openclaw/default', { 'x-openclaw-model': agentId });
+  if (second.ok) return { ...second, via: `openclaw/default→${agentId}` };
+
+  return second.error ? second : first;
 }
 
 export async function fetchOpenClawJson(
