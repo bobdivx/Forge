@@ -11,9 +11,19 @@ import { join } from 'node:path';
 import { getConfig } from '../../lib/config-db';
 import { loadAstroDb } from '../../lib/load-astro-db';
 
-async function resolveOpenClawJsonPath(): Promise<string> {
+async function resolveOpenClawJsonCandidates(): Promise<string[]> {
   const appDataDir = (await getConfig('dockerAppDataDir')).trim() || 'C:\\DATA\\AppData';
-  return join(appDataDir, 'openclaw', 'openclaw.json');
+  const base = appDataDir.replace(/[\\/]+$/, '');
+  return [
+    join(base, 'openclaw', 'openclaw.json'),
+    join(base, 'AppData', 'openclaw', 'openclaw.json'),
+  ];
+}
+
+async function resolveOpenClawJsonPath(): Promise<{ path: string; candidates: string[] }> {
+  const candidates = await resolveOpenClawJsonCandidates();
+  const found = candidates.find((p) => existsSync(p));
+  return { path: found || candidates[0], candidates };
 }
 
 function readOpenClawJson(path: string): Record<string, unknown> {
@@ -51,13 +61,22 @@ async function getForgeAgentIds(): Promise<string[]> {
 
 export const GET: APIRoute = async () => {
   try {
-    const path = await resolveOpenClawJsonPath();
+    const { path, candidates } = await resolveOpenClawJsonPath();
     const exists = existsSync(path);
     const forgeAgentIds = await getForgeAgentIds();
     const container = detectOpenClawContainer();
 
     if (!exists) {
-      return new Response(JSON.stringify({ ok: false, error: `Config introuvable : ${path}`, forgeAgents: forgeAgentIds, container }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `Config introuvable : ${path}`,
+          triedPaths: candidates,
+          forgeAgents: forgeAgentIds,
+          container,
+        }),
+        { status: 200 },
+      );
     }
 
     const config = readOpenClawJson(path);
@@ -82,12 +101,12 @@ export const GET: APIRoute = async () => {
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json().catch(() => ({}));
-    const path = await resolveOpenClawJsonPath();
+    const { path, candidates } = await resolveOpenClawJsonPath();
     const { db, ActivityLog } = await loadAstroDb();
     const now = new Date();
 
     if (!existsSync(path)) {
-      throw new Error(`Chemin de configuration openclaw.json inaccessible : ${path}`);
+      throw new Error(`Chemin de configuration openclaw.json inaccessible : ${path}. Chemins testés: ${candidates.join(', ')}`);
     }
 
     const config = readOpenClawJson(path);
