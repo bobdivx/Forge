@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'preact/hooks';
 
 export default function SystemMonitor() {
-  const [stats, setStats] = useState({ memoryUsage: 0, cpuLoad: 0, diskUsage: 0, githubDiskUsage: 0 });
+  const [stats, setStats] = useState({ 
+    memoryUsage: 0, 
+    cpuLoad: 0, 
+    diskUsage: 0, 
+    githubDiskUsage: 0,
+    unhealthyContainers: [] 
+  });
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -18,6 +24,15 @@ export default function SystemMonitor() {
 
   return (
     <div class="mt-4 px-3 space-y-4">
+      {stats.unhealthyContainers?.length > 0 && (
+        <div class="p-2 bg-red-500/20 border border-red-500/50 rounded text-[10px] text-red-400">
+          <span class="font-bold uppercase block mb-1">⚠️ Conteneurs instables</span>
+          <ul class="list-disc list-inside opacity-80">
+            {stats.unhealthyContainers.map(name => <li key={name}>{name}</li>)}
+          </ul>
+        </div>
+      )}
+      
       {[
         { label: 'RAM (Système)', val: stats.memoryUsage, color: 'bg-blue-500' },
         {
