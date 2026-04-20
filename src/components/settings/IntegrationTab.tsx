@@ -75,6 +75,7 @@ export default function IntegrationTab({
   const healthyRepos = st === 'ok';
   const probe = reposHealth?.openclawProbe;
   const bindMounts = (probe?.mounts ?? []).filter((m) => m.type === 'bind' && m.destination);
+  const dockerUnavailable = Boolean(probe?.dockerError && /docker.*(enoent|inaccessible)/i.test(probe.dockerError));
   const suggestions: BindSuggestion[] = Array.isArray(reposHealth?.openclawBindSuggestions)
     ? (reposHealth.openclawBindSuggestions as BindSuggestion[])
     : [];
@@ -210,7 +211,7 @@ export default function IntegrationTab({
             {reposHealth.openclawNote && (
               <p class="text-[11px] opacity-90 border-t border-current/10 pt-2 mt-2">{reposHealth.openclawNote}</p>
             )}
-            {probe?.attempted && (
+            {probe?.attempted && !dockerUnavailable && (
               <div class="border-t border-current/10 pt-3 mt-2 space-y-2">
                 <p class="font-semibold">
                   OpenClaw (Docker){' '}
