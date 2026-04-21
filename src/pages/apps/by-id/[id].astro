@@ -7,10 +7,12 @@ import ProjectDemandesForm from '../../../components/apps/ProjectDemandesForm';
 import AppProjectOps from '../../../components/apps/AppProjectOps';
 import AuditLauncher from '../../../components/apps/AuditLauncher';
 import GitHistoryCard from '../../../components/apps/GitHistoryCard';
+import GithubFolderCard from '../../../components/apps/GithubFolderCard';
 import path from 'path';
 import { db, Project, Request, eq, desc } from 'astro:db';
 import { resolveProjectPathFromDbProject, isSafeRepoDirName } from '../../../lib/forge-repos';
 import { getGitCommits, getGitSummary } from '../../../lib/project-git';
+import { summarizeGithubFolder } from '../../../lib/project-github-meta';
 import { mapDbRequestToUi } from '../../../lib/forge-request-mapper';
 
 const rawId = Astro.params.id;
@@ -45,6 +47,23 @@ const displayName = row.name || folderKey;
 
 const { commits, error: gitLogError } = getGitCommits(projectPath, 30);
 const gitSummary = getGitSummary(projectPath);
+
+let githubSummary;
+try {
+  githubSummary = summarizeGithubFolder(projectPath);
+} catch {
+  githubSummary = {
+    present: false,
+    workflows: [],
+    dependabot: false,
+    codeowners: false,
+    funding: false,
+    issueTemplatesCount: 0,
+    pullRequestTemplatePaths: [],
+    notablePaths: [],
+    remoteOriginUrl: null,
+  };
+}
 
 let requests = [];
 try {
@@ -110,14 +129,17 @@ const app = {
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-      <!-- Historique Git : carte + modal -->
-      <GitHistoryCard
-        client:load
-        commits={commits}
-        gitLogError={gitLogError}
-        isRepo={gitSummary.isRepo}
-        appHttpUrl={`http://${app.url}`}
-      />
+      <div class="xl:col-span-2 space-y-6">
+        <GithubFolderCard client:load summary={githubSummary} />
+
+        <GitHistoryCard
+          client:load
+          commits={commits}
+          gitLogError={gitLogError}
+          isRepo={gitSummary.isRepo}
+          appHttpUrl={`http://${app.url}`}
+        />
+      </div>
 
       <!-- Colonne latérale -->
       <aside class="space-y-5">

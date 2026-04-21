@@ -12,6 +12,7 @@ import {
   getReposRoot,
   isSafeRepoDirName,
 } from './forge-repos';
+import { summarizeGithubFolder, type GithubFolderSummary } from './project-github-meta';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -92,8 +93,8 @@ const gitStatus: ForgeTool<{ project: string }, string> = {
     project: { type: 'string', description: 'Nom du projet', required: true },
   },
   execute: ({ project }, _ctx) =>
-    run('git_status', () => {
-      const dir = resolveProjectPath(project);
+    run('git_status', async () => {
+      const dir = await resolveProjectPath(project);
       if (!dir)
         return {
           ok: false,
@@ -120,8 +121,8 @@ const gitLog: ForgeTool<{ project: string; limit?: number }, string> = {
     },
   },
   execute: ({ project, limit = 10 }, _ctx) =>
-    run('git_log', () => {
-      const dir = resolveProjectPath(project);
+    run('git_log', async () => {
+      const dir = await resolveProjectPath(project);
       if (!dir)
         return {
           ok: false,
@@ -152,8 +153,8 @@ const gitDiff: ForgeTool<{ project: string; staged?: boolean }, string> = {
     },
   },
   execute: ({ project, staged = false }, _ctx) =>
-    run('git_diff', () => {
-      const dir = resolveProjectPath(project);
+    run('git_diff', async () => {
+      const dir = await resolveProjectPath(project);
       if (!dir)
         return {
           ok: false,
@@ -183,8 +184,8 @@ const gitBranch: ForgeTool<{ project: string }, string> = {
     project: { type: 'string', description: 'Nom du projet', required: true },
   },
   execute: ({ project }, _ctx) =>
-    run('git_branch', () => {
-      const dir = resolveProjectPath(project);
+    run('git_branch', async () => {
+      const dir = await resolveProjectPath(project);
       if (!dir)
         return {
           ok: false,
@@ -212,8 +213,8 @@ const fileList: ForgeTool<{ project: string; subpath?: string }, string[]> = {
     },
   },
   execute: ({ project, subpath = '' }, _ctx) =>
-    run('file_list', () => {
-      const base = resolveProjectPath(project);
+    run('file_list', async () => {
+      const base = await resolveProjectPath(project);
       if (!base)
         return {
           ok: false,
@@ -276,8 +277,8 @@ const fileRead: ForgeTool<
     },
   },
   execute: ({ project, filepath, maxLines = 100 }, _ctx) =>
-    run('file_read', () => {
-      const base = resolveProjectPath(project);
+    run('file_read', async () => {
+      const base = await resolveProjectPath(project);
       if (!base)
         return {
           ok: false,
@@ -331,8 +332,8 @@ const fileTree: ForgeTool<{ project: string; depth?: number }, string> = {
     },
   },
   execute: ({ project, depth = 2 }, _ctx) =>
-    run('file_tree', () => {
-      const dir = resolveProjectPath(project);
+    run('file_tree', async () => {
+      const dir = await resolveProjectPath(project);
       if (!dir)
         return {
           ok: false,
@@ -433,8 +434,8 @@ const projectScripts: ForgeTool<
     },
   },
   execute: ({ project, depth = 2 }, _ctx) =>
-    run('project_scripts', () => {
-      const base = resolveProjectPath(project);
+    run('project_scripts', async () => {
+      const base = await resolveProjectPath(project);
       if (!base)
         return {
           ok: false,
@@ -492,6 +493,61 @@ const projectScripts: ForgeTool<
 
 // ── System ────────────────────────────────────────────────────────────────────
 
+const githubMeta: ForgeTool<{ project: string }, GithubFolderSummary> = {
+  name: 'github_meta',
+  description:
+    'Méta-données du dépôt : dossier .github (workflows, dependabot, templates, CODEOWNERS) et `git remote get-url origin`',
+  category: 'system',
+  params: {
+    project: { type: 'string', description: 'Nom du projet (dossier sous la racine Forge)', required: true },
+  },
+  execute: ({ project }, _ctx) =>
+    run('github_meta', async () => {
+      const dir = await resolveProjectPath(project);
+      if (!dir) {
+        return {
+          ok: false,
+          output: {
+            present: false,
+            workflows: [],
+            dependabot: false,
+            codeowners: false,
+            funding: false,
+            issueTemplatesCount: 0,
+            pullRequestTemplatePaths: [],
+            notablePaths: [],
+            remoteOriginUrl: null,
+          },
+          error: `Projet introuvable: ${project}`,
+          durationMs: 0,
+          toolName: 'github_meta',
+        };
+      }
+      try {
+        const output = summarizeGithubFolder(dir);
+        return { ok: true, output, toolName: 'github_meta', durationMs: 0 };
+      } catch (e) {
+        return {
+          ok: false,
+          output: {
+            present: false,
+            workflows: [],
+            dependabot: false,
+            codeowners: false,
+            funding: false,
+            issueTemplatesCount: 0,
+            pullRequestTemplatePaths: [],
+            notablePaths: [],
+            remoteOriginUrl: null,
+          },
+          error: e instanceof Error ? e.message : String(e),
+          durationMs: 0,
+          toolName: 'github_meta',
+        };
+      }
+    }),
+};
+
 const projectsList: ForgeTool<Record<string, never>, string[]> = {
   name: 'projects_list',
   description: 'Liste tous les projets dans FORGE_REPOS_ROOT',
@@ -537,6 +593,7 @@ const ALL_TOOLS: ForgeTool[] = [
   projectScripts as ForgeTool,
   dockerPs as ForgeTool,
   dockerLogs as ForgeTool,
+  githubMeta as ForgeTool,
   projectsList as ForgeTool,
 ];
 

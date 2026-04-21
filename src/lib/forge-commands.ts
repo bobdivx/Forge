@@ -27,6 +27,7 @@ export const FORGE_COMMANDS: CommandDef[] = [
       '/tools run git_status project=my-app',
       '/tools run git_log project=my-app limit=5',
       '/tools run docker_ps',
+      '/tools run github_meta project=my-app',
       '/tools run projects_list',
     ],
   },

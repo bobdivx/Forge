@@ -40,6 +40,7 @@ import {
   normalizeDependencyStatus,
   normalizeErrorType,
 } from '../../lib/forge-agent-work';
+import { finalizeAgentTaskStatus } from '../../lib/forge-task-status-sync';
 
 // ── Helpers dev-server (dupliqués depuis dev-server.ts pour accès interne) ────
 
@@ -378,14 +379,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         if (!Number.isFinite(tidRaw)) {
           return json({ error: 'taskId doit être un nombre entier (id AgentTask)' }, 400);
         }
-        await db
-          .update(AgentTask)
-          .set({
-            status: 'completed',
-            output: safeOut,
-            updatedAt: now,
-          })
-          .where(eq(AgentTask.id, tidRaw));
+        const fin = await finalizeAgentTaskStatus(tidRaw, 'completed', safeOut);
+        if (!fin.ok) {
+          return json({ error: fin.error || 'Impossible de mettre à jour la tâche' }, 400);
+        }
         await db.insert(AgentMessage).values({
           fromAgent: String(agentId),
           toAgent: 'CHEF_TECHNIQUE',

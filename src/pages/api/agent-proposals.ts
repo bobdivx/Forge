@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { db, Request, Project, AgentMessage, desc, eq } from 'astro:db';
+import { db, Request, Project, AgentMessage, ActivityLog, desc, eq } from 'astro:db';
 
 export const GET: APIRoute = async () => {
   try {
@@ -12,6 +12,7 @@ export const GET: APIRoute = async () => {
         priority: Request.priority,
         author: Request.author,
         requestType: Request.requestType,
+        assigneeAgentId: Request.assigneeAgentId,
         createdAt: Request.createdAt,
         updatedAt: Request.updatedAt,
         projectName: Project.name,
@@ -68,6 +69,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       priority,
       author,
       requestType,
+      assigneeAgentId: assigneeAgentId.slice(0, 120) || undefined,
       createdAt: now,
       updatedAt: now,
     }).returning();
@@ -78,6 +80,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
       content: `[Nouvelle demande #${row?.id ?? '?'}] ${requestType} — "${title.slice(0, 200)}" (priorité: ${priority}, projet: ${projectId}, auteur: ${author})`,
       timestamp: now,
     });
+
+    if (row?.id != null) {
+      await db.insert(ActivityLog).values({
+        actorType: 'user',
+        actorId: author.slice(0, 200),
+        action: 'carnet.request.created',
+        entityType: 'request',
+        entityId: String(row.id),
+        details: JSON.stringify({
+          title: title.slice(0, 240),
+          requestType,
+          priority,
+          projectId,
+          assigneeAgentId,
+        }),
+        createdAt: now,
+      });
+    }
 
     return new Response(JSON.stringify({ ok: true, request: row }), {
       status: 201,
@@ -92,7 +112,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
  * PUT — met à jour statut / priorité / contenu d'une demande.
  * Corps : id*, status?, priority?, content?
  */
-export const PUT: APIRoute = async ({ request }) => {
+export const PUT: APIRoute = async ({ request, locals }) => {
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -124,9 +144,58 @@ export const PUT: APIRoute = async ({ request }) => {
     patch.priority = p;
   }
   if (body.content != null) patch.content = String(body.content).slice(0, 8000);
+  if (body.assigneeAgentId != null) {
+    patch.assigneeAgentId = String(body.assigneeAgentId).trim().slice(0, 120) || undefined;
+  }
 
   try {
+    const existingRows = await db.select().from(Request).where(eq(Request.id, id)).limit(1);
+    const existing = existingRows[0];
+    if (!existing) {
+      return new Response(JSON.stringify({ error: 'Demande introuvable' }), { status: 404 });
+    }
+
     await db.update(Request).set(patch as any).where(eq(Request.id, id));
+
+    const actorEmail =
+      String((locals as { user?: { email?: string } })?.user?.email ?? '').trim() || 'dashboard';
+    const now = new Date();
+
+    if (patch.status != null && String(existing.status) !== String(patch.status)) {
+      await db.insert(ActivityLog).values({
+        actorType: 'user',
+        actorId: actorEmail.slice(0, 200),
+        action: 'carnet.request.status_changed',
+        entityType: 'request',
+        entityId: String(id),
+        details: JSON.stringify({
+          from: existing.status,
+          to: patch.status,
+          title: String(existing.title || '').slice(0, 240),
+        }),
+        createdAt: now,
+      });
+    }
+
+    if (
+      patch.assigneeAgentId !== undefined &&
+      String(existing.assigneeAgentId ?? '').trim() !== String(patch.assigneeAgentId ?? '').trim()
+    ) {
+      await db.insert(ActivityLog).values({
+        actorType: 'user',
+        actorId: actorEmail.slice(0, 200),
+        action: 'carnet.request.assignee_changed',
+        entityType: 'request',
+        entityId: String(id),
+        details: JSON.stringify({
+          from: existing.assigneeAgentId ?? null,
+          to: patch.assigneeAgentId ?? null,
+          title: String(existing.title || '').slice(0, 240),
+        }),
+        createdAt: now,
+      });
+    }
+
     return new Response(JSON.stringify({ ok: true, id }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });

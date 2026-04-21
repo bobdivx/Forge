@@ -46,7 +46,7 @@ export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUr
 
   return (
     <>
-      <section class="xl:col-span-2 bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <button
           type="button"
           disabled={disabled && !gitLogError}

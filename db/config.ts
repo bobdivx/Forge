@@ -70,6 +70,8 @@ const Request = defineTable({
     author: column.text({ default: 'Mathieu' }),
     /** Fonctionnalite | Correction */
     requestType: column.text({ optional: true }),
+    /** Agent OpenClaw cible (sinon déduit du type de demande). */
+    assigneeAgentId: column.text({ optional: true }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
   },

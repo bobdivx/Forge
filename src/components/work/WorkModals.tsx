@@ -116,8 +116,7 @@ function DetailModal({ item, projects, onClose, onDeleted, onUpdated }: {
   async function saveChanges() {
     setError(''); setSaving(true);
     try {
-      const body: Record<string, unknown> = { id: item.id, status };
-      if (item._type === 'issue' || item._type === 'dep') body.assigneeAgentId = assignee;
+      const body: Record<string, unknown> = { id: item.id, status, assigneeAgentId: assignee };
       const res = await fetch(apiPath, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur');
@@ -200,6 +199,7 @@ function DetailModal({ item, projects, onClose, onDeleted, onUpdated }: {
             <div class="flex justify-between"><span class="text-gray-400">Type</span><span class="text-purple-600 font-medium">{item.requestType || '—'}</span></div>
             <div class="flex justify-between"><span class="text-gray-400">Priorité</span><span class="font-medium">{item.priority || '—'}</span></div>
             <div class="flex justify-between"><span class="text-gray-400">Auteur</span><span class="text-gray-700">{item.author || '—'}</span></div>
+            <div class="flex justify-between pt-1 border-t border-gray-200"><span class="text-gray-400">Agent cible</span><span class="font-medium" style={`color:${accentColor}`}>{agentLabel(assignee)}</span></div>
           </>
         )}
         {item._type === 'issue' && (

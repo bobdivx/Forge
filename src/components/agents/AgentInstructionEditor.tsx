@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
+import ForgeAgentProtocolHint from './ForgeAgentProtocolHint';
 
 interface AgentRow {
   agentId: string;
@@ -134,6 +135,7 @@ export default function AgentInstructionEditor() {
 
   return (
     <div class="flex flex-col gap-4">
+      <ForgeAgentProtocolHint />
       {/* Tabs */}
       <div class="flex gap-2 border-b border-zinc-700 pb-2">
         <button

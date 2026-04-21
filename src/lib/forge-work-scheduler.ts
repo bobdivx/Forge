@@ -4,8 +4,11 @@
  * - Tourne en arrière-plan via setInterval (60 s).
  * - Lit les WorkSchedule actifs en DB pour décider si la plage horaire est valide.
  * - Peut être démarré / arrêté manuellement (override = ignore les plages).
- * - Quand le travail commence : envoie une directive au CHEF_TECHNIQUE via OpenClaw
- *   et redispatche les AgentTask en statut `pending` / `bug`.
+ * - Au début d’une session (manuel ou entrée dans une plage) : directive à tous les agents
+ *   concernés via OpenClaw, puis création de tâches depuis les bugs ouverts et envoi des
+ *   AgentTask `pending` / `bug`.
+ * - Pendant la session : redispatch périodique des tâches sans renvoyer la directive complète.
+ * - Les demandes carnet (`Request` en pending) sont converties en `AgentTask` liées par `[ForgeRequest #id]`.
  * - Journalise dans la table Heartbeat.
  */
 
@@ -13,6 +16,16 @@ import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
 import { invokeOpenClawSessionsSend, resolveSessionsSendKey } from './openclaw-gateway';
+import {
+  resolveAssigneeForForgeRequest,
+  forgeRequestTaskTitle,
+  extractForgeRequestIdFromTaskBlob,
+  appendForgeDoneFooterToTaskBody,
+  buildForgeTaskDispatchFooter,
+  stripForgeDoneFooterFromBody,
+} from './forge-request-routing';
+import { scanOpenClawForForgeDoneSignals } from './forge-openclaw-done-scan';
+import { insertForgeActivityLog } from './forge-activity-log';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +70,10 @@ let _state: WorkSystemState = 'scheduled';
 let _lastStartedAt: Date | null = null;
 let _lastStoppedAt: Date | null = null;
 let _currentlyWorking = false;
+/** Évite les exécutions concurrentes du redispatch léger. */
+let _dispatchInProgress = false;
+/** Pour le mode planifié : évite une directive « début de session » à chaque minute dans la plage. */
+let _prevScheduledInWindow = false;
 
 // ── Helpers temps ────────────────────────────────────────────────────────────
 
@@ -106,6 +123,43 @@ function computeNextWindowAt(schedules: WorkScheduleRow[]): string | null {
     }
   }
   return null;
+}
+
+/** CHEF et veille en tête, puis le reste — toutes les cibles reçoivent la directive. */
+function orderDirectiveTargets(ids: string[]): string[] {
+  const uniq = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  const rank = (id: string) => {
+    const u = id.toUpperCase();
+    if (u === 'CHEF_TECHNIQUE') return 0;
+    if (u === 'VEILLE_TECH') return 1;
+    return 2;
+  };
+  return uniq.sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return a.localeCompare(b);
+  });
+}
+
+/** Envoie `sessions_send` puis tente la résolution de clé gateway (ids métiers / alias). */
+async function sessionsSendWithFallback(
+  sessionKey: string,
+  message: string,
+  extraHints: string[] = [],
+): Promise<{ ok: boolean; error?: string }> {
+  let res = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
+  if (!res.ok) {
+    const fallback = await resolveSessionsSendKey(undefined, [
+      sessionKey,
+      sessionKey.replace(/^openclaw\//i, ''),
+      ...extraHints,
+    ]);
+    if (fallback && fallback !== sessionKey) {
+      res = await invokeOpenClawSessionsSend({ sessionKey: fallback, message, asyncDelivery: true });
+    }
+  }
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
 // ── Journalisation ────────────────────────────────────────────────────────────
@@ -165,7 +219,7 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
       if (agentIds.length && !agentIds.includes(assignee)) continue;
 
       const taskTitle = `[AppIssue #${issue.id}] ${issue.title}`;
-      const taskInput = [
+      const taskInputBase = [
         `URL: ${issue.url}`,
         `Type: ${issue.errorType}`,
         issue.detail ? `Détail: ${issue.detail}` : '',
@@ -174,19 +228,136 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
         .filter(Boolean)
         .join('\n');
 
-      await db.insert(AgentTask).values({
-        agentId: assignee,
-        task: taskTitle,
-        input: taskInput,
-        projectId: issue.projectId ?? undefined,
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      const [createdIssueTask] = await db
+        .insert(AgentTask)
+        .values({
+          agentId: assignee,
+          task: taskTitle,
+          input: taskInputBase,
+          projectId: issue.projectId ?? undefined,
+          status: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      if (createdIssueTask?.id != null) {
+        await db
+          .update(AgentTask)
+          .set({
+            input: appendForgeDoneFooterToTaskBody(createdIssueTask.id, taskInputBase),
+            updatedAt: new Date(),
+          })
+          .where(eq(AgentTask.id, createdIssueTask.id));
+        await insertForgeActivityLog({
+          actorType: 'system',
+          actorId: 'work_scheduler',
+          action: 'swarm.issue.task_created',
+          entityType: 'agent_task',
+          entityId: String(createdIssueTask.id),
+          details: {
+            appIssueId: issue.id,
+            assignee,
+            title: String(issue.title || '').slice(0, 240),
+          },
+        });
+      }
       seenIssueIds.add(idStr);
     }
   } catch (e) {
     console.warn('[work-scheduler] dispatchOpenAppIssues error:', e);
+  }
+}
+
+/** Demandes carnet (`Request` pending) → `AgentTask`, puis passage en `in_progress`. */
+async function dispatchPendingForgeRequests(agentIds: string[]) {
+  try {
+    const { db, Request, AgentTask, Project } = await loadAstroDb();
+    const activeProjects = await db
+      .select({ id: Project.id })
+      .from(Project)
+      .where(eq(Project.swarmEnabled, 1));
+    const activeIds = new Set(activeProjects.map((p) => p.id));
+
+    const requestRows = await db.select().from(Request).limit(250);
+    const pend = requestRows.filter((r) => String(r.status).toLowerCase() === 'pending');
+    if (!pend.length) return;
+
+    const taskRows = await db.select().from(AgentTask).limit(400);
+
+    const hasOpenAgentTaskForRequest = (requestId: number): boolean =>
+      taskRows.some((t) => {
+        const blob = `${t.task ?? ''}\n${t.input ?? ''}`;
+        if (extractForgeRequestIdFromTaskBlob(blob) !== requestId) return false;
+        const st = String(t.status).toLowerCase();
+        return st === 'pending' || st === 'running';
+      });
+
+    for (const req of pend) {
+      if (!activeIds.has(req.projectId)) continue;
+
+      const assignee = resolveAssigneeForForgeRequest(req);
+      if (agentIds.length && !agentIds.includes(assignee)) continue;
+
+      if (hasOpenAgentTaskForRequest(req.id)) continue;
+
+      const taskTitle = forgeRequestTaskTitle(req.id, req.title);
+      const taskInputBase = [
+        `Type: ${req.requestType ?? 'demande'}`,
+        `Priorité: ${req.priority ?? 'medium'}`,
+        req.content ? `Description:\n${req.content}` : '',
+        `Auteur carnet: ${req.author ?? '—'}`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+        .slice(0, 120_000);
+
+      const [createdReqTask] = await db
+        .insert(AgentTask)
+        .values({
+          agentId: assignee,
+          task: taskTitle,
+          input: taskInputBase,
+          projectId: req.projectId,
+          status: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      if (createdReqTask?.id != null) {
+        await db
+          .update(AgentTask)
+          .set({
+            input: appendForgeDoneFooterToTaskBody(createdReqTask.id, taskInputBase),
+            updatedAt: new Date(),
+          })
+          .where(eq(AgentTask.id, createdReqTask.id));
+      }
+
+      await db
+        .update(Request)
+        .set({ status: 'in_progress', updatedAt: new Date() })
+        .where(eq(Request.id, req.id));
+
+      if (createdReqTask?.id != null) {
+        await insertForgeActivityLog({
+          actorType: 'system',
+          actorId: 'work_scheduler',
+          action: 'swarm.request.dispatched',
+          entityType: 'request',
+          entityId: String(req.id),
+          details: {
+            taskId: createdReqTask.id,
+            assignee,
+            title: String(req.title || '').slice(0, 240),
+            requestType: req.requestType ?? null,
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[work-scheduler] dispatchPendingForgeRequests error:', e);
   }
 }
 
@@ -211,19 +382,33 @@ async function dispatchPendingTasks(agentIds: string[]) {
     for (const task of pending) {
       try {
         const sessionKey = task.agentId;
-        const rawMessage = `[Forge — reprise automatique · tâche #${task.id}]\n\n${task.task}${task.input ? '\n\n' + task.input : ''}`;
-        const message = (await translateContentForAgent(rawMessage)).slice(0, 120_000);
+        const inputClean = stripForgeDoneFooterFromBody(task.input || '');
+        const rawMessage = `[Forge — reprise automatique · tâche #${task.id}]\n\n${task.task}${inputClean ? '\n\n' + inputClean : ''}`;
+        const translatedCore = await translateContentForAgent(rawMessage);
+        const message = (
+          translatedCore.trimEnd() +
+          '\n\n' +
+          buildForgeTaskDispatchFooter(task.id)
+        ).slice(0, 120_000);
 
-        let res = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
-        if (!res.ok) {
-          const fallback = await resolveSessionsSendKey(undefined, [sessionKey, task.agentId]);
-          if (fallback && fallback !== sessionKey) {
-            res = await invokeOpenClawSessionsSend({ sessionKey: fallback, message, asyncDelivery: true });
-          }
-        }
+        const res = await sessionsSendWithFallback(sessionKey, message, [
+          task.agentId,
+          String(task.agentId || '').replace(/^openclaw\//i, ''),
+        ]);
         if (res.ok) {
           const { db: db2, AgentTask: AT2, eq: eq2 } = await loadAstroDb();
           await db2.update(AT2).set({ status: 'running', updatedAt: new Date() }).where(eq2(AT2.id, task.id));
+          await insertForgeActivityLog({
+            actorType: 'system',
+            actorId: 'work_scheduler',
+            action: 'swarm.task.sent_openclaw',
+            entityType: 'agent_task',
+            entityId: String(task.id),
+            details: {
+              sessionKey,
+              taskPreview: String(task.task || '').slice(0, 200),
+            },
+          });
         }
       } catch {
         /* task skip silencieux */
@@ -234,14 +419,71 @@ async function dispatchPendingTasks(agentIds: string[]) {
   }
 }
 
-/** Envoie la directive de début de session ; renvoie les erreurs OpenClaw (token, gateway, session). */
+async function getEnabledAgentIds(): Promise<string[]> {
+  try {
+    const { db, AgentInstruction } = await loadAstroDb();
+    const allAgents = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
+    return allAgents.map((a) => a.agentId);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Agents concernés par les plages actives à `now` (vide dans les plages = tous les agents activés).
+ */
+async function resolveTargetsForScheduleWindow(
+  activeSchedules: WorkScheduleRow[],
+  now: Date,
+): Promise<string[]> {
+  const { db, AgentInstruction } = await loadAstroDb();
+  const agentSet = new Set<string>();
+  for (const s of activeSchedules) {
+    if (isInWindow(s, now)) {
+      try {
+        const ids: string[] = JSON.parse(s.agentIds);
+        ids.forEach((id) => {
+          if (id) agentSet.add(id);
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  let targets = [...agentSet];
+  if (targets.length === 0) {
+    const allAgents = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
+    targets = allAgents.map((a) => a.agentId);
+  }
+  return targets;
+}
+
+/** Reprend les bugs → tâches et pousse les tâches pending (sans renvoyer la directive « début de session »). */
+async function runDispatchOnly(agentIds: string[]): Promise<void> {
+  if (_dispatchInProgress || _currentlyWorking) return;
+  _dispatchInProgress = true;
+  try {
+    const { exceeded } = await checkBudgetExceeded();
+    if (exceeded) return;
+    await dispatchOpenAppIssues(agentIds);
+    await dispatchPendingForgeRequests(agentIds);
+    await dispatchPendingTasks(agentIds);
+    await scanOpenClawForForgeDoneSignals();
+  } finally {
+    _dispatchInProgress = false;
+  }
+}
+
+/** Envoie la directive de début de session à **tous** les agents cibles (plus de limite à 3). */
 async function sendWorkDirective(agentIds: string[]): Promise<string[]> {
   const errors: string[] = [];
   const { db, Project } = await loadAstroDb();
   const activeProjects = await db.select().from(Project);
-  const swarmProjects = activeProjects.filter(p => p.swarmEnabled === 1);
+  const swarmProjects = activeProjects.filter((p) => p.swarmEnabled === 1);
 
-  const targets = agentIds.length ? agentIds : ['CHEF_TECHNIQUE'];
+  const ordered = orderDirectiveTargets(
+    agentIds.length ? agentIds : ['CHEF_TECHNIQUE'],
+  );
 
   let projectListMsg = '';
   if (swarmProjects.length > 0) {
@@ -251,20 +493,20 @@ async function sendWorkDirective(agentIds: string[]): Promise<string[]> {
     projectListMsg =
       '\n\n🎯 PROJETS ACTIFS POUR LE SWARM :\n' +
       translatedPaths.join('\n') +
-      '\n\nInstructions prioritaires : Analyse ces dossiers sur le NAS, identifie les manques et propose des améliorations ou commence les tâches en attente.';
+      '\n\nInstructions prioritaires : le CHEF coordonne, la VEILLE propose des améliorations sur ces dépôts, les autres agents exécutent selon leurs rôles. Analyse les dossiers sur le NAS, identifie les manques et lance les tâches en attente.';
   } else {
     projectListMsg =
-      '\n\n⚠️ AUCUN PROJET ACTIF. Reste en veille et surveille les nouvelles instructions générales.';
+      '\n\n⚠️ AUCUN PROJET SWARM ACTIF (toggle par projet). La VEILLE peut quand même proposer des idées générales ; le CHEF garde la priorité sur ce qui est pertinent.';
   }
 
   const message =
     '[Forge — début de session de travail automatique]\n\n' +
-    "Le système de travail planifié vient de s'activer. " +
+    "Le système de travail Forge vient de démarrer une session. " +
     projectListMsg;
 
-  for (const sessionKey of targets.slice(0, 3)) {
+  for (const sessionKey of ordered) {
     try {
-      const res = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
+      const res = await sessionsSendWithFallback(sessionKey, message);
       if (!res.ok) {
         const line = `${sessionKey}: ${res.error || 'échec inconnu'}`;
         errors.push(line);
@@ -352,9 +594,10 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
     });
 
     const openClawErrors = await sendWorkDirective(agentIds);
-    /** Crée des AgentTask pour les bugs ouverts, puis envoie toutes les tâches `pending`/`bug`. */
     await dispatchOpenAppIssues(agentIds);
+    await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
+    await scanOpenClawForForgeDoneSignals();
     return { ok: true, openClawErrors };
   } catch (e) {
     await logHeartbeat('error', `Erreur cycle de travail : ${String(e)}`);
@@ -379,12 +622,21 @@ async function stopWorkCycle(reason: string) {
 // ── Tick principal ────────────────────────────────────────────────────────────
 
 async function tick() {
-  if (_state === 'running' || _state === 'stopped') {
-    // override manuel : on ne touche pas à l'état
+  if (_state === 'stopped') return;
+
+  // Mode manuel « En cours » : redispatch régulier (la directive complète a été envoyée au démarrage).
+  if (_state === 'running') {
+    try {
+      const agentIds = await getEnabledAgentIds();
+      await runDispatchOnly(agentIds);
+    } catch (e) {
+      console.warn('[work-scheduler] tick (running) error:', e);
+    }
     return;
   }
 
-  // Mode 'scheduled' : évaluer les plages horaires
+  if (_state !== 'scheduled') return;
+
   try {
     const { db, WorkSchedule } = await loadAstroDb();
     const schedules: WorkScheduleRow[] = await db.select().from(WorkSchedule);
@@ -393,31 +645,24 @@ async function tick() {
     const now = new Date();
     const inWindow = activeSchedules.some((s) => isInWindow(s, now));
 
-    if (inWindow && !_currentlyWorking) {
-      // Rassembler tous les agentIds des plages actives dans la fenêtre
-      const agentSet = new Set<string>();
-      for (const s of activeSchedules) {
-        if (isInWindow(s, now)) {
-          try {
-            const ids: string[] = JSON.parse(s.agentIds);
-            ids.forEach((id) => { if (id) agentSet.add(id); });
-          } catch {
-            /* ignore */
+    if (inWindow) {
+      const targets = await resolveTargetsForScheduleWindow(activeSchedules, now);
+
+      if (!_prevScheduledInWindow) {
+        if (!_currentlyWorking) {
+          const cycle = await runWorkCycle(targets, false);
+          if (!cycle.budgetBlocked) {
+            _prevScheduledInWindow = true;
           }
         }
+      } else {
+        await runDispatchOnly(targets);
       }
-
-      let targets = [...agentSet];
-      // Si la plage ne spécifie aucun agent, on prend tous les agents activés
-      if (targets.length === 0) {
-        const { AgentInstruction } = await loadAstroDb();
-        const allAgents = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
-        targets = allAgents.map(a => a.agentId);
+    } else {
+      if (_prevScheduledInWindow) {
+        await logHeartbeat('info', '[work-scheduler] Fin de plage horaire planifiée');
+        _prevScheduledInWindow = false;
       }
-
-      await runWorkCycle(targets, false);
-    } else if (!inWindow && _currentlyWorking) {
-      await stopWorkCycle('fin de plage horaire');
     }
   } catch (e) {
     console.warn('[work-scheduler] tick error:', e);
@@ -479,12 +724,14 @@ export async function manualStart(agentIds: string[] = []): Promise<WorkCycleRes
 export async function manualStop() {
   await stopWorkCycle('arrêt manuel');
   _state = 'stopped';
+  _prevScheduledInWindow = false;
 }
 
 /** Réactive le mode planifié — le scheduler reprend le contrôle. */
 export function enableScheduledMode() {
   _state = 'scheduled';
   _currentlyWorking = false;
+  _prevScheduledInWindow = false;
 }
 
 /** Retourne l'état courant du système de travail. */

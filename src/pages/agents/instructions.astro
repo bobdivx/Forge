@@ -3,6 +3,7 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import AgentInstructionEditor from '../../components/agents/AgentInstructionEditor';
+import { FORGE_AGENT_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
 ---
 
 <DashboardLayout title="Instructions Agents" currentPath="/agents/instructions">
@@ -23,6 +24,14 @@ import AgentInstructionEditor from '../../components/agents/AgentInstructionEdit
           Gérez les system prompts de chaque agent directement depuis le dashboard.
           La DB est la source de vérité — le bouton <strong class="text-gray-700">⚡ Sync</strong> régénère les fichiers
           <code class="text-[#175B37] text-xs font-mono">.md</code> lus par OpenClaw.
+        </p>
+        <p class="text-[#175B37] text-sm mt-3 max-w-2xl bg-[#E9F3EB] border border-[#175B37]/20 rounded-xl px-4 py-3">
+          <strong class="text-gray-800">Clôture des missions carnet :</strong>{' '}
+          <span class="text-gray-700">{FORGE_AGENT_PROTOCOL_SUMMARY}</span>
+          <span class="block text-xs text-gray-600 mt-2">
+            Détail technique (exemple PUT, codes <code class="font-mono">completed</code> / <code class="font-mono">failed</code>)
+            dans le bloc repliable sous l’éditeur ci-dessous.
+          </span>
         </p>
       </div>
       <a

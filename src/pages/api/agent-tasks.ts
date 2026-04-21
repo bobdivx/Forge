@@ -5,6 +5,9 @@ import {
   mapSessionToAgentRow,
 } from '../../lib/openclaw-gateway';
 import { loadAstroDb } from '../../lib/load-astro-db';
+import type { AgentTaskTerminalStatus } from '../../lib/forge-task-status-sync';
+import { finalizeAgentTaskStatus } from '../../lib/forge-task-status-sync';
+import { insertForgeActivityLog } from '../../lib/forge-activity-log';
 
 /** POST { agentId, task, status? } — crée une tâche en base. */
 export const POST: APIRoute = async ({ request }) => {
@@ -123,8 +126,7 @@ export const GET: APIRoute = async ({ locals }) => {
  * PUT { id, status, output? } — un agent met à jour le statut d'une tâche.
  * Statuts valides : pending | running | completed | failed | bug | cancelled
  */
-export const PUT: APIRoute = async ({ request }) => {
-  const { db, AgentTask, eq } = await loadAstroDb();
+export const PUT: APIRoute = async ({ request, locals }) => {
   let body: any;
   try {
     body = await request.json();
@@ -149,14 +151,29 @@ export const PUT: APIRoute = async ({ request }) => {
     );
   }
   try {
-    await db
-      .update(AgentTask)
-      .set({
-        status: String(status),
-        output: output ? String(output) : undefined,
-        updatedAt: new Date(),
-      })
-      .where(eq(AgentTask.id, Number(id)));
+    const r = await finalizeAgentTaskStatus(
+      Number(id),
+      String(status) as AgentTaskTerminalStatus,
+      output,
+    );
+    if (!r.ok) {
+      return new Response(JSON.stringify({ error: r.error || 'Mise à jour impossible' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const actorEmail =
+      String((locals as { user?: { email?: string } })?.user?.email ?? '').trim() || 'dashboard';
+    await insertForgeActivityLog({
+      actorType: 'user',
+      actorId: actorEmail.slice(0, 200),
+      action: 'swarm.task.status_manual',
+      entityType: 'agent_task',
+      entityId: String(Number(id)),
+      details: { status: String(status) },
+    });
+
     return new Response(JSON.stringify({ ok: true, id, status }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
