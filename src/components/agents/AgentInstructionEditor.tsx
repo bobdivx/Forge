@@ -24,6 +24,7 @@ type AgentTemplate = {
   label: string;
   defaultModel: string;
   filePath: string;
+  defaultPrompt?: string;
 };
 
 const MODEL_FALLBACK = ['qwen2.5-coder:7b', 'qwen2.5:7b', 'llama3.1:8b'];
@@ -118,6 +119,9 @@ export default function AgentInstructionEditor() {
     setNewAgentId(t.id);
     if (newAgentModelMode === 'list' && t.defaultModel) {
       setNewAgentModelFromList(t.defaultModel);
+    }
+    if (typeof t.defaultPrompt === 'string') {
+      setNewAgentPrompt(t.defaultPrompt);
     }
   }, [newAgentTemplate, templates, newAgentModelMode]);
 

@@ -31,6 +31,8 @@ import {
 } from './forge-request-routing';
 import { scanOpenClawForForgeDoneSignals } from './forge-openclaw-done-scan';
 import { insertForgeActivityLog } from './forge-activity-log';
+import { ensureProjectScopedSubagent } from './openclaw-app-subagents';
+import { cleanupIdleProjectScopedSubagents } from './openclaw-app-subagents';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,6 +88,7 @@ let _lastStoppedAt: Date | null = null;
 let _currentlyWorking = false;
 /** Évite les exécutions concurrentes du redispatch léger. */
 let _dispatchInProgress = false;
+let _lastSubagentCleanupAt = 0;
 /** Pour le mode planifié : évite une directive « début de session » à chaque minute dans la plage. */
 let _prevScheduledInWindow = false;
 
@@ -229,8 +232,17 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
       const idStr = String(issue.id);
       if (seenIssueIds.has(idStr)) continue;
 
-      const assignee = String(issue.assigneeAgentId || 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE';
-      if (agentIds.length && !agentIds.includes(assignee)) continue;
+      const parentAssignee = String(issue.assigneeAgentId || 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE';
+      const scoped = await ensureProjectScopedSubagent({
+        parentAgentId: parentAssignee,
+        projectId: issue.projectId,
+      });
+      const assignee = scoped.agentId || parentAssignee;
+      if (
+        agentIds.length &&
+        !agentIds.includes(parentAssignee) &&
+        !agentIds.includes(assignee)
+      ) continue;
 
       const taskTitle = `[AppIssue #${issue.id}] ${issue.title}`;
       const taskInputBase = [
@@ -310,8 +322,17 @@ async function dispatchPendingForgeRequests(agentIds: string[]) {
     for (const req of pend) {
       if (!activeIds.has(req.projectId)) continue;
 
-      const assignee = resolveAssigneeForForgeRequest(req);
-      if (agentIds.length && !agentIds.includes(assignee)) continue;
+      const parentAssignee = resolveAssigneeForForgeRequest(req);
+      const scoped = await ensureProjectScopedSubagent({
+        parentAgentId: parentAssignee,
+        projectId: req.projectId,
+      });
+      const assignee = scoped.agentId || parentAssignee;
+      if (
+        agentIds.length &&
+        !agentIds.includes(parentAssignee) &&
+        !agentIds.includes(assignee)
+      ) continue;
 
       if (hasOpenAgentTaskForRequest(req.id)) continue;
 
@@ -483,8 +504,27 @@ async function runDispatchOnly(agentIds: string[]): Promise<void> {
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
     await scanOpenClawForForgeDoneSignals();
+    await maybeCleanupIdleSubagents();
   } finally {
     _dispatchInProgress = false;
+  }
+}
+
+async function maybeCleanupIdleSubagents(): Promise<void> {
+  const now = Date.now();
+  const everyMs = 6 * 60 * 60 * 1000;
+  if (now - _lastSubagentCleanupAt < everyMs) return;
+  _lastSubagentCleanupAt = now;
+  try {
+    const res = await cleanupIdleProjectScopedSubagents();
+    if (res.removed.length > 0) {
+      await logHeartbeat(
+        'info',
+        `[work-scheduler] cleanup sous-agents: ${res.removed.length} supprimé(s) sur ${res.scanned} scannés`,
+      );
+    }
+  } catch (e) {
+    console.warn('[work-scheduler] cleanup idle subagents error:', e);
   }
 }
 
@@ -681,6 +721,7 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
     await scanOpenClawForForgeDoneSignals();
+    await maybeCleanupIdleSubagents();
     const sessionCheck = await verifyAgentSessions(agentIds);
     return {
       ok: true,

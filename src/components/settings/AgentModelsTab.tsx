@@ -1,4 +1,5 @@
 import AgentModelMatrix from './AgentModelMatrix';
+import AgentSanityPanel from './AgentSanityPanel';
 
 export default function AgentModelsTab() {
   return (
@@ -21,6 +22,7 @@ export default function AgentModelsTab() {
           Instructions
         </a>
       </div>
+      <AgentSanityPanel />
       <AgentModelMatrix />
     </div>
   );

@@ -15,6 +15,7 @@
  *   agentId:  string          // ex: "TESTEUR_QA"
  *   type:     'bug' | 'task' | 'completion' | 'memory' | 'message' | 'request'
  *            | 'app_issue' | 'dependency_request' | 'app_issue_status' | 'dependency_status'
+ *            | 'feature_status'
  *            | 'dev_server_control'
  *   title:    string          // résumé court (obligatoire)
  *   content:  string          // détail complet (obligatoire)
@@ -84,6 +85,7 @@ const ALLOWED_TYPES = [
   'app_issue_status',
   'dependency_status',
   'feature_proposal',
+  'feature_status',
   'dev_server_control',
 ] as const;
 type HookType = (typeof ALLOWED_TYPES)[number];
@@ -140,19 +142,24 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     issueId,
     requestId,
     status: bodyStatus,
+    featureId,
   } = body ?? {};
 
   if (!agentId || !type) {
     return json({ error: 'Champs requis : agentId, type' }, 400);
   }
 
-  const isStatusUpdate = type === 'app_issue_status' || type === 'dependency_status';
+  const isStatusUpdate =
+    type === 'app_issue_status' || type === 'dependency_status' || type === 'feature_status';
   if (isStatusUpdate) {
     if (type === 'app_issue_status' && (issueId == null || bodyStatus == null)) {
       return json({ error: 'app_issue_status requiert issueId et status' }, 400);
     }
     if (type === 'dependency_status' && (requestId == null || bodyStatus == null)) {
       return json({ error: 'dependency_status requiert requestId et status' }, 400);
+    }
+    if (type === 'feature_status' && (featureId == null || bodyStatus == null)) {
+      return json({ error: 'feature_status requiert featureId et status' }, 400);
     }
   } else if (!title || content == null || content === '') {
     return json(
@@ -199,6 +206,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           priority: (priority as any) || 'medium',
           author: String(agentId),
           requestType: 'Fonctionnalite',
+          assigneeAgentId: String(assigneeAgentId || 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE',
           createdAt: now,
           updatedAt: now,
         });
@@ -210,6 +218,47 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         });
         return json({ ok: true, message: `Proposition enregistrée pour ${project}`, type });
       }
+    }
+
+    // ── Mise à jour proposition fonctionnalité (carnet Request) ─────────────
+    if (type === 'feature_status') {
+      const featureStatus = String(bodyStatus || '').trim().toLowerCase();
+      const map: Record<string, string> = {
+        pending: 'pending',
+        in_progress: 'in_progress',
+        running: 'in_progress',
+        completed: 'completed',
+        done: 'completed',
+        failed: 'pending',
+        rejected: 'rejected',
+        cancelled: 'rejected',
+      };
+      const next = map[featureStatus];
+      if (!next) {
+        return json({ error: 'status invalide pour feature_status' }, 400);
+      }
+      const idNum = Number(featureId);
+      if (!Number.isFinite(idNum) || idNum < 1) {
+        return json({ error: 'featureId invalide' }, 400);
+      }
+      const existing = await db.select().from(Request).where(eq(Request.id, idNum)).limit(1);
+      if (!existing.length) return json({ error: `Feature #${idNum} introuvable` }, 404);
+      const prevContent = String(existing[0].content || '');
+      const note = String(content || '').trim();
+      const mergedContent = note
+        ? `${prevContent}\n\n---\nMise à jour ${agentId} (${now.toISOString()}):\n${note}`.slice(0, 8000)
+        : prevContent;
+      await db
+        .update(Request)
+        .set({ status: next, content: mergedContent, updatedAt: now })
+        .where(eq(Request.id, idNum));
+      await db.insert(AgentMessage).values({
+        fromAgent: String(agentId),
+        toAgent: 'CHEF_TECHNIQUE',
+        content: `[Feature #${idNum}] → ${next}${note ? ` — ${note.slice(0, 300)}` : ''}`,
+        timestamp: now,
+      });
+      return json({ ok: true, message: `Feature #${idNum} → ${next}`, type });
     }
 
     // ── Mise à jour anomalie page ─────────────────────────────────────────

@@ -4,7 +4,7 @@
  * Réimplémenté from scratch pour DevForge (Astro/Node.js).
  * SERVEUR UNIQUEMENT — utilise child_process et fs.
  */
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -13,6 +13,8 @@ import {
   isSafeRepoDirName,
 } from './forge-repos';
 import { summarizeGithubFolder, type GithubFolderSummary } from './project-github-meta';
+import { getConfig } from './config-db';
+import { isGithubAutomationAgent } from './agent-github-auth';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -580,6 +582,145 @@ const projectsList: ForgeTool<Record<string, never>, string[]> = {
     }),
 };
 
+const githubCommit: ForgeTool<
+  {
+    project: string;
+    agentId: string;
+    message: string;
+    files?: string[];
+    push?: boolean;
+    branch?: string;
+  },
+  { committed: boolean; pushed: boolean; branch: string; commitSha: string | null; note?: string }
+> = {
+  name: 'github_commit',
+  description: 'Commit et push GitHub contrôlés pour agent GitHub',
+  category: 'git',
+  params: {
+    project: { type: 'string', description: 'Nom du projet', required: true },
+    agentId: { type: 'string', description: "ID agent demandeur", required: true },
+    message: { type: 'string', description: 'Message de commit', required: true },
+    push: { type: 'boolean', description: 'Pousser après commit', default: true },
+    branch: { type: 'string', description: 'Branche cible optionnelle' },
+  },
+  execute: ({ project, agentId, message, files = [], push = true, branch }, _ctx) =>
+    run('github_commit', async () => {
+      const requester = String(agentId || '').trim();
+      if (!isGithubAutomationAgent(requester)) {
+        return {
+          ok: false,
+          output: { committed: false, pushed: false, branch: '', commitSha: null },
+          error: `Agent non autorisé pour commit GitHub: ${requester || 'inconnu'}`,
+          durationMs: 0,
+          toolName: 'github_commit',
+        };
+      }
+      const dir = await resolveProjectPath(project);
+      if (!dir) {
+        return {
+          ok: false,
+          output: { committed: false, pushed: false, branch: '', commitSha: null },
+          error: `Projet introuvable: ${project}`,
+          durationMs: 0,
+          toolName: 'github_commit',
+        };
+      }
+      const msg = String(message || '').trim();
+      if (!msg) {
+        return {
+          ok: false,
+          output: { committed: false, pushed: false, branch: '', commitSha: null },
+          error: 'Message de commit requis',
+          durationMs: 0,
+          toolName: 'github_commit',
+        };
+      }
+      const gitStatusBefore = safeExec('git status --porcelain', dir);
+      if (!gitStatusBefore.ok) {
+        return {
+          ok: false,
+          output: { committed: false, pushed: false, branch: '', commitSha: null },
+          error: gitStatusBefore.stdout || 'Impossible de lire git status',
+          durationMs: 0,
+          toolName: 'github_commit',
+        };
+      }
+      if (!String(gitStatusBefore.stdout || '').trim()) {
+        return {
+          ok: true,
+          output: {
+            committed: false,
+            pushed: false,
+            branch: '',
+            commitSha: null,
+            note: 'Aucun changement à commit',
+          },
+          durationMs: 0,
+          toolName: 'github_commit',
+        };
+      }
+
+      if (Array.isArray(files) && files.length > 0) {
+        for (const f of files) {
+          const rel = String(f || '').trim();
+          if (!rel || rel.includes('..')) continue;
+          execFileSync('git', ['add', '--', rel], { cwd: dir, encoding: 'utf8' });
+        }
+      } else {
+        execFileSync('git', ['add', '-A'], { cwd: dir, encoding: 'utf8' });
+      }
+
+      execFileSync('git', ['commit', '-m', msg], { cwd: dir, encoding: 'utf8' });
+      const sha = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
+      const currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
+      const targetBranch = String(branch || '').trim() || currentBranch;
+
+      let pushed = false;
+      if (push) {
+        const token = String((await getConfig('githubToken')) || '').trim();
+        if (!token) {
+          return {
+            ok: false,
+            output: { committed: true, pushed: false, branch: targetBranch, commitSha: sha },
+            error: 'Token GitHub absent dans Forge (settings.githubToken)',
+            durationMs: 0,
+            toolName: 'github_commit',
+          };
+        }
+        execFileSync(
+          'git',
+          [
+            '-c',
+            `http.extraHeader=Authorization: Bearer ${token}`,
+            'push',
+            'origin',
+            `HEAD:${targetBranch}`,
+          ],
+          { cwd: dir, encoding: 'utf8' },
+        );
+        pushed = true;
+      }
+
+      return {
+        ok: true,
+        output: {
+          committed: true,
+          pushed,
+          branch: targetBranch,
+          commitSha: sha,
+        },
+        durationMs: 0,
+        toolName: 'github_commit',
+      };
+    }),
+};
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 const ALL_TOOLS: ForgeTool[] = [
@@ -593,6 +734,7 @@ const ALL_TOOLS: ForgeTool[] = [
   projectScripts as ForgeTool,
   dockerPs as ForgeTool,
   dockerLogs as ForgeTool,
+  githubCommit as ForgeTool,
   githubMeta as ForgeTool,
   projectsList as ForgeTool,
 ];

@@ -8,9 +8,10 @@ import { getAgentApiSecretsBundle } from '../../lib/custom-api-tokens-db';
  * Exemple : `curl -s http://127.0.0.1:4321/api/agent-api-secrets`
  * (depuis la machine / LAN autorisé par le middleware).
  */
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ url }) => {
   try {
-    const bundle = await getAgentApiSecretsBundle();
+    const agentId = String(url.searchParams.get('agentId') || '').trim();
+    const bundle = await getAgentApiSecretsBundle(agentId || undefined);
     return new Response(JSON.stringify(bundle), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

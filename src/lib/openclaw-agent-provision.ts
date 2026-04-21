@@ -1,10 +1,11 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { getForgeRepoRoot } from './forge-repo-root';
 import {
   fetchOpenClawJson,
   fetchOpenClawAgentsList,
   invokeOpenClawSessionsSend,
+  readOpenClawLocalConfigFile,
 } from './openclaw-gateway';
 
 type ProvisionStep = {
@@ -17,6 +18,45 @@ export type ProvisionAgentResult = {
   ok: boolean;
   steps: ProvisionStep[];
 };
+
+type ConfigSnapshot = {
+  path: string;
+  raw: string;
+  size: number;
+};
+
+function isLikelyHealthyOpenClawConfig(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const hasGateway = parsed.gateway && typeof parsed.gateway === 'object';
+    const hasModels = parsed.models && typeof parsed.models === 'object';
+    const hasAgents = parsed.agents && typeof parsed.agents === 'object';
+    return Boolean(hasGateway && hasModels && hasAgents);
+  } catch {
+    return false;
+  }
+}
+
+async function snapshotOpenClawConfig(): Promise<ConfigSnapshot | null> {
+  const local = await readOpenClawLocalConfigFile();
+  const filePath = local?.path;
+  if (!filePath) return null;
+  try {
+    const raw = readFileSync(filePath, 'utf-8');
+    return { path: filePath, raw, size: Buffer.byteLength(raw, 'utf-8') };
+  } catch {
+    return null;
+  }
+}
+
+function rollbackOpenClawConfig(snapshot: ConfigSnapshot): string | null {
+  try {
+    writeFileSync(snapshot.path, snapshot.raw, 'utf-8');
+    return null;
+  } catch (e: unknown) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
 
 function buildDelegatePrompt(params: {
   agentId: string;
@@ -63,6 +103,7 @@ export async function provisionAgentInOpenClaw(params: {
   }
 
   // 2) Stratégie API gateway: tenter agents_upsert (si tool exposé)
+  const configBefore = await snapshotOpenClawConfig();
   const upsert = await fetchOpenClawJson(undefined, '/tools/invoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -75,7 +116,37 @@ export async function provisionAgentInOpenClaw(params: {
     }),
   });
   if (upsert.ok) {
-    steps.push({ strategy: 'gateway_agents_upsert', ok: true });
+    if (!configBefore) {
+      steps.push({
+        strategy: 'gateway_agents_upsert',
+        ok: true,
+        detail: 'upsert_ok; no_local_config_snapshot',
+      });
+    } else {
+      let safe = true;
+      let detail = 'upsert_ok';
+      try {
+        const afterRaw = readFileSync(configBefore.path, 'utf-8');
+        const afterSize = Buffer.byteLength(afterRaw, 'utf-8');
+        const severeShrink = afterSize < Math.floor(configBefore.size * 0.5);
+        const missingCoreSections = !isLikelyHealthyOpenClawConfig(afterRaw);
+        if (severeShrink || missingCoreSections) {
+          safe = false;
+          const rollbackErr = rollbackOpenClawConfig(configBefore);
+          detail = rollbackErr
+            ? `unsafe_config_detected(size:${configBefore.size}->${afterSize}, missingCoreSections:${missingCoreSections}); rollback_failed:${rollbackErr}`
+            : `unsafe_config_detected(size:${configBefore.size}->${afterSize}, missingCoreSections:${missingCoreSections}); rollback_done`;
+        }
+      } catch (e: unknown) {
+        safe = false;
+        const msg = e instanceof Error ? e.message : String(e);
+        const rollbackErr = rollbackOpenClawConfig(configBefore);
+        detail = rollbackErr
+          ? `post_upsert_check_failed:${msg}; rollback_failed:${rollbackErr}`
+          : `post_upsert_check_failed:${msg}; rollback_done`;
+      }
+      steps.push({ strategy: 'gateway_agents_upsert', ok: safe, detail });
+    }
   } else {
     steps.push({
       strategy: 'gateway_agents_upsert',

@@ -3,6 +3,7 @@
  */
 import { eq, desc } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
+import { isGithubAutomationAgent } from './agent-github-auth';
 
 export type CustomTokenItemInput = {
   id?: number;
@@ -103,7 +104,7 @@ export async function syncCustomTokensFromClient(items: CustomTokenItemInput[]):
 }
 
 /** Bundle pour les agents (réseau local) : jetons Config + personnalisés. */
-export async function getAgentApiSecretsBundle(): Promise<{
+export async function getAgentApiSecretsBundle(agentId?: string): Promise<{
   /** URL dashboard Forge joignable depuis les agents (hooks / APIs). Vide si non renseigné — scripts utilisent encore env / défaut. */
   forgePublicUrl: string;
   githubToken: string;
@@ -119,9 +120,10 @@ export async function getAgentApiSecretsBundle(): Promise<{
   for (const r of rows) {
     if (r.key && r.secret) custom[r.key] = r.secret;
   }
+  const githubAllowed = agentId ? isGithubAutomationAgent(agentId) : true;
   return {
     forgePublicUrl: config.forgePublicUrl || '',
-    githubToken: config.githubToken || '',
+    githubToken: githubAllowed ? config.githubToken || '' : '',
     vercelToken: config.vercelToken || '',
     openclawToken: config.openclawToken || '',
     custom,
