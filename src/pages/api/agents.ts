@@ -342,6 +342,36 @@ export const GET: APIRoute = async ({ locals }) => {
       });
     }
 
+    // Complément: certains agents n'apparaissent plus dans OpenClaw
+    // (session expirée / registre restreint) mais existent dans le journal AgentTask.
+    // On les expose quand même pour aligner la grille avec l'historique des missions.
+    for (const taskAgentId of Object.keys(taskStatsDb)) {
+      const id = String(taskAgentId || '').trim();
+      if (!id) continue;
+      const upper = normAgentKey(id);
+      const canonicalId = byInstructionId.get(upper)?.agentId || id;
+      if (byId.has(canonicalId)) continue;
+      const inst = byInstructionId.get(upper);
+      byId.set(canonicalId, {
+        id: canonicalId,
+        name: canonicalId,
+        status: 'en veille',
+        model: String(inst?.model || '—'),
+        contextTokens: null,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        runtimeMs: 0,
+        lastSeenMs: 0,
+        lastSeen: '—',
+        raw: {
+          source: 'task_history',
+          taskHistoryOnly: true,
+          reason: 'Agent visible via AgentTask (historique) mais absent des sessions/registry OpenClaw.',
+          enabledInForge: enabledInstructionIds.has(upper),
+        },
+      });
+    }
+
     agents = Array.from(byId.values()).sort((a, b) => String(a.id).localeCompare(String(b.id)));
     mergedWithInstructions = true;
   } catch {
