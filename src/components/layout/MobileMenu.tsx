@@ -15,6 +15,12 @@ const menuItems = [
     match: ['/agents', '/swarm'],
   },
   {
+    name: 'Flux Swarm',
+    path: '/agents/flux',
+    icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+    match: ['/agents/flux'],
+  },
+  {
     name: 'Projets',
     path: '/apps',
     icon: 'M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-10.5v9',
@@ -88,7 +94,10 @@ export default function MobileMenu({
 
   function isActive(item: (typeof menuItems)[0] | (typeof generalItems)[0]) {
     const p = pathname || currentPath;
-    return item.match.some((m) => p === m || p.startsWith(m + '/'));
+    return item.match.some((m) => {
+      if (m === '/agents' && (p === '/agents/flux' || p.startsWith('/agents/flux/'))) return false;
+      return p === m || p.startsWith(m + '/');
+    });
   }
 
   const [isOpen, setIsOpen] = useState(false);

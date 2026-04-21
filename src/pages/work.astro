@@ -106,6 +106,10 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
         <h3 class="text-base font-bold text-gray-900">Demandes & Fonctionnalités</h3>
         <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{requests.length}</span>
         <div class="flex-1"></div>
+        <a
+          href="/agents/flux"
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 mr-2"
+        >Flux Swarm</a>
         <button
           type="button"
           onclick="window.__openWorkModal && window.__openWorkModal('request')"

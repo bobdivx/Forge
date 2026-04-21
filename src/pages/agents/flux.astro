@@ -1,0 +1,93 @@
+---
+// @ts-nocheck
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import SwarmFlowTimeline from '../../components/swarm/SwarmFlowTimeline';
+---
+
+<DashboardLayout title="Flux Swarm" currentPath="/agents/flux">
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div>
+        <p class="text-xs text-gray-400 mb-1">
+          <a href="/agents" class="hover:text-[#175B37]">← L’équipe</a>
+          <span class="mx-2 text-gray-300">/</span>
+          <span class="text-gray-600 font-medium">Flux Swarm</span>
+        </p>
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Flux du swarm</h1>
+        <p class="text-gray-500 text-sm max-w-2xl mt-2">
+          Vue chronologique de ce que Forge enregistre : <strong class="text-gray-700">sessions de travail</strong>,
+          <strong class="text-gray-700">missions</strong> (tâches envoyées aux agents) et <strong class="text-gray-700">messages</strong> entre agents.
+          C’est la trace « côté Forge » — OpenClaw peut contenir plus de détail dans ses propres journaux.
+        </p>
+      </div>
+      <a
+        href="/work"
+        class="shrink-0 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+      >
+        Carnet de bord →
+      </a>
+    </div>
+
+    <div class="rounded-[1.5rem] border border-[#175B37]/20 bg-[#E9F3EB] px-5 py-4 text-sm text-gray-700 space-y-3">
+      <p class="font-semibold text-[#175B37]">Comment lire ce flux</p>
+      <ol class="list-decimal pl-5 space-y-2 text-gray-600 leading-relaxed">
+        <li>
+          <strong class="text-gray-800">Proposition / veille</strong> — une idée issue de la veille ou d’un agent apparaît souvent comme
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">💡</span> message ou comme
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">Carnet · demande liée</span> quand Forge a créé une tâche.
+        </li>
+        <li>
+          <strong class="text-gray-800">Validation / tri (carnet)</strong> — quand quelqu’un modifie le statut ou l’agent cible d’une demande dans le dashboard,
+          Forge enregistre un événement explicite (<span class="font-mono text-xs bg-white/70 px-1 rounded">Carnet — statut modifié</span>,
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">agent cible modifié</span>). Une validation uniquement dans OpenClaw reste visible surtout via les messages.
+        </li>
+        <li>
+          <strong class="text-gray-800">Mise au travail</strong> — les cartes
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">▶️ Mission … en cours sur OpenClaw</span> indiquent qu’une tâche a été poussée au gateway.
+        </li>
+        <li>
+          <strong class="text-gray-800">Clôture</strong> — une mission
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">terminée</span> met à jour le carnet lorsque la ligne
+          <span class="font-mono text-xs">FORGE_DONE</span> est détectée ou qu’un agent appelle l’API / le hook.
+        </li>
+      </ol>
+    </div>
+
+    <div class="rounded-[1.5rem] border border-gray-200 bg-white px-5 py-4 text-sm text-gray-700 shadow-sm">
+      <p class="font-semibold text-gray-900 mb-3">Parcours type (d’après les événements enregistrés)</p>
+      <ol class="list-none space-y-3">
+        <li class="flex gap-3">
+          <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">1</span>
+          <span><strong class="text-gray-800">Idée ou demande</strong> — entrée au carnet (<span class="font-mono text-[11px] text-gray-500">Nouvelle entrée au carnet</span>) et/ou message agent (souvent <span class="font-mono text-[11px]">💡</span> veille).</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">2</span>
+          <span><strong class="text-gray-800">Tri / validation côté dashboard</strong> — changement de statut ou d’agent cible (<span class="font-mono text-[11px] text-gray-500">Carnet — statut modifié</span>, <span class="font-mono text-[11px]">agent cible modifié</span>).</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">3</span>
+          <span><strong class="text-gray-800">Mise en mission</strong> — le planificateur crée la tâche liée au carnet (<span class="font-mono text-[11px] text-gray-500">Carnet — demande mise en tâche</span>).</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">4</span>
+          <span><strong class="text-gray-800">Exécution OpenClaw</strong> — envoi effectif au gateway (<span class="font-mono text-[11px] text-gray-500">Tâche poussée vers OpenClaw</span>), puis mission <span class="font-mono text-[11px]">en cours</span> dans la chronologie.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">5</span>
+          <span><strong class="text-gray-800">Clôture</strong> — ligne <span class="font-mono text-[11px]">FORGE_DONE</span> détectée (<span class="font-mono text-[11px] text-gray-500">Clôture automatique</span>) ou mise à jour manuelle ; le carnet se met en phase (<span class="font-mono text-[11px] text-gray-500">Carnet — aligné sur une tâche agent</span>).</span>
+        </li>
+      </ol>
+    </div>
+
+    <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-6 rounded-full" style="background:#175B37"></div>
+        <h2 class="text-base font-bold text-gray-900">Chronologie</h2>
+        <span class="text-[10px] uppercase tracking-widest text-gray-400">Rafraîchissement ~12 s</span>
+      </div>
+      <SwarmFlowTimeline client:load />
+    </section>
+  </div>
+</DashboardLayout>
