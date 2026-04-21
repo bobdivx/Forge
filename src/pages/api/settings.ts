@@ -2,10 +2,18 @@ import type { APIRoute } from 'astro';
 import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
+import { inferOpenClawBackedPathDefaults } from '../../lib/openclaw-path-defaults';
 
 export const GET: APIRoute = async () => {
   const config = await getAllConfig();
-  return new Response(JSON.stringify(config), {
+  const inferred = await inferOpenClawBackedPathDefaults();
+  const hydrated = {
+    ...config,
+    forgeReposRoot: config.forgeReposRoot || inferred.forgeReposRoot || config.forgeReposRoot,
+    dockerYamlDir: config.dockerYamlDir || inferred.dockerYamlDir || config.dockerYamlDir,
+    dockerAppDataDir: config.dockerAppDataDir || inferred.dockerAppDataDir || config.dockerAppDataDir,
+  };
+  return new Response(JSON.stringify(hydrated), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });

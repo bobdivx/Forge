@@ -7,7 +7,8 @@
  * les agents et modèles des actions utilisateur ou imports explicites.
  */
 export default async function seed() {
-  const { db, Config } = await import('astro:db');
+  const { db, Config, AgentModel } = await import('astro:db');
+  const { FORGE_DEFAULT_AGENT_MODELS } = await import('../src/lib/agent-model-defaults');
 
   // ── 1. Config initiale (clés vides — pas de chemins imposés) ──
   try {
@@ -30,5 +31,29 @@ export default async function seed() {
     }
   } catch (e) {
     console.warn('Config seed skipped:', e);
+  }
+
+  // ── 2. Catalogue modèles agents (fallback stable UI) ──
+  try {
+    if (!AgentModel) {
+      console.warn('AgentModel seed skipped: table non resolue (schema Astro DB non regenere).');
+      return;
+    }
+    const existingModels = await db.select().from(AgentModel);
+    if (existingModels.length === 0) {
+      const now = new Date();
+      await db.insert(AgentModel).values(
+        FORGE_DEFAULT_AGENT_MODELS.map((m) => ({
+          id: m.id,
+          label: m.label,
+          source: 'seed',
+          enabled: 1,
+          updatedAt: now,
+        })),
+      );
+      console.log('AgentModel seeded.');
+    }
+  } catch {
+    console.warn('AgentModel seed skipped: schema/table indisponible pour cette execution.');
   }
 }

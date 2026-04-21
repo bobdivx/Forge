@@ -379,6 +379,12 @@ export default function WorkScheduleTab() {
               ok?: boolean;
               budgetBlocked?: string;
               openClawErrors?: string[];
+              wakeReport?: {
+                targeted: number;
+                awakened: string[];
+                failed: { agentId: string; error: string }[];
+                sessionCheck?: { active: string[]; missing: string[] };
+              };
               error?: string;
             }
           | undefined;
@@ -387,6 +393,14 @@ export default function WorkScheduleTab() {
             setMsg(`Erreur : le cycle n'a pas démarré — ${wc.budgetBlocked}`);
           } else if (wc && wc.ok === false && wc.error) {
             setMsg(`Erreur : ${wc.error}`);
+          } else if (wc?.wakeReport?.sessionCheck) {
+            const ok = wc.wakeReport.sessionCheck.active;
+            const ko = wc.wakeReport.sessionCheck.missing;
+            setMsg(
+              ko.length > 0
+                ? `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}, manquantes: ${ko.join(', ')}.`
+                : `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}.`,
+            );
           } else if (wc?.openClawErrors?.length) {
             setMsg(
               `Attention : OpenClaw n'a pas reçu les directives (${wc.openClawErrors.join(' · ')}). Vérifiez le token, l'URL de la gateway et que sessions_send est autorisé.`,

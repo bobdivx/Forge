@@ -1,5 +1,6 @@
 import TeamAvatar from './TeamAvatar';
 import type { AgentTeamProfile } from '../../lib/agent-profile';
+import type { SwarmWorkCommand } from '../../lib/forge-agent-protocol';
 
 type TaskStats = {
   total: number;
@@ -20,12 +21,22 @@ type Agent = {
   runtimeMs?: number;
   lastSeen?: string;
   lastSeenMs?: number;
+  raw?: {
+    offline?: boolean;
+    disabledInDb?: boolean;
+    registryOnly?: boolean;
+    reason?: string;
+  };
 };
 
 type Props = {
   agent: Agent;
   taskStats?: TaskStats;
   teamProfile: AgentTeamProfile;
+  onSwarmCommand?: (agentId: string, command: SwarmWorkCommand) => void;
+  commandBusy?: boolean;
+  commandMessage?: string | null;
+  wakeStatusLabel?: string;
 };
 
 export { formatAgentName, getAgentRole } from '../../lib/agent-profile';
@@ -44,7 +55,15 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
   );
 }
 
-export default function AgentCard({ agent, taskStats, teamProfile }: Props) {
+export default function AgentCard({
+  agent,
+  taskStats,
+  teamProfile,
+  onSwarmCommand,
+  commandBusy = false,
+  commandMessage = null,
+  wakeStatusLabel,
+}: Props) {
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   const presenceDot =
@@ -132,15 +151,52 @@ export default function AgentCard({ agent, taskStats, teamProfile }: Props) {
             </svg>
           </div>
         </div>
+        {wakeStatusLabel ? (
+          <div class="mt-2">
+            <span class="inline-flex max-w-full items-center rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+              {wakeStatusLabel}
+            </span>
+          </div>
+        ) : null}
       </a>
 
       <div class="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/80 px-4 py-2.5">
-        <a href="/discussion" class="text-[11px] font-semibold text-[#175B37] transition hover:underline">
-          Messagerie Forge
-        </a>
-        <span class="max-w-[55%] truncate text-right font-mono text-[9px] text-gray-400" title={agent.id}>
-          {truncateText(agent.id, 28)}
-        </span>
+        <div class="flex flex-wrap items-center gap-1">
+          {(['start_work', 'pause_work', 'stop_work'] as SwarmWorkCommand[]).map((cmd) => (
+            <button
+              key={cmd}
+              type="button"
+              onClick={() => onSwarmCommand?.(agent.id, cmd)}
+              disabled={commandBusy}
+              class="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 transition hover:border-[#175B37]/30 hover:bg-[#E9F3EB] disabled:opacity-50"
+              title={cmd === 'start_work' ? 'Démarrer (start work)' : cmd === 'pause_work' ? 'Pause (pause work)' : 'Arrêter (stop work)'}
+              aria-label={cmd === 'start_work' ? 'Démarrer' : cmd === 'pause_work' ? 'Pause' : 'Arrêter'}
+            >
+              {cmd === 'start_work' ? (
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              ) : cmd === 'pause_work' ? (
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
+                </svg>
+              ) : (
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M6 6h12v12H6z" />
+                </svg>
+              )}
+            </button>
+          ))}
+          <a href="/discussion" class="ml-1 text-[11px] font-semibold text-[#175B37] transition hover:underline">
+            Message
+          </a>
+        </div>
+        <div class="max-w-[48%] text-right">
+          <span class="block truncate font-mono text-[9px] text-gray-400" title={agent.id}>
+            {truncateText(agent.id, 28)}
+          </span>
+          {commandMessage ? <span class="block truncate text-[9px] text-gray-500">{commandMessage}</span> : null}
+        </div>
       </div>
     </div>
   );

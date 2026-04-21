@@ -8,6 +8,7 @@ import {
   type AgentTeamProfile,
   type OpenClawAgentProfileRow,
 } from '../../lib/agent-profile';
+import { buildSwarmWorkDirective, type SwarmWorkCommand } from '../../lib/forge-agent-protocol';
 
 type Agent = {
   id: string;
@@ -20,7 +21,17 @@ type Agent = {
   runtimeMs?: number;
   lastSeen?: string;
   lastSeenMs?: number;
-  raw?: { offline?: boolean; disabledInDb?: boolean };
+  raw?: {
+    offline?: boolean;
+    disabledInDb?: boolean;
+    registryOnly?: boolean;
+    reason?: string;
+  };
+};
+
+type ActivationAdvice = {
+  gatewayReadOnly?: boolean;
+  message?: string;
 };
 
 type TaskStats = {
@@ -84,6 +95,27 @@ export default function AgentsGrid() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'idle'>('all');
   const [query, setQuery] = useState('');
+  const [activationAdvice, setActivationAdvice] = useState<ActivationAdvice | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [newAgentId, setNewAgentId] = useState('');
+  const [newAgentModel, setNewAgentModel] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createMsg, setCreateMsg] = useState<string | null>(null);
+  const [commandBusyByAgent, setCommandBusyByAgent] = useState<Record<string, boolean>>({});
+  const [commandMsgByAgent, setCommandMsgByAgent] = useState<Record<string, string>>({});
+  const [wakeBusy, setWakeBusy] = useState(false);
+  const [wakeMsg, setWakeMsg] = useState<string | null>(null);
+
+  const refreshAgentsNow = async () => {
+    try {
+      const data = await fetch('/api/agents').then((r) => r.json());
+      setAgents(Array.isArray(data.agents) ? data.agents : []);
+      setTaskStats(data.taskStats ?? {});
+      setActivationAdvice(data.activationAdvice && typeof data.activationAdvice === 'object' ? data.activationAdvice : null);
+    } catch {
+      /* ignore refresh errors here */
+    }
+  };
 
   useEffect(() => {
     const load = () => {
@@ -92,6 +124,7 @@ export default function AgentsGrid() {
         .then(([data, pr]) => {
           setAgents(Array.isArray(data.agents) ? data.agents : Array.isArray(data) ? data : []);
           setTaskStats(data.taskStats ?? {});
+          setActivationAdvice(data.activationAdvice && typeof data.activationAdvice === 'object' ? data.activationAdvice : null);
           const gwErr = typeof data.gatewayError === 'string' && data.gatewayError ? data.gatewayError : null;
           setError(gwErr);
           if (pr?.profiles && typeof pr.profiles === 'object') {
@@ -105,10 +138,187 @@ export default function AgentsGrid() {
         .catch(() => setError('Impossible de contacter le gateway OpenClaw.'))
         .finally(() => setLoading(false));
     };
+    const loadModels = () => {
+      fetch('/api/models')
+        .then((r) => r.json())
+        .then((rows) => {
+          const values = Array.isArray(rows)
+            ? rows
+                .map((m: { id?: string; name?: string }) => String(m.id || m.name || '').replace(/^openclaw\//i, '').trim())
+                .filter(Boolean)
+            : [];
+          const merged = [...new Set(values)].sort((a, b) => a.localeCompare(b));
+          setAvailableModels(merged);
+          if (!newAgentModel && merged.length > 0) setNewAgentModel(merged[0]);
+        })
+        .catch(() => {
+          setAvailableModels([]);
+        });
+    };
     load();
+    loadModels();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, []);
+
+  const createAgent = async () => {
+    const agentId = newAgentId.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    if (!agentId || !newAgentModel) {
+      setCreateMsg("Renseigne un ID et un modèle.");
+      return;
+    }
+    setCreating(true);
+    setCreateMsg(null);
+    try {
+      const r = await fetch('/api/agent-instructions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, model: newAgentModel, enabled: true }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || data.ok === false) {
+        setCreateMsg(typeof data.error === 'string' ? data.error : 'Création impossible.');
+        return;
+      }
+      setCreateMsg(
+        data?.provision?.ok
+          ? `Agent ${agentId} ajouté et provisionné OpenClaw.`
+          : `Agent ${agentId} ajouté (provision OpenClaw à vérifier).`,
+      );
+      setNewAgentId('');
+      // rafraîchit immédiatement la liste réelle affichée
+      const refreshed = await fetch('/api/agents').then((x) => x.json());
+      setAgents(Array.isArray(refreshed.agents) ? refreshed.agents : []);
+      setTaskStats(refreshed.taskStats ?? {});
+    } catch {
+      setCreateMsg('Erreur réseau.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const sendSwarmCommand = async (agentId: string, command: SwarmWorkCommand) => {
+    const target = agents.find((a) => a.id === agentId);
+    if (target?.raw?.disabledInDb) {
+      setCommandMsgByAgent((prev) => ({ ...prev, [agentId]: 'Agent désactivé dans Forge' }));
+      return;
+    }
+    if (target?.raw?.offline) {
+      setCommandMsgByAgent((prev) => ({
+        ...prev,
+        [agentId]: 'Session hors ligne (aucune session active côté OpenClaw)',
+      }));
+      return;
+    }
+    setCommandBusyByAgent((prev) => ({ ...prev, [agentId]: true }));
+    setCommandMsgByAgent((prev) => ({ ...prev, [agentId]: 'Envoi…' }));
+    try {
+      const directive = buildSwarmWorkDirective(command, 'direct');
+      const r = await fetch('/api/openclaw-directive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionKey: agentId,
+          message: directive,
+          timeoutSeconds: 90,
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || data.ok === false) {
+        setCommandMsgByAgent((prev) => ({
+          ...prev,
+          [agentId]: typeof data.error === 'string' && data.error ? data.error : 'Commande refusée',
+        }));
+        return;
+      }
+      const via = typeof data.via === 'string' ? data.via : 'gateway';
+      const reply =
+        data?.result && typeof data.result === 'object' && typeof data.result.reply === 'string'
+          ? data.result.reply.trim()
+          : '';
+      setCommandMsgByAgent((prev) => ({
+        ...prev,
+        [agentId]: reply
+          ? `Réponse reçue (${via})`
+          : `Commande envoyée (${command.replace('_', ' ')}, via ${via})`,
+      }));
+      // Feedback immédiat sur la carte : le statut affiché se base sur sessions_list,
+      // qui peut avoir quelques secondes de retard.
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agentId
+            ? {
+                ...a,
+                status:
+                  command === 'start_work' || command === 'resume_work'
+                    ? 'actif'
+                    : 'en veille',
+              }
+            : a,
+        ),
+      );
+      void refreshAgentsNow();
+      window.setTimeout(() => {
+        void refreshAgentsNow();
+      }, 2200);
+      window.setTimeout(() => {
+        setCommandMsgByAgent((prev) => {
+          const next = { ...prev };
+          delete next[agentId];
+          return next;
+        });
+      }, 6500);
+    } catch {
+      setCommandMsgByAgent((prev) => ({ ...prev, [agentId]: 'Erreur réseau' }));
+    } finally {
+      setCommandBusyByAgent((prev) => ({ ...prev, [agentId]: false }));
+    }
+  };
+
+  const wakeOpenClawAgents = async () => {
+    setWakeBusy(true);
+    setWakeMsg('Reveil des agents en cours...');
+    try {
+      const r = await fetch('/api/openclaw-wake-agents', { method: 'POST' });
+      const data = await r.json().catch(() => ({}));
+      const sentCount = Array.isArray(data?.sent) ? data.sent.length : 0;
+      const failedCount = Array.isArray(data?.failed) ? data.failed.length : 0;
+      if (!r.ok && r.status !== 207) {
+        setWakeMsg(typeof data?.error === 'string' ? data.error : 'Reveil impossible');
+        return;
+      }
+      if (failedCount > 0) {
+        setWakeMsg(`Reveil partiel: ${sentCount} ok, ${failedCount} en echec`);
+      } else {
+        setWakeMsg(`Reveil lance pour ${sentCount} agent(s)`);
+      }
+      await refreshAgentsNow();
+      window.setTimeout(() => void refreshAgentsNow(), 2200);
+    } catch {
+      setWakeMsg('Erreur reseau pendant le reveil des agents');
+    } finally {
+      setWakeBusy(false);
+    }
+  };
+
+  const getWakeStatusLabel = (agent: Agent): string => {
+    const busy = Boolean(commandBusyByAgent[agent.id]);
+    const commandMsg = String(commandMsgByAgent[agent.id] || '').trim();
+    if (busy) return 'Reveil: envoi de directive...';
+    if (commandMsg) {
+      if (/réponse reçue/i.test(commandMsg)) return 'Reveil: agent répond';
+      if (/commande envoyée/i.test(commandMsg)) return 'Reveil: directive envoyée';
+      if (/erreur|refus|impossible|hors ligne|désactivé/i.test(commandMsg)) {
+        return `Reveil: ${commandMsg}`;
+      }
+      return `Reveil: ${commandMsg}`;
+    }
+    if (agent.status === 'actif') return 'Reveil: session active';
+    if (agent.raw?.disabledInDb) return 'Reveil: desactive dans Forge';
+    if (agent.raw?.offline) return 'Reveil: aucune session active';
+    if (agent.raw?.registryOnly) return 'Reveil: present dans OpenClaw, non reveille';
+    return 'Reveil: en veille';
+  };
 
   const teamProfiles = useMemo(() => {
     const map: Record<string, AgentTeamProfile> = {};
@@ -170,6 +380,14 @@ export default function AgentsGrid() {
           actif(s)
         </span>
         <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={() => void wakeOpenClawAgents()}
+            disabled={wakeBusy}
+            class="rounded-full border border-[#175B37]/20 bg-[#175B37] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {wakeBusy ? 'Reveil…' : 'Reveiller les agents'}
+          </button>
           <label class="relative block w-full sm:w-52">
             <span class="sr-only">Filtrer les agents</span>
             <svg
@@ -202,6 +420,48 @@ export default function AgentsGrid() {
           />
         </div>
       </div>
+      {wakeMsg && (
+        <div class="rounded-[1.5rem] border border-gray-100 bg-white px-4 py-3 text-xs text-gray-700 shadow-sm">
+          {wakeMsg}
+        </div>
+      )}
+
+      <div class="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+        <p class="mb-3 text-sm font-semibold text-gray-900">Ajouter un agent</p>
+        <div class="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={newAgentId}
+            onInput={(e) => setNewAgentId((e.target as HTMLInputElement).value)}
+            placeholder="ID agent (ex: DEV_DATA)"
+            class="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 outline-none transition focus:border-[#175B37]/50 focus:bg-white focus:ring-2 focus:ring-[#175B37]/15 min-w-[180px]"
+          />
+          <select
+            value={newAgentModel}
+            onChange={(e) => setNewAgentModel((e.target as HTMLSelectElement).value)}
+            class="rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 outline-none transition focus:border-[#175B37]/50 focus:bg-white focus:ring-2 focus:ring-[#175B37]/15 min-w-[220px]"
+          >
+            <option value="" disabled>
+              Choisir un modèle
+            </option>
+            {availableModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void createAgent()}
+            disabled={creating}
+            class="rounded-full px-4 py-2 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ background: '#175B37' }}
+          >
+            {creating ? 'Ajout…' : 'Ajouter'}
+          </button>
+          {createMsg && <span class="text-xs text-gray-600">{createMsg}</span>}
+        </div>
+      </div>
 
       {error && (
         <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -213,10 +473,25 @@ export default function AgentsGrid() {
         </div>
       )}
 
+      {activationAdvice?.message && (
+        <div class="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          {activationAdvice.message}
+        </div>
+      )}
+
       {filtered.length > 0 ? (
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((agent) => (
-            <AgentCard key={agent.id} agent={agent} taskStats={taskStats[agent.id]} teamProfile={teamProfiles[agent.id]!} />
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              taskStats={taskStats[agent.id]}
+              teamProfile={teamProfiles[agent.id]!}
+              onSwarmCommand={sendSwarmCommand}
+              commandBusy={Boolean(commandBusyByAgent[agent.id])}
+              commandMessage={commandMsgByAgent[agent.id] ?? null}
+              wakeStatusLabel={getWakeStatusLabel(agent)}
+            />
           ))}
         </div>
       ) : (

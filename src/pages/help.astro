@@ -37,5 +37,20 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
         <li>Dans ce cas, utiliser la saisie manuelle des chemins ou désactiver la sonde.</li>
       </ul>
     </section>
+
+    <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
+      <h2 class="text-lg font-semibold text-zinc-900">4) /agents n'affiche qu'un agent</h2>
+      <p class="text-sm text-zinc-700">
+        Si OpenClaw UI affiche plusieurs agents mais Forge n'en voit qu'un (souvent <code class="font-mono">chef_technique</code>),
+        la gateway est generalement en mode liste restreinte (<code class="font-mono">allowAny=false</code>).
+      </p>
+      <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
+        <li>Verifier dans Forge: <a class="underline" href="/agents">/agents</a> puis regarder le message d'activation.</li>
+        <li>Verifier dans la reponse API que <code class="font-mono">openclawAgentsRegistry.allowAny</code> est bien <code class="font-mono">true</code>.</li>
+        <li>Dans la config OpenClaw gateway, autoriser la visibilite globale de <code class="font-mono">agents_list</code>.</li>
+        <li>Redemarrer le service gateway OpenClaw puis cliquer sur “Reveiller les agents” dans <a class="underline" href="/agents">/agents</a>.</li>
+        <li>Si besoin, verifier avec un POST sur <code class="font-mono">/tools/invoke</code> (tool <code class="font-mono">agents_list</code>) que la liste complete remonte.</li>
+      </ul>
+    </section>
   </div>
 </DashboardLayout>

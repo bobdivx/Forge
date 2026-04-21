@@ -3,6 +3,7 @@ import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { readForgeSetupState } from '../../lib/forge-setup';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
+import { inferOpenClawBackedPathDefaults } from '../../lib/openclaw-path-defaults';
 
 const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubWebhookSecret',
@@ -42,7 +43,14 @@ export const GET: APIRoute = async ({ locals }) => {
   }
   const state = await readForgeSetupState();
   const config = await getAllConfig();
-  return new Response(JSON.stringify({ state, config }), {
+  const inferred = await inferOpenClawBackedPathDefaults();
+  const hydrated = {
+    ...config,
+    forgeReposRoot: config.forgeReposRoot || inferred.forgeReposRoot || config.forgeReposRoot,
+    dockerYamlDir: config.dockerYamlDir || inferred.dockerYamlDir || config.dockerYamlDir,
+    dockerAppDataDir: config.dockerAppDataDir || inferred.dockerAppDataDir || config.dockerAppDataDir,
+  };
+  return new Response(JSON.stringify({ state, config: hydrated }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });

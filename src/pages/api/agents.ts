@@ -30,6 +30,16 @@ function normAgentKey(s: string): string {
   return String(s).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+function canonicalAgentIdCandidate(raw: string): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const parts = s.split(':').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 2 && parts[0].toLowerCase() === 'agent') {
+    return parts[1];
+  }
+  return s;
+}
+
 const CANONICAL_AGENT_ID_SET = new Set(FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId));
 
 /**
@@ -274,34 +284,104 @@ export const GET: APIRoute = async ({ locals }) => {
     dbInstructionRowCount = allInstructions.length;
     dbEnabledInstructionCount = allInstructions.filter((r) => Number(r.enabled) === 1).length;
 
-    const byAgentId = new Map(
-      allInstructions.map((r) => [r.agentId, { model: r.model, enabled: r.enabled }]),
+    const enabledInstructionIds = new Set(
+      allInstructions.filter((r) => Number(r.enabled) === 1).map((r) => String(r.agentId).toUpperCase()),
+    );
+    const byInstructionId = new Map(
+      allInstructions.map((r) => [String(r.agentId).toUpperCase(), r]),
     );
 
+    // Liste "réelle" = sessions OpenClaw (actives/récentes) + registre gateway.
+    const byId = new Map<string, any>();
+    const keyToId = new Map<string, string>();
+    const normalizeIdKey = (v: unknown) => normAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
+    for (const raw of rawSessions) {
+      const mapped = mapSessionToAgentRow(raw);
+      const id = String(mapped.id || '').trim();
+      if (!id) continue;
+      const upper = normalizeIdKey(id);
+      const base = canonicalAgentIdCandidate(id);
+      const inst = byInstructionId.get(upper);
+      const canonicalId = byInstructionId.get(upper)?.agentId || keyToId.get(upper) || base || id;
+      keyToId.set(upper, canonicalId);
+      byId.set(canonicalId, {
+        ...mapped,
+        id: canonicalId,
+        name: canonicalId,
+        model: mapped.model && mapped.model !== '—' ? mapped.model : String(inst?.model || mapped.model || '—'),
+        raw: { ...(mapped.raw || {}), source: 'session' },
+      });
+    }
+
+    for (const reg of openclawRegistry.agents) {
+      const id = String(reg.id || '').trim();
+      if (!id || byId.has(id)) continue;
+      const upper = normalizeIdKey(id);
+      const base = canonicalAgentIdCandidate(id);
+      const canonicalId = byInstructionId.get(upper)?.agentId || keyToId.get(upper) || base || id;
+      if (byId.has(canonicalId)) continue;
+      keyToId.set(upper, canonicalId);
+      const inst = byInstructionId.get(upper);
+      byId.set(canonicalId, {
+        id: canonicalId,
+        name: canonicalId,
+        status: 'en veille',
+        model: String(inst?.model || '—'),
+        contextTokens: null,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        runtimeMs: 0,
+        lastSeenMs: 0,
+        lastSeen: '—',
+        raw: {
+          source: 'registry',
+          registryOnly: true,
+          reason: 'Agent présent dans agents_list mais sans session active.',
+          enabledInForge: enabledInstructionIds.has(upper),
+        },
+      });
+    }
+
+    agents = Array.from(byId.values()).sort((a, b) => String(a.id).localeCompare(String(b.id)));
     mergedWithInstructions = true;
-    const { agents: built, used } = buildSwarmFromDefaultsAndSessions(
-      byAgentId,
-      rawSessions,
-      result.ok,
-    );
-    agents = built;
-    if (result.ok) {
-      rawSessions.forEach((raw, i) => {
-        if (used.has(i)) return;
-        agents.push(mapSessionToAgentRow(raw));
-      });
-    }
   } catch {
-    /* DB indisponible : liste canonique dépôt + sessions uniquement */
-    const emptyMap = new Map<string, { model?: string | null; enabled?: number | null }>();
-    const { agents: built, used } = buildSwarmFromDefaultsAndSessions(emptyMap, rawSessions, result.ok);
-    agents = built;
-    if (result.ok) {
-      rawSessions.forEach((raw, i) => {
-        if (used.has(i)) return;
-        agents.push(mapSessionToAgentRow(raw));
+    /* DB indisponible : on reste sur la liste réelle gateway uniquement. */
+    const byId = new Map<string, any>();
+    const keyToId = new Map<string, string>();
+    const normalizeIdKey = (v: unknown) => normAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
+    for (const raw of rawSessions) {
+      const mapped = mapSessionToAgentRow(raw);
+      const id = String(mapped.id || '').trim();
+      if (!id) continue;
+      const upper = normalizeIdKey(id);
+      const base = canonicalAgentIdCandidate(id);
+      const canonicalId = keyToId.get(upper) || base || id;
+      keyToId.set(upper, canonicalId);
+      byId.set(canonicalId, { ...mapped, id: canonicalId, name: canonicalId, raw: { ...(mapped.raw || {}), source: 'session' } });
+    }
+    for (const reg of openclawRegistry.agents) {
+      const id = String(reg.id || '').trim();
+      if (!id) continue;
+      const upper = normalizeIdKey(id);
+      const base = canonicalAgentIdCandidate(id);
+      const canonicalId = keyToId.get(upper) || base || id;
+      if (byId.has(canonicalId)) continue;
+      keyToId.set(upper, canonicalId);
+      byId.set(canonicalId, {
+        id: canonicalId,
+        name: canonicalId,
+        status: 'en veille',
+        model: '—',
+        contextTokens: null,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        runtimeMs: 0,
+        lastSeenMs: 0,
+        lastSeen: '—',
+        raw: { source: 'registry', registryOnly: true, reason: 'Agent sans session active.' },
       });
     }
+    agents = Array.from(byId.values()).sort((a, b) => String(a.id).localeCompare(String(b.id)));
   }
 
   const registryIds = openclawRegistry.agents.map((a) => a.id);
@@ -356,6 +436,22 @@ export const GET: APIRoute = async ({ locals }) => {
         dbTaskAgentKeyCount: Object.keys(taskStatsDb).length,
         note:
           'taskStats = AgentTask (agentId → id canonique Forge) + sessions OpenClaw via sessions_list (messageLimit) : comptage messages user par session rattachée ; sans messages, +1 total comme avant.',
+      },
+      activationAdvice: {
+        gatewayReadOnly:
+          openclawRegistry.ok &&
+          openclawRegistry.agents.length > 0 &&
+          rawSessions.length === 0,
+        gatewayAgentListRestricted:
+          openclawRegistry.ok &&
+          openclawRegistry.allowAny === false &&
+          openclawRegistry.agents.length <= 1,
+        message:
+          openclawRegistry.ok && openclawRegistry.allowAny === false && openclawRegistry.agents.length <= 1
+            ? `Le gateway OpenClaw renvoie une liste d'agents restreinte (allowAny=false, requester=${openclawRegistry.requester || 'inconnu'}). Ouvrez /help pour activer la visibilite globale des agents dans la configuration gateway.`
+            : openclawRegistry.ok && openclawRegistry.agents.length > 0 && rawSessions.length === 0
+            ? "Des agents sont enregistrés dans le gateway mais aucune session n'est active. Démarrez les agents côté OpenClaw (ou planificateur) puis vérifiez /tools/invoke sessions_list."
+            : undefined,
       },
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },

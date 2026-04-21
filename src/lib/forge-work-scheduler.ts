@@ -15,7 +15,12 @@
 import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
-import { invokeOpenClawSessionsSend, resolveSessionsSendKey } from './openclaw-gateway';
+import {
+  invokeOpenClawSessionsSend,
+  resolveSessionsSendKey,
+  fetchOpenClawSessionsPayload,
+  normalizeOpenClawSessions,
+} from './openclaw-gateway';
 import {
   resolveAssigneeForForgeRequest,
   forgeRequestTaskTitle,
@@ -50,6 +55,15 @@ export type WorkCycleResult = {
   ok: boolean;
   budgetBlocked?: string;
   openClawErrors?: string[];
+  wakeReport?: {
+    targeted: number;
+    awakened: string[];
+    failed: { agentId: string; error: string }[];
+    sessionCheck?: {
+      active: string[];
+      missing: string[];
+    };
+  };
   error?: string;
 };
 
@@ -474,9 +488,56 @@ async function runDispatchOnly(agentIds: string[]): Promise<void> {
   }
 }
 
-/** Envoie la directive de début de session à **tous** les agents cibles (plus de limite à 3). */
-async function sendWorkDirective(agentIds: string[]): Promise<string[]> {
+async function verifyAgentSessions(agentIds: string[]): Promise<{ active: string[]; missing: string[] }> {
+  const targeted = [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (targeted.length === 0) return { active: [], missing: [] };
+  try {
+    const payload = await fetchOpenClawSessionsPayload(undefined, {
+      invokeOnly: true,
+      sessionsListArgs: { limit: 120, messageLimit: 0 },
+    });
+    if (!payload.ok) {
+      return { active: [], missing: targeted };
+    }
+    const sessions = normalizeOpenClawSessions(payload.data) as Record<string, unknown>[];
+    const isActive = (agentId: string) => {
+      const want = agentId.trim().toUpperCase();
+      return sessions.some((s) => {
+        const keys = [
+          String(s.agentId ?? '').trim().toUpperCase(),
+          String(s.agent_id ?? '').trim().toUpperCase(),
+          String(s.sessionKey ?? '').trim().toUpperCase(),
+          String(s.session_key ?? '').trim().toUpperCase(),
+          String(s.key ?? '').trim().toUpperCase(),
+          String(s.displayName ?? '').trim().toUpperCase(),
+          String(s.display_name ?? '').trim().toUpperCase(),
+        ];
+        const status = String(s.status ?? s.state ?? '').trim().toLowerCase();
+        const stateActive =
+          status === 'running' ||
+          status === 'active' ||
+          status === 'connected' ||
+          status === 'online';
+        return stateActive && keys.some((k) => k === want || (k && k.includes(want)));
+      });
+    };
+    const active = targeted.filter((id) => isActive(id));
+    const missing = targeted.filter((id) => !active.includes(id));
+    return { active, missing };
+  } catch {
+    return { active: [], missing: targeted };
+  }
+}
+
+/** Envoie la directive de début de session à **tous** les agents cibles avec retries. */
+async function sendWorkDirective(agentIds: string[]): Promise<{
+  errors: string[];
+  awakened: string[];
+  failed: { agentId: string; error: string }[];
+}> {
   const errors: string[] = [];
+  const awakened: string[] = [];
+  const failed: { agentId: string; error: string }[] = [];
   const { db, Project } = await loadAstroDb();
   const activeProjects = await db.select().from(Project);
   const swarmProjects = activeProjects.filter((p) => p.swarmEnabled === 1);
@@ -504,21 +565,43 @@ async function sendWorkDirective(agentIds: string[]): Promise<string[]> {
     "Le système de travail Forge vient de démarrer une session. " +
     projectListMsg;
 
+  const MAX_ATTEMPTS = 3;
   for (const sessionKey of ordered) {
+    let delivered = false;
+    let lastError = 'échec inconnu';
     try {
-      const res = await sessionsSendWithFallback(sessionKey, message);
-      if (!res.ok) {
-        const line = `${sessionKey}: ${res.error || 'échec inconnu'}`;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+        const res = await sessionsSendWithFallback(sessionKey, message, [sessionKey]);
+        if (res.ok) {
+          delivered = true;
+          awakened.push(sessionKey);
+          if (attempt > 1) {
+            await logHeartbeat(
+              'info',
+              `[work-scheduler] Réveil ${sessionKey} réussi au retry ${attempt}/${MAX_ATTEMPTS}`,
+            );
+          }
+          break;
+        }
+        lastError = res.error || lastError;
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+        }
+      }
+      if (!delivered) {
+        const line = `${sessionKey}: ${lastError}`;
+        failed.push({ agentId: sessionKey, error: lastError });
         errors.push(line);
-        await logHeartbeat('warn', `[work-scheduler] Directive non livrée — ${line}`);
+        await logHeartbeat('warn', `[work-scheduler] Directive non livrée après retries — ${line}`);
       }
     } catch (e) {
       const line = `${sessionKey}: ${String(e)}`;
+      failed.push({ agentId: sessionKey, error: String(e) });
       errors.push(line);
       await logHeartbeat('warn', `[work-scheduler] Directive exception — ${line}`);
     }
   }
-  return errors;
+  return { errors, awakened, failed };
 }
 
 async function checkBudgetExceeded(): Promise<{ exceeded: boolean; info: string }> {
@@ -593,12 +676,22 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
       createdAt: new Date(),
     });
 
-    const openClawErrors = await sendWorkDirective(agentIds);
+    const wake = await sendWorkDirective(agentIds);
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
     await scanOpenClawForForgeDoneSignals();
-    return { ok: true, openClawErrors };
+    const sessionCheck = await verifyAgentSessions(agentIds);
+    return {
+      ok: true,
+      openClawErrors: wake.errors,
+      wakeReport: {
+        targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
+        awakened: wake.awakened,
+        failed: wake.failed,
+        sessionCheck,
+      },
+    };
   } catch (e) {
     await logHeartbeat('error', `Erreur cycle de travail : ${String(e)}`);
     if (fromManual) {
@@ -718,6 +811,15 @@ export async function manualStart(agentIds: string[] = []): Promise<WorkCycleRes
   }
 
   return await runWorkCycle(targets, true);
+}
+
+/**
+ * Déclenche un redispatch immédiat (sans envoyer la directive "début de session").
+ * Utile après création d'une demande carnet pour éviter d'attendre le prochain tick.
+ */
+export async function triggerDispatchNow(agentIds: string[] = []): Promise<void> {
+  const targets = agentIds.length ? agentIds : await getEnabledAgentIds();
+  await runDispatchOnly(targets);
 }
 
 /** Arrêt manuel — repasse en mode `stopped` (les plages planifiées ne reprennent pas). */

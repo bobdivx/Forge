@@ -6,6 +6,12 @@ import {
   type OpenClawAgentProfileRow,
 } from '../../lib/agent-profile';
 import TeamAvatar from '../agents/TeamAvatar';
+import NotificationBellIcon from '../icons/NotificationBellIcon';
+import {
+  buildSwarmWorkDirective,
+  SWARM_WORK_COMMAND_LABELS,
+  type SwarmWorkCommand,
+} from '../../lib/forge-agent-protocol';
 
 type Project = { id: number; name: string; path: string; status: string | null };
 type RequestItem = {
@@ -156,6 +162,7 @@ export default function DiscussionComposer() {
     avatarEmoji: '',
   });
   const [profileSaving, setProfileSaving] = useState(false);
+  const [swarmCommandMode, setSwarmCommandMode] = useState<'direct' | 'leader'>('direct');
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const historyLoadGen = useRef(0);
   const currentAgentRef = useRef<string>('');
@@ -184,6 +191,16 @@ export default function DiscussionComposer() {
     } catch {
       setError('Copie impossible automatiquement. Sélectionnez et copiez manuellement.');
     }
+  };
+
+  const applySwarmCommand = (command: SwarmWorkCommand) => {
+    const directive = buildSwarmWorkDirective(command, swarmCommandMode);
+    setMessage((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return directive;
+      return `${directive}\n\n${trimmed}`;
+    });
+    setError(null);
   };
 
   const pollAssistantReply = async (sessionKey: string, afterMs: number) => {
@@ -1229,9 +1246,7 @@ export default function DiscussionComposer() {
                 aria-label="Notifications réponses non lues"
               >
                 <span class="relative inline-flex">
-                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
+                  <NotificationBellIcon class="h-5 w-5" />
                   {totalUnread > 0 && (
                     <span class="absolute -right-1 -top-1 inline-flex min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#175B37] px-1 text-[10px] font-bold text-white">
                       {totalUnread > 99 ? '99+' : totalUnread}
@@ -1484,6 +1499,33 @@ export default function DiscussionComposer() {
             ) : null}
 
             <div class="shrink-0 border-t border-gray-200 bg-white p-3 sm:p-4">
+              <div class="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2">
+                <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Commandes swarm</span>
+                {(['start_work', 'pause_work', 'resume_work', 'stop_work'] as SwarmWorkCommand[]).map((cmd) => (
+                  <button
+                    key={cmd}
+                    type="button"
+                    class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 transition hover:border-[#175B37]/40 hover:bg-[#E9F3EB]"
+                    onClick={() => applySwarmCommand(cmd)}
+                    disabled={sending || historyLoading}
+                  >
+                    {SWARM_WORK_COMMAND_LABELS[cmd]}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  class={`ml-auto rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                    swarmCommandMode === 'leader'
+                      ? 'border-[#175B37]/40 bg-[#E9F3EB] text-[#175B37]'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                  onClick={() => setSwarmCommandMode((m) => (m === 'leader' ? 'direct' : 'leader'))}
+                  disabled={sending || historyLoading}
+                  title="Mode chef: génère une directive d’orchestration à envoyer au chef"
+                >
+                  mode {swarmCommandMode === 'leader' ? 'chef' : 'direct'}
+                </button>
+              </div>
               {sessionUnavailable ? (
                 <p class="mx-auto mb-2 max-w-3xl rounded-xl border border-amber-100 bg-amber-50/90 px-3 py-2 text-center text-[11px] text-amber-900 sm:text-left">
                   Cette session OpenClaw est indisponible (hors ligne ou désactivée). Choisissez un membre disponible

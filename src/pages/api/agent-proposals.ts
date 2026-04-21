@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { db, Request, Project, AgentMessage, ActivityLog, desc, eq } from 'astro:db';
+import { triggerDispatchNow } from '../../lib/forge-work-scheduler';
 
 export const GET: APIRoute = async () => {
   try {
@@ -98,6 +99,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
         createdAt: now,
       });
     }
+
+    // Déclenche un passage immédiat du scheduler pour traiter la nouvelle demande
+    // sans attendre le tick planifié (60s) ou l'entrée dans une plage horaire.
+    await triggerDispatchNow([assigneeAgentId]).catch(() => {});
 
     return new Response(JSON.stringify({ ok: true, request: row }), {
       status: 201,

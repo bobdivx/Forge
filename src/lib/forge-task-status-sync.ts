@@ -48,6 +48,8 @@ export async function finalizeAgentTaskStatus(
       if (st === 'completed') requestStatus = 'completed';
       else if (st === 'failed') requestStatus = 'pending';
       else if (st === 'cancelled') requestStatus = 'rejected';
+      else if (st === 'running') requestStatus = 'in_progress';
+      else if (st === 'pending') requestStatus = 'pending';
       if (requestStatus) {
         await db
           .update(Request)

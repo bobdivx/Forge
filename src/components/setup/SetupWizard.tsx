@@ -61,6 +61,32 @@ export default function SetupWizard() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (step !== 1) return;
+    if (cfg.forgeReposRoot.trim() && cfg.dockerYamlDir.trim() && cfg.dockerAppDataDir.trim()) return;
+
+    let cancelled = false;
+    fetch('/api/setup-wizard')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const c = d?.config && typeof d.config === 'object' ? d.config : {};
+        setCfg((prev) => ({
+          ...prev,
+          forgeReposRoot: prev.forgeReposRoot || String((c as Record<string, unknown>).forgeReposRoot || ''),
+          dockerYamlDir: prev.dockerYamlDir || String((c as Record<string, unknown>).dockerYamlDir || ''),
+          dockerAppDataDir: prev.dockerAppDataDir || String((c as Record<string, unknown>).dockerAppDataDir || ''),
+        }));
+      })
+      .catch(() => {
+        /* ignore auto-fill errors in wizard */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [step, cfg.forgeReposRoot, cfg.dockerYamlDir, cfg.dockerAppDataDir]);
+
   const merge = (patch: Partial<Config>) => setCfg((p) => ({ ...p, ...patch }));
 
   const testOpenClaw = async () => {

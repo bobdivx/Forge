@@ -7,6 +7,7 @@ import {
   probeOpenClawGatewayRepairPair,
   readOpenClawLocalConfigFile,
 } from './openclaw-gateway';
+import { inferOpenClawBackedPathDefaults } from './openclaw-path-defaults';
 
 export type OpenClawAutoRepairTokenSource = 'file' | 'database' | 'env';
 
@@ -14,21 +15,19 @@ export type OpenClawAutoRepairResult = {
   alreadyOk: boolean;
   repaired: boolean;
   winner?: { baseUrl: string; tokenSource: OpenClawAutoRepairTokenSource };
-  saved: { gatewayUrl: boolean; token: boolean; dockerAppDataDir: boolean };
+  saved: {
+    gatewayUrl: boolean;
+    token: boolean;
+    dockerAppDataDir: boolean;
+    dockerYamlDir: boolean;
+    forgeReposRoot: boolean;
+  };
   warnings: string[];
   actions: string[];
   error?: string;
   probesTried: number;
   dockerRestart?: { ok: boolean; container?: string; error?: string };
 };
-
-function inferDockerAppDataDirFromOpenclawPath(configPath: string): string | null {
-  const norm = configPath.replace(/\\/g, '/');
-  const lower = norm.toLowerCase();
-  const idx = lower.lastIndexOf('/openclaw/openclaw.json');
-  if (idx <= 0) return null;
-  return norm.slice(0, idx).replace(/\/$/, '') || null;
-}
 
 function detectOpenClawContainerName(): string | null {
   try {
@@ -56,7 +55,13 @@ export async function runOpenClawAutoRepair(options?: {
 }): Promise<OpenClawAutoRepairResult> {
   const warnings: string[] = [];
   const actions: string[] = [];
-  const saved = { gatewayUrl: false, token: false, dockerAppDataDir: false };
+  const saved = {
+    gatewayUrl: false,
+    token: false,
+    dockerAppDataDir: false,
+    dockerYamlDir: false,
+    forgeReposRoot: false,
+  };
   let probesTried = 0;
   let dockerRestart: OpenClawAutoRepairResult['dockerRestart'];
 
@@ -189,12 +194,21 @@ export async function runOpenClawAutoRepair(options?: {
     actions.push('Jeton non enregistré en base (OPENCLAW_GATEWAY_TOKEN actif).');
   }
 
-  const appDataDb = (await getConfig('dockerAppDataDir')).trim();
-  const inferred = local?.path ? inferDockerAppDataDirFromOpenclawPath(local.path) : null;
-  if (!appDataDb && inferred) {
-    partial.dockerAppDataDir = inferred;
+  const inferredPaths = await inferOpenClawBackedPathDefaults();
+  if (inferredPaths.dockerAppDataDir) {
+    partial.dockerAppDataDir = inferredPaths.dockerAppDataDir;
     saved.dockerAppDataDir = true;
-    actions.push(`dockerAppDataDir défini depuis openclaw.json : ${partial.dockerAppDataDir}`);
+    actions.push(`dockerAppDataDir défini depuis OpenClaw : ${partial.dockerAppDataDir}`);
+  }
+  if (inferredPaths.dockerYamlDir) {
+    partial.dockerYamlDir = inferredPaths.dockerYamlDir;
+    saved.dockerYamlDir = true;
+    actions.push(`dockerYamlDir défini depuis OpenClaw : ${partial.dockerYamlDir}`);
+  }
+  if (inferredPaths.forgeReposRoot) {
+    partial.forgeReposRoot = inferredPaths.forgeReposRoot;
+    saved.forgeReposRoot = true;
+    actions.push(`forgeReposRoot déduit des mounts OpenClaw : ${partial.forgeReposRoot}`);
   }
 
   if (Object.keys(partial).length) {

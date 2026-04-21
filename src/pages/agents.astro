@@ -5,7 +5,6 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AgentsGrid from '../components/agents/AgentsGrid';
 import SwarmInteractionsBoard from '../components/agents/SwarmInteractionsBoard';
 import AgentTaskTable from '../components/agents/AgentTaskTable';
-import AgentRepl from '../components/agents/AgentRepl';
 import { loadAstroDb } from '../lib/load-astro-db';
 
 let agentStats = { total: 0, withTasks: 0, totalTasks: 0, pendingIssues: 0 };
@@ -130,17 +129,6 @@ try {
         <span class="text-[10px] uppercase tracking-widest text-gray-400">Messages AgentMessage · Astro DB</span>
       </div>
       <SwarmInteractionsBoard client:load />
-    </section>
-
-    <!-- Console REPL -->
-    <section>
-      <div class="flex items-center gap-3 mb-5">
-        <div class="w-1 h-6 rounded-full" style="background:#3BAE61"></div>
-        <h3 class="text-base font-bold text-gray-900">Console Forge</h3>
-        <span class="text-[10px] uppercase tracking-widest text-gray-400">Commandes slash · Git · Docker · Mémoire</span>
-        <span class="ml-auto text-[10px] font-mono text-gray-400">/help · /tools · /memory · /task</span>
-      </div>
-      <AgentRepl client:load />
     </section>
 
   </div>

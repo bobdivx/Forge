@@ -3,7 +3,6 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import AgentInstructionEditor from '../../components/agents/AgentInstructionEditor';
-import { FORGE_AGENT_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
 ---
 
 <DashboardLayout title="Instructions Agents" currentPath="/agents/instructions">
@@ -25,14 +24,6 @@ import { FORGE_AGENT_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
           La DB est la source de vérité — le bouton <strong class="text-gray-700">⚡ Sync</strong> régénère les fichiers
           <code class="text-[#175B37] text-xs font-mono">.md</code> lus par OpenClaw.
         </p>
-        <p class="text-[#175B37] text-sm mt-3 max-w-2xl bg-[#E9F3EB] border border-[#175B37]/20 rounded-xl px-4 py-3">
-          <strong class="text-gray-800">Clôture des missions carnet :</strong>{' '}
-          <span class="text-gray-700">{FORGE_AGENT_PROTOCOL_SUMMARY}</span>
-          <span class="block text-xs text-gray-600 mt-2">
-            Détail technique (exemple PUT, codes <code class="font-mono">completed</code> / <code class="font-mono">failed</code>)
-            dans le bloc repliable sous l’éditeur ci-dessous.
-          </span>
-        </p>
       </div>
       <a
         href="/agents"
@@ -40,18 +31,6 @@ import { FORGE_AGENT_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
       >
         ← L'Équipe
       </a>
-    </div>
-
-    <!-- Flux info -->
-    <div class="flex flex-wrap items-center gap-2 text-xs bg-white border border-gray-100 rounded-xl px-4 py-3 shadow-sm text-gray-500">
-      <span class="text-gray-700 font-medium">Flux :</span>
-      <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded font-mono">Dashboard (DB)</span>
-      <span>→ Sauvegarder</span>
-      <span class="px-2 py-1 bg-blue-50 border border-blue-100 rounded font-mono text-blue-600">DB AgentInstruction</span>
-      <span>→ ⚡ Sync</span>
-      <span class="px-2 py-1 bg-orange-50 border border-orange-100 rounded font-mono text-orange-500">.md sur disque</span>
-      <span>→ relire</span>
-      <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded font-mono">OpenClaw</span>
     </div>
 
     <!-- Éditeur -->

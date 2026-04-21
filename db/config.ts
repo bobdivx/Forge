@@ -121,6 +121,24 @@ const AgentInstruction = defineTable({
   },
 });
 
+/**
+ * Catalogue local des modèles utilisables pour les agents Forge.
+ * Sert de source stable quand OpenClaw est indisponible.
+ */
+const AgentModel = defineTable({
+  columns: {
+    /** Identifiant modèle (ex: qwen3-coder:30b). */
+    id: column.text({ primaryKey: true }),
+    /** Libellé affiché dans les sélecteurs. */
+    label: column.text(),
+    /** Origine du modèle: local | openclaw | seed. */
+    source: column.text({ default: 'seed' }),
+    /** 1 = visible dans les UI, 0 = masqué. */
+    enabled: column.number({ default: 1 }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 /** Mémoire persistante par agent — inspirée du pattern memdir/ de Claude Code. */
 const AgentMemory = defineTable({
   columns: {
@@ -372,6 +390,7 @@ export default defineDb({
     ForgeUser,
     AgentMemory,
     AgentInstruction,
+    AgentModel,
     CustomApiToken,
     AgentAppIssue,
     AgentDependencyRequest,

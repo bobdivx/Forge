@@ -13,6 +13,15 @@ type WorkCyclePayload = {
   ok?: boolean;
   budgetBlocked?: string;
   openClawErrors?: string[];
+  wakeReport?: {
+    targeted: number;
+    awakened: string[];
+    failed: { agentId: string; error: string }[];
+    sessionCheck?: {
+      active: string[];
+      missing: string[];
+    };
+  };
   error?: string;
 };
 
@@ -67,6 +76,16 @@ export default function DashWorkSystem() {
             setMsg(`Budget : ${wc.budgetBlocked}`);
           } else if (wc && wc.ok === false && wc.error) {
             setMsg(wc.error);
+          } else if (wc?.wakeReport?.sessionCheck) {
+            const ok = wc.wakeReport.sessionCheck.active;
+            const ko = wc.wakeReport.sessionCheck.missing;
+            if (ko.length > 0) {
+              setMsg(
+                `Sessions actives: ${ok.length}/${wc.wakeReport.targeted} — manquantes: ${ko.join(', ')}`,
+              );
+            } else {
+              setMsg(`Sessions actives: ${ok.length}/${wc.wakeReport.targeted}`);
+            }
           } else if (wc?.openClawErrors?.length) {
             setMsg(`OpenClaw : ${wc.openClawErrors.join(' · ')}`);
           } else {

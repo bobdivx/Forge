@@ -8,9 +8,13 @@ import type { APIRoute } from 'astro';
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import { getConfig } from '../../lib/config-db';
+import { FORGE_AGENT_INSTRUCTION_ROWS } from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
-import { fetchOpenClawAgentsList } from '../../lib/openclaw-gateway';
+import { fetchOpenClawAgentsList, fetchOpenClawJson } from '../../lib/openclaw-gateway';
+
+const VIRTUAL_AGENTS_CONFIG_KEY = 'openclawVirtualAgents';
 
 async function resolveOpenClawJsonCandidates(): Promise<string[]> {
   const appDataDir = (await getConfig('dockerAppDataDir')).trim() || 'C:\\DATA\\AppData';
@@ -54,24 +58,144 @@ function detectOpenClawContainer(): string | null {
   }
 }
 
-async function getForgeAgentIds(): Promise<string[]> {
+async function getForgeAgentIds(autoEnableIfEmpty = false): Promise<{ ids: string[]; autoEnabled: string[] }> {
   try {
     const { db, AgentInstruction } = await loadAstroDb();
-    const rows = await db.select({ agentId: AgentInstruction.agentId, enabled: AgentInstruction.enabled }).from(AgentInstruction);
-    return rows.filter((r) => r.enabled === 1).map((r) => r.agentId);
+    const rows = await db
+      .select({ agentId: AgentInstruction.agentId, enabled: AgentInstruction.enabled })
+      .from(AgentInstruction);
+    const enabledIds = rows.filter((r) => r.enabled === 1).map((r) => r.agentId);
+    if (enabledIds.length > 0 || !autoEnableIfEmpty || rows.length === 0) {
+      return { ids: enabledIds, autoEnabled: [] };
+    }
+
+    const autoEnabled: string[] = [];
+    for (const row of rows) {
+      await db
+        .update(AgentInstruction)
+        .set({ enabled: 1, updatedAt: new Date() })
+        .where(eq(AgentInstruction.agentId, row.agentId));
+      autoEnabled.push(row.agentId);
+    }
+    return { ids: autoEnabled, autoEnabled };
   } catch {
-    return ['CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL', 'DEV_BACKEND', 'DEV_FRONTEND'];
+    return {
+      ids: ['CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL', 'DEV_BACKEND', 'DEV_FRONTEND'],
+      autoEnabled: [],
+    };
   }
+}
+
+async function resolveSyncTargetAgentIds(autoEnableIfEmpty = false): Promise<{ ids: string[]; autoEnabled: string[]; adoptedFromGateway: boolean }> {
+  const { ids: baseIds, autoEnabled } = await getForgeAgentIds(autoEnableIfEmpty);
+  if (baseIds.length > 0) return { ids: [...new Set(baseIds)], autoEnabled, adoptedFromGateway: false };
+
+  const defaults = FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId);
+  const gw = await fetchOpenClawAgentsList(undefined);
+  const fromGateway = gw.ok ? gw.agents.map((a) => String(a.id || '').trim()).filter(Boolean) : [];
+  const merged = [...new Set([...defaults, ...fromGateway])];
+  if (merged.length > 0) {
+    return { ids: merged, autoEnabled, adoptedFromGateway: fromGateway.length > 0 };
+  }
+  return { ids: [], autoEnabled, adoptedFromGateway: false };
+}
+
+async function readVirtualAgentsFromForgeConfig(): Promise<string[]> {
+  try {
+    const { db, Config } = await loadAstroDb();
+    const rows = await db.select().from(Config).where(eq(Config.key, VIRTUAL_AGENTS_CONFIG_KEY)).limit(1);
+    if (!rows.length) return [];
+    const parsed = JSON.parse(String(rows[0].value || '[]'));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((v) => String(v || '').trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function writeVirtualAgentsToForgeConfig(agentIds: string[]): Promise<void> {
+  const { db, Config } = await loadAstroDb();
+  const value = JSON.stringify([...new Set(agentIds)]);
+  const existing = await db.select().from(Config).where(eq(Config.key, VIRTUAL_AGENTS_CONFIG_KEY)).limit(1);
+  if (existing.length) {
+    await db.update(Config).set({ value, updatedAt: new Date() }).where(eq(Config.key, VIRTUAL_AGENTS_CONFIG_KEY));
+  } else {
+    await db.insert(Config).values({ key: VIRTUAL_AGENTS_CONFIG_KEY, value, updatedAt: new Date() });
+  }
+}
+
+async function trySyncViaGatewayApi(forgeAgentIds: string[]): Promise<{
+  ok: boolean;
+  via?: string;
+  error?: string;
+}> {
+  const payloads: { via: string; body: Record<string, unknown> }[] = [
+    {
+      via: 'agents_sync',
+      body: {
+        tool: 'agents_sync',
+        action: 'json',
+        args: { agents: forgeAgentIds.map((id) => ({ id })), merge: true },
+      },
+    },
+    {
+      via: 'agents_set',
+      body: {
+        tool: 'agents_set',
+        action: 'json',
+        args: { list: forgeAgentIds.map((id) => ({ id })) },
+      },
+    },
+    {
+      via: 'agents_upsert',
+      body: {
+        tool: 'agents_upsert',
+        action: 'json',
+        args: { agents: forgeAgentIds.map((id) => ({ id })) },
+      },
+    },
+  ];
+
+  let lastError = 'Aucun outil d’écriture des agents exposé par le gateway.';
+  for (const attempt of payloads) {
+    const res = await fetchOpenClawJson(undefined, '/tools/invoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(attempt.body),
+    });
+    if (!res.ok) {
+      lastError = res.error || `HTTP ${res.status} sur ${attempt.via}`;
+      continue;
+    }
+
+    const listRes = await fetchOpenClawAgentsList(undefined);
+    if (!listRes.ok) {
+      lastError = listRes.error || `Écriture ${attempt.via} réussie mais agents_list illisible.`;
+      continue;
+    }
+    const current = new Set(listRes.agents.map((a) => String(a.id || '').trim().toUpperCase()));
+    const allPresent = forgeAgentIds.every((id) => current.has(id.toUpperCase()));
+    if (allPresent) {
+      return { ok: true, via: attempt.via };
+    }
+    lastError = `Écriture ${attempt.via} acceptée mais agents_list ne reflète pas tous les agents attendus.`;
+  }
+
+  return { ok: false, error: lastError };
 }
 
 export const GET: APIRoute = async () => {
   try {
     const { path, candidates } = await resolveOpenClawJsonPath();
     const exists = existsSync(path);
-    const forgeAgentIds = await getForgeAgentIds();
+    let { ids: forgeAgentIds } = await resolveSyncTargetAgentIds(false);
     const container = detectOpenClawContainer();
     const agentsRes = await fetchOpenClawAgentsList(undefined);
     const gatewayCurrentIds = agentsRes.agents.map((a) => a.id);
+    if (forgeAgentIds.length === 0 && gatewayCurrentIds.length > 0) {
+      forgeAgentIds = [...new Set(gatewayCurrentIds)];
+    }
+    const virtualIds = await readVirtualAgentsFromForgeConfig();
     const currentIds = exists
       ? (() => {
           const config = readOpenClawJson(path);
@@ -79,7 +203,7 @@ export const GET: APIRoute = async () => {
           const currentList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
           return currentList.map((a) => a.id).filter((id) => typeof id === 'string');
         })()
-      : gatewayCurrentIds;
+      : [...new Set([...gatewayCurrentIds, ...virtualIds])];
 
     if (!exists && !agentsRes.ok) {
       return new Response(
@@ -117,6 +241,7 @@ export const GET: APIRoute = async () => {
       warning: !exists
         ? `Config locale introuvable (${path}) ; aperçu basé sur agents_list (API gateway).`
         : undefined,
+      virtualRegistry: !exists ? virtualIds : [],
     }), { status: 200 });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
@@ -130,28 +255,32 @@ export const POST: APIRoute = async ({ request }) => {
     const { db, ActivityLog } = await loadAstroDb();
     const now = new Date();
 
+    const { ids: forgeAgentIds, autoEnabled, adoptedFromGateway } = await resolveSyncTargetAgentIds(true);
+    let syncMode: 'api' | 'file' | 'api-virtual' = 'file';
+    let syncVia: string | null = null;
     if (!existsSync(path)) {
-      const agentsRes = await fetchOpenClawAgentsList(undefined);
-      const gatewayHint = agentsRes.ok
-        ? `API gateway joignable (${agentsRes.agents.length} agents détectés via agents_list), mais aucun outil d'écriture des agents n'est exposé: la synchronisation nécessite un accès au fichier openclaw.json.`
-        : `API gateway non exploitable pour la synchronisation (${agentsRes.error || `HTTP ${agentsRes.status || 0}`}).`;
-      throw new Error(
-        `Chemin de configuration openclaw.json inaccessible : ${path}. Chemins testés: ${candidates.join(', ')}. ${gatewayHint}`,
-      );
+      const apiSync = await trySyncViaGatewayApi(forgeAgentIds);
+      if (!apiSync.ok) {
+        // Fallback robuste: registre virtuel côté Forge quand le gateway est en mode lecture seule.
+        await writeVirtualAgentsToForgeConfig(forgeAgentIds);
+        syncMode = 'api-virtual';
+        syncVia = 'forge-shadow-registry';
+      } else {
+        syncMode = 'api';
+        syncVia = apiSync.via || null;
+        await writeVirtualAgentsToForgeConfig([]);
+      }
+    } else {
+      const config = readOpenClawJson(path);
+      const agents = (config.agents ?? {}) as Record<string, unknown>;
+      const existingList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
+      const forgeSet = new Set(forgeAgentIds);
+      const keepExisting = existingList.filter((a) => !forgeSet.has(a.id));
+      const newList = [...forgeAgentIds.map((id) => ({ id })), ...keepExisting];
+      config.agents = { ...agents, list: newList };
+      writeOpenClawJson(path, config);
+      await writeVirtualAgentsToForgeConfig([]);
     }
-
-    const config = readOpenClawJson(path);
-    const forgeAgentIds = await getForgeAgentIds();
-    const agents = (config.agents ?? {}) as Record<string, unknown>;
-    const existingList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
-
-    // Fusion des agents
-    const forgeSet = new Set(forgeAgentIds);
-    const keepExisting = existingList.filter((a) => !forgeSet.has(a.id));
-    const newList = [...forgeAgentIds.map(id => ({ id })), ...keepExisting];
-    config.agents = { ...agents, list: newList };
-
-    writeOpenClawJson(path, config);
 
     // Audit Log
     await db.insert(ActivityLog).values({
@@ -175,7 +304,22 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    return new Response(JSON.stringify({ ok: true, synchronized: forgeAgentIds.length, restart: restartResult }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        synchronized: forgeAgentIds.length,
+        mode: syncMode,
+        via: syncVia,
+        note:
+          syncMode === 'api-virtual'
+            ? `Gateway joignable mais sans outils d'écriture d'agents ; Forge conserve un registre virtuel (${VIRTUAL_AGENTS_CONFIG_KEY}) en attendant l'activation d'un tool de sync côté OpenClaw.`
+            : undefined,
+        autoEnabled,
+        adoptedFromGateway,
+        restart: restartResult,
+      }),
+      { status: 200 },
+    );
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
   }
