@@ -8,6 +8,7 @@ import { loadAstroDb } from '../../lib/load-astro-db';
 import type { AgentTaskTerminalStatus } from '../../lib/forge-task-status-sync';
 import { finalizeAgentTaskStatus } from '../../lib/forge-task-status-sync';
 import { insertForgeActivityLog } from '../../lib/forge-activity-log';
+import { scanOpenClawForForgeDoneSignals } from '../../lib/forge-openclaw-done-scan';
 
 /** POST { agentId, task, status? } — crée une tâche en base. */
 export const POST: APIRoute = async ({ request }) => {
@@ -64,6 +65,13 @@ type TaskRow = {
 };
 
 export const GET: APIRoute = async ({ locals }) => {
+  // Garde-fou d'autonomie:
+  // quand le scheduler est arrêté, on continue à synchroniser les FORGE_DONE
+  // au rythme du journal (throttle interne dans le scanner).
+  await scanOpenClawForForgeDoneSignals().catch(() => {
+    /* scan best-effort */
+  });
+
   const { db, AgentTask, desc } = await loadAstroDb();
   const email = locals.user?.email as string | undefined;
 
