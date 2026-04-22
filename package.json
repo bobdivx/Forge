@@ -30,6 +30,7 @@
     "@astrojs/preact": "^5.1.1",
     "@astrojs/tailwind": "^6.0.2",
     "@astrojs/vercel": "^10.0.4",
+    "@rollup/rollup-linux-x64-gnu": "^4.60.2",
     "astro": "^6.1.6",
     "chart.js": "^4.5.1",
     "daisyui": "latest",

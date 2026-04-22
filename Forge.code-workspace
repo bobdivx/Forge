@@ -1,9 +1,6 @@
 {
 	"folders": [
 		{
-			"path": "."
-		},
-		{
 			"path": "../../Docker/AppData/ollama-nvidia"
 		},
 		{
@@ -11,6 +8,9 @@
 		},
 		{
 			"path": "X:/AppData/openclaw"
+		},
+		{
+			"path": "D:/Github/Forge"
 		}
 	],
 	"settings": {}
