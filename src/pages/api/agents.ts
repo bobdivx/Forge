@@ -12,6 +12,10 @@ import {
   mapSessionToAgentRow,
   getOpenClawClientDebugMeta,
 } from '../../lib/openclaw-gateway';
+import {
+  normForgeAgentKey,
+  resolveCanonicalForgeAgentId,
+} from '../../lib/forge-agent-id';
 
 type TaskStats = {
   total: number;
@@ -23,11 +27,6 @@ type TaskStats = {
 
 function emptyTaskStats(): TaskStats {
   return { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
-}
-
-/** Compare les agentId DB (casse, underscores) avec les ids affichés (CHEF_TECHNIQUE, clés session…). */
-function normAgentKey(s: string): string {
-  return String(s).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 function canonicalAgentIdCandidate(raw: string): string {
@@ -48,9 +47,9 @@ const CANONICAL_AGENT_ID_SET = new Set(FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r
 function mapTaskAgentIdToCanonical(agentId: string): string {
   const t = String(agentId).trim();
   if (CANONICAL_AGENT_ID_SET.has(t)) return t;
-  const n = normAgentKey(t);
+  const n = normForgeAgentKey(t);
   for (const row of FORGE_AGENT_INSTRUCTION_ROWS) {
-    if (normAgentKey(row.agentId) === n) return row.agentId;
+    if (normForgeAgentKey(row.agentId) === n) return row.agentId;
   }
   const lower = t.toLowerCase();
   if (lower === 'github' || lower === 'expert-github' || lower === 'expert_github') return 'EXPERT_GITHUB';
@@ -71,10 +70,10 @@ function resolveStatsFromDb(
     const v = pick(k);
     if (v) return v;
   }
-  const want = normAgentKey(agentId);
-  const wantName = normAgentKey(agentName);
+  const want = normForgeAgentKey(agentId);
+  const wantName = normForgeAgentKey(agentName);
   for (const [k, v] of Object.entries(db)) {
-    const nk = normAgentKey(k);
+    const nk = normForgeAgentKey(k);
     if (nk && (nk === want || nk === wantName)) return { ...v };
   }
   return emptyTaskStats();
@@ -137,22 +136,24 @@ function buildDisplayTaskStats(
 
 /** Score de correspondance session OpenClaw ↔ agentId (table AgentInstruction). */
 function sessionMatchScore(raw: Record<string, unknown>, agentId: string): number {
-  const want = agentId.trim().toUpperCase();
-  if (!want) return 0;
-  const same = (v: unknown) => String(v ?? '').trim().toUpperCase() === want;
-  if (same(raw.agentId) || same(raw.agent_id)) return 100;
-  if (same(raw.displayName) || same(raw.display_name)) return 90;
-  if (same(raw.label)) return 88;
+  const wantKey = normForgeAgentKey(agentId);
+  if (!wantKey) return 0;
+  const sameKey = (v: unknown) => normForgeAgentKey(String(v ?? '')) === wantKey;
+  if (sameKey(raw.agentId) || sameKey(raw.agent_id)) return 100;
+  if (sameKey(raw.displayName) || sameKey(raw.display_name)) return 90;
+  if (sameKey(raw.label)) return 88;
   const keyStr = String(raw.key ?? raw.sessionKey ?? raw.session_key ?? '');
   if (keyStr) {
     const parts = keyStr
       .split(/[:\\/]+/)
-      .map((p) => p.trim().toUpperCase())
+      .map((p) => p.trim())
       .filter(Boolean);
-    if (parts.includes(want)) return 70;
+    for (const p of parts) {
+      if (normForgeAgentKey(p) === wantKey) return 70;
+    }
   }
   const mapped = mapSessionToAgentRow(raw);
-  if (String(mapped.name).toUpperCase() === want) return 60;
+  if (normForgeAgentKey(String(mapped.name)) === wantKey) return 60;
   const blob = [
     keyStr,
     String(raw.label),
@@ -162,7 +163,7 @@ function sessionMatchScore(raw: Record<string, unknown>, agentId: string): numbe
   ]
     .join(' ')
     .toUpperCase();
-  if (want === 'EXPERT_GITHUB' && /\bGITHUB\b/.test(blob)) return 58;
+  if (wantKey === normForgeAgentKey('EXPERT_GITHUB') && /\bGITHUB\b/.test(blob)) return 58;
   return 0;
 }
 
@@ -285,16 +286,19 @@ export const GET: APIRoute = async ({ locals }) => {
     dbEnabledInstructionCount = allInstructions.filter((r) => Number(r.enabled) === 1).length;
 
     const enabledInstructionIds = new Set(
-      allInstructions.filter((r) => Number(r.enabled) === 1).map((r) => String(r.agentId).toUpperCase()),
+      allInstructions
+        .filter((r) => Number(r.enabled) === 1)
+        .map((r) => normForgeAgentKey(String(r.agentId))),
     );
     const byInstructionId = new Map(
-      allInstructions.map((r) => [String(r.agentId).toUpperCase(), r]),
+      allInstructions.map((r) => [normForgeAgentKey(String(r.agentId)), r]),
     );
 
     // Liste "réelle" = sessions OpenClaw (actives/récentes) + registre gateway.
     const byId = new Map<string, any>();
     const keyToId = new Map<string, string>();
-    const normalizeIdKey = (v: unknown) => normAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
+    const normalizeIdKey = (v: unknown) =>
+      normForgeAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
     for (const raw of rawSessions) {
       const mapped = mapSessionToAgentRow(raw);
       const id = String(mapped.id || '').trim();
@@ -302,7 +306,11 @@ export const GET: APIRoute = async ({ locals }) => {
       const upper = normalizeIdKey(id);
       const base = canonicalAgentIdCandidate(id);
       const inst = byInstructionId.get(upper);
-      const canonicalId = byInstructionId.get(upper)?.agentId || keyToId.get(upper) || base || id;
+      const canonicalId =
+        inst?.agentId ||
+        keyToId.get(upper) ||
+        resolveCanonicalForgeAgentId(base) ||
+        resolveCanonicalForgeAgentId(id);
       keyToId.set(upper, canonicalId);
       byId.set(canonicalId, {
         ...mapped,
@@ -315,10 +323,14 @@ export const GET: APIRoute = async ({ locals }) => {
 
     for (const reg of openclawRegistry.agents) {
       const id = String(reg.id || '').trim();
-      if (!id || byId.has(id)) continue;
+      if (!id) continue;
       const upper = normalizeIdKey(id);
       const base = canonicalAgentIdCandidate(id);
-      const canonicalId = byInstructionId.get(upper)?.agentId || keyToId.get(upper) || base || id;
+      const canonicalId =
+        byInstructionId.get(upper)?.agentId ||
+        keyToId.get(upper) ||
+        resolveCanonicalForgeAgentId(base) ||
+        resolveCanonicalForgeAgentId(id);
       if (byId.has(canonicalId)) continue;
       keyToId.set(upper, canonicalId);
       const inst = byInstructionId.get(upper);
@@ -348,8 +360,8 @@ export const GET: APIRoute = async ({ locals }) => {
     for (const taskAgentId of Object.keys(taskStatsDb)) {
       const id = String(taskAgentId || '').trim();
       if (!id) continue;
-      const upper = normAgentKey(id);
-      const canonicalId = byInstructionId.get(upper)?.agentId || id;
+      const upper = normForgeAgentKey(id);
+      const canonicalId = byInstructionId.get(upper)?.agentId || resolveCanonicalForgeAgentId(id) || id;
       if (byId.has(canonicalId)) continue;
       const inst = byInstructionId.get(upper);
       byId.set(canonicalId, {
@@ -378,14 +390,18 @@ export const GET: APIRoute = async ({ locals }) => {
     /* DB indisponible : on reste sur la liste réelle gateway uniquement. */
     const byId = new Map<string, any>();
     const keyToId = new Map<string, string>();
-    const normalizeIdKey = (v: unknown) => normAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
+    const normalizeIdKey = (v: unknown) =>
+      normForgeAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
     for (const raw of rawSessions) {
       const mapped = mapSessionToAgentRow(raw);
       const id = String(mapped.id || '').trim();
       if (!id) continue;
       const upper = normalizeIdKey(id);
       const base = canonicalAgentIdCandidate(id);
-      const canonicalId = keyToId.get(upper) || base || id;
+      const canonicalId =
+        keyToId.get(upper) ||
+        resolveCanonicalForgeAgentId(base) ||
+        resolveCanonicalForgeAgentId(id);
       keyToId.set(upper, canonicalId);
       byId.set(canonicalId, { ...mapped, id: canonicalId, name: canonicalId, raw: { ...(mapped.raw || {}), source: 'session' } });
     }
@@ -394,7 +410,10 @@ export const GET: APIRoute = async ({ locals }) => {
       if (!id) continue;
       const upper = normalizeIdKey(id);
       const base = canonicalAgentIdCandidate(id);
-      const canonicalId = keyToId.get(upper) || base || id;
+      const canonicalId =
+        keyToId.get(upper) ||
+        resolveCanonicalForgeAgentId(base) ||
+        resolveCanonicalForgeAgentId(id);
       if (byId.has(canonicalId)) continue;
       keyToId.set(upper, canonicalId);
       byId.set(canonicalId, {
@@ -415,8 +434,19 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   const registryIds = openclawRegistry.agents.map((a) => a.id);
+  const registryIdsCanonical = registryIds.map((rid) =>
+    resolveCanonicalForgeAgentId(String(rid ?? '')),
+  );
+  const forgeNormKeys = new Set(
+    FORGE_AGENT_INSTRUCTION_ROWS.map((r) => normForgeAgentKey(r.agentId)),
+  );
+  const registryNormKeys = new Set(
+    registryIds.map((rid) => normForgeAgentKey(resolveCanonicalForgeAgentId(String(rid ?? '')))),
+  );
   const registryMatchForgeDefault =
-    openclawRegistry.ok && registryIds.length === FORGE_SWARM_AGENT_COUNT;
+    openclawRegistry.ok &&
+    forgeNormKeys.size === registryNormKeys.size &&
+    [...forgeNormKeys].every((k) => registryNormKeys.has(k));
 
   const taskStats = buildDisplayTaskStats(
     agents.map((a) => ({ id: String(a.id), name: String(a.name) })),
@@ -439,6 +469,7 @@ export const GET: APIRoute = async ({ locals }) => {
         status: openclawRegistry.status,
         count: openclawRegistry.agents.length,
         agentIds: registryIds,
+        agentIdsCanonical: registryIdsCanonical,
         agents: openclawRegistry.agents,
         requester: openclawRegistry.requester,
         allowAny: openclawRegistry.allowAny,

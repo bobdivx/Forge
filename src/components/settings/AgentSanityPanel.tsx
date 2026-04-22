@@ -5,6 +5,7 @@ type AgentCheck = {
   enabledInForge: boolean;
   hasDbPrompt: boolean;
   hasInstructionFile: boolean;
+  instructionFileMissingOnHost?: boolean;
   instructionFilePath: string;
   inOpenClawAgentsListApi: boolean;
   inOpenClawLocalConfig: boolean;
@@ -12,7 +13,12 @@ type AgentCheck = {
 };
 
 type SanityPayload = {
-  summary?: { total: number; ready: number; notReady: number };
+  summary?: {
+    total: number;
+    ready: number;
+    notReady: number;
+    missingInstructionFileOnHostCount?: number;
+  };
   checks?: AgentCheck[];
 };
 
@@ -54,7 +60,8 @@ export default function AgentSanityPanel() {
         <div>
           <h3 class="text-sm font-semibold text-gray-900">Santé des agents</h3>
           <p class="text-[11px] text-gray-500">
-            Vérifie l’activation Forge, le prompt DB, le fichier d’instruction et la présence OpenClaw.
+            Vérifie l’activation Forge, le prompt DB et l’enregistrement OpenClaw (liste API ou openclaw.json). Le fichier
+            .md sur l’hôte est informatif si le prompt est déjà en base.
           </p>
         </div>
         <button
@@ -71,8 +78,17 @@ export default function AgentSanityPanel() {
 
       {!loading && !error && (
         <div class="space-y-3">
-          <div class="text-xs text-gray-600">
-            {data.summary?.ready ?? 0}/{data.summary?.total ?? checks.length} agents prêts
+          <div class="text-xs text-gray-600 space-y-0.5">
+            <div>
+              {data.summary?.ready ?? 0}/{data.summary?.total ?? checks.length} agents prêts
+            </div>
+            {typeof data.summary?.missingInstructionFileOnHostCount === 'number' &&
+              data.summary.missingInstructionFileOnHostCount > 0 && (
+                <div class="text-amber-700">
+                  Fichiers .md absents sur l’hôte : {data.summary.missingInstructionFileOnHostCount} (non bloquant si
+                  prompt DB présent).
+                </div>
+              )}
           </div>
 
           <div class="max-h-64 overflow-auto border border-gray-100 rounded-xl">
@@ -102,14 +118,20 @@ export default function AgentSanityPanel() {
                         ? [
                             !c.enabledInForge ? 'désactivé' : '',
                             !c.hasDbPrompt ? 'prompt DB manquant' : '',
-                            !c.hasInstructionFile ? 'fichier instruction absent' : '',
                             !c.inOpenClawAgentsListApi && !c.inOpenClawLocalConfig
-                              ? 'absent OpenClaw'
+                              ? 'absent liste OpenClaw / pas dans openclaw.json local'
                               : '',
                           ]
                             .filter(Boolean)
                             .join(', ')
-                        : 'prêt'}
+                        : [
+                            'prêt',
+                            c.instructionFileMissingOnHost
+                              ? '(fichier .md absent sur l’hôte ; prompt DB)'
+                              : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
                     </td>
                   </tr>
                 ))}

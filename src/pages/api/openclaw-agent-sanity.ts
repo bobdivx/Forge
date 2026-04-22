@@ -7,15 +7,19 @@ import {
   fetchOpenClawAgentsList,
   readOpenClawLocalConfigFile,
 } from '../../lib/openclaw-gateway';
+import { normForgeAgentKey } from '../../lib/forge-agent-id';
 
 type AgentSanityRow = {
   agentId: string;
   enabledInForge: boolean;
   hasDbPrompt: boolean;
   hasInstructionFile: boolean;
+  /** Fichier attendu absent sur l’hôte (ex. déploiement Vercel sans copie `instructions/`). */
+  instructionFileMissingOnHost: boolean;
   instructionFilePath: string;
   inOpenClawAgentsListApi: boolean;
   inOpenClawLocalConfig: boolean;
+  /** Activé + prompt non vide + enregistré OpenClaw (liste API ou openclaw.json local) ; le fichier .md sur disque est informatif. */
   ready: boolean;
 };
 
@@ -49,10 +53,10 @@ export const GET: APIRoute = async ({ locals }) => {
 
   const rows = await db.select().from(AgentInstruction);
   const apiSet = new Set(
-    agentsListRes.agents.map((a) => String(a.id || '').trim().toUpperCase()).filter(Boolean),
+    agentsListRes.agents.map((a) => normForgeAgentKey(String(a.id ?? ''))).filter(Boolean),
   );
   const diskIds = readLocalConfigAgentIdsFromDisk(localCfg?.path || null);
-  const diskSet = new Set(diskIds.map((id) => id.toUpperCase()));
+  const diskSet = new Set(diskIds.map((id) => normForgeAgentKey(id)).filter(Boolean));
 
   const checks: AgentSanityRow[] = rows
     .map((r) => {
@@ -63,19 +67,19 @@ export const GET: APIRoute = async ({ locals }) => {
       const hasInstructionFile = Boolean(fullPath) && existsSync(fullPath);
       const enabledInForge = Number(r.enabled) === 1;
       const hasDbPrompt = prompt.length > 0;
-      const inOpenClawAgentsListApi = apiSet.has(agentId.toUpperCase());
-      const inOpenClawLocalConfig = diskSet.has(agentId.toUpperCase());
-      const ready =
-        enabledInForge &&
-        hasDbPrompt &&
-        hasInstructionFile &&
-        (inOpenClawAgentsListApi || inOpenClawLocalConfig);
+      const key = normForgeAgentKey(agentId);
+      const inOpenClawAgentsListApi = apiSet.has(key);
+      const inOpenClawLocalConfig = diskSet.has(key);
+      const instructionFileMissingOnHost = hasDbPrompt && !hasInstructionFile;
+      const openclawRegistered = inOpenClawAgentsListApi || inOpenClawLocalConfig;
+      const ready = enabledInForge && hasDbPrompt && openclawRegistered;
 
       return {
         agentId,
         enabledInForge,
         hasDbPrompt,
         hasInstructionFile,
+        instructionFileMissingOnHost,
         instructionFilePath: relPath,
         inOpenClawAgentsListApi,
         inOpenClawLocalConfig,
@@ -93,6 +97,7 @@ export const GET: APIRoute = async ({ locals }) => {
           total: checks.length,
           ready: readyCount,
           notReady: checks.length - readyCount,
+          missingInstructionFileOnHostCount: checks.filter((c) => c.instructionFileMissingOnHost).length,
         },
         gatewayAgentsList: {
           ok: agentsListRes.ok,
