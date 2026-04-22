@@ -9,12 +9,14 @@ import {
 } from '../../lib/openclaw-gateway';
 import { buildSwarmWorkDirective } from '../../lib/forge-agent-protocol';
 import { getAppUpdateInfo } from '../../lib/app-update-check';
+import { attemptOpenClawPreRepair } from './_openclaw-pre-repair';
 
 const CHIEF_AGENT_ID = 'CHEF_TECHNIQUE';
 
 export const POST: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
   let directive = buildSwarmWorkDirective('start_work', 'direct');
+  let preRepair: { attempted: boolean; ok: boolean; note?: string; error?: string } | undefined;
   const updateInfo = await getAppUpdateInfo().catch(() => null);
   if (updateInfo?.updateAvailable && updateInfo.latestVersion && updateInfo.currentVersion) {
     directive = [
@@ -30,12 +32,22 @@ export const POST: APIRoute = async ({ locals }) => {
       .join('\n');
   }
 
-  const registry = await fetchOpenClawAgentsList(email);
+  let registry = await fetchOpenClawAgentsList(email);
+  const shouldAttemptRepair =
+    registry.ok &&
+    (registry.allowAny === false ||
+      registry.agents.length <= 1 ||
+      registry.agents.every((a) => String(a.id || '').trim().toUpperCase() === CHIEF_AGENT_ID));
+  if (shouldAttemptRepair) {
+    preRepair = await attemptOpenClawPreRepair('wake-agents-allowlist');
+    registry = await fetchOpenClawAgentsList(email);
+  }
   if (!registry.ok) {
     return new Response(
       JSON.stringify({
         ok: false,
         error: registry.error || 'Impossible de lire la liste des agents OpenClaw.',
+        preRepair,
       }),
       { status: 502, headers: { 'Content-Type': 'application/json' } },
     );
@@ -108,6 +120,7 @@ export const POST: APIRoute = async ({ locals }) => {
           ok: true,
           sent,
           failed,
+          preRepair,
           viaChiefFallback: true,
           chiefAgentId: CHIEF_AGENT_ID,
           targeted: targetIds.length,
@@ -122,6 +135,7 @@ export const POST: APIRoute = async ({ locals }) => {
       ok: failed.length === 0,
       sent,
       failed,
+      preRepair,
       targeted: targetIds.length,
       registryCount: registryIds.length,
       enabledCount: enabledIds.size,

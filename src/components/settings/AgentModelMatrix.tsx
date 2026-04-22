@@ -94,6 +94,11 @@ type SyncPreview = {
   upToDate?: boolean;
   error?: string;
   warning?: string;
+  subagentPolicy?: {
+    ok?: boolean;
+    issues?: string[];
+    maxSpawnDepth?: number;
+  };
 };
 
 export default function AgentModelMatrix() {
@@ -357,6 +362,19 @@ export default function AgentModelMatrix() {
                   <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
                     {syncPreview.warning}
                   </p>
+                )}
+                {syncPreview.subagentPolicy && !syncPreview.subagentPolicy.ok && (
+                  <div class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 space-y-1">
+                    <p class="font-semibold">Politique subagents à corriger</p>
+                    {(syncPreview.subagentPolicy.issues || []).slice(0, 4).map((issue) => (
+                      <p class="font-mono break-all" key={issue}>
+                        - {issue}
+                      </p>
+                    ))}
+                    {(syncPreview.subagentPolicy.issues?.length || 0) > 4 && (
+                      <p>… {(syncPreview.subagentPolicy.issues?.length || 0) - 4} autre(s) anomalie(s).</p>
+                    )}
+                  </div>
                 )}
                 <div class="flex flex-wrap gap-4 text-xs">
                   <div>

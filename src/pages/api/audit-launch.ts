@@ -14,6 +14,7 @@ import {
 } from '../../lib/openclaw-gateway';
 import { getOllamaOriginResolved } from '../../lib/config-db';
 import { getForgeHookBaseUrl } from '../../lib/forge-hook-base-url';
+import { attemptOpenClawPreRepair } from './_openclaw-pre-repair';
 
 const execFileAsync = promisify(execFile);
 
@@ -554,6 +555,7 @@ async function invokeViaDockerExec(
 // ── Endpoint principal ────────────────────────────────────────────────────────
 export const POST: APIRoute = async ({ request, locals }) => {
   const email = locals.user?.email as string | undefined;
+  const preRepair = await attemptOpenClawPreRepair('audit-launch');
 
   let body: { projectName?: string; projectId?: number; projectPath?: string; roles?: string[] };
   try {
@@ -746,6 +748,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   return json({
     ok: true,
+    preRepair,
     projectName,
     dispatchedCount,
     queuedCount,

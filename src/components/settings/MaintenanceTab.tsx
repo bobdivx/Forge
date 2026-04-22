@@ -16,6 +16,11 @@ type OpenClawSyncStatus = {
   warning?: string;
   error?: string;
   virtualRegistry?: string[];
+  subagentPolicy?: {
+    ok?: boolean;
+    issues?: string[];
+    maxSpawnDepth?: number;
+  };
 };
 
 type OpenClawSyncPost = {
@@ -279,6 +284,10 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
                   <span class="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-amber-900 font-medium">
                     Synchro virtuelle (gateway read-only)
                   </span>
+                ) : syncAgentsStatus.subagentPolicy?.ok === false ? (
+                  <span class="inline-flex items-center rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-amber-900 font-medium">
+                    Permissions subagents à réparer
+                  </span>
                 ) : syncAgentsStatus.upToDate ? (
                   <span class="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-emerald-900 font-medium">
                     Agents synchronisés
@@ -303,6 +312,13 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
                   </span>
                 )}
                 {syncAgentsStatus.warning && <span class="text-amber-800">{syncAgentsStatus.warning}</span>}
+                {syncAgentsStatus.subagentPolicy?.ok === false &&
+                  Array.isArray(syncAgentsStatus.subagentPolicy.issues) &&
+                  syncAgentsStatus.subagentPolicy.issues.length > 0 && (
+                    <span class="text-amber-900">
+                      permissions: {syncAgentsStatus.subagentPolicy.issues.length} anomalie(s) détectée(s)
+                    </span>
+                  )}
                 {syncAgentsStatus.error && <span class="text-red-700">{syncAgentsStatus.error}</span>}
               </div>
             )}

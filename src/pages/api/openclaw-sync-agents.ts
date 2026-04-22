@@ -20,6 +20,12 @@ const AGENT_ID_RE = /^[A-Z0-9_]{2,72}$/;
 const SUBAGENT_MARKER = '__APP_';
 
 type OpenClawAgentEntry = { id: string; model?: string };
+type SubagentPolicyReport = {
+  ok: boolean;
+  issues: string[];
+  maxSpawnDepth?: number;
+  repaired?: boolean;
+};
 
 function normalizeAgentId(input: unknown): string {
   const raw = String(input ?? '').trim();
@@ -119,6 +125,96 @@ function readOpenClawJson(path: string): Record<string, unknown> {
 
 function writeOpenClawJson(path: string, data: Record<string, unknown>): void {
   writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+function diagnoseSubagentPolicy(config: Record<string, unknown>): SubagentPolicyReport {
+  const issues: string[] = [];
+  const agents = (config.agents ?? {}) as Record<string, unknown>;
+  const defaults = (agents.defaults ?? {}) as Record<string, unknown>;
+  const defaultsSubagents = (defaults.subagents ?? {}) as Record<string, unknown>;
+  const maxSpawnDepthRaw = Number(defaultsSubagents.maxSpawnDepth ?? 1);
+  const maxSpawnDepth = Number.isFinite(maxSpawnDepthRaw) ? maxSpawnDepthRaw : 1;
+  if (maxSpawnDepth < 2) {
+    issues.push(`agents.defaults.subagents.maxSpawnDepth=${String(defaultsSubagents.maxSpawnDepth ?? '(absent)')} (<2).`);
+  }
+
+  const list = Array.isArray(agents.list) ? (agents.list as unknown[]) : [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const entry = item as Record<string, unknown>;
+    const id = normalizeAgentId(entry.id);
+    if (!id) continue;
+    const subagents = (entry.subagents ?? {}) as Record<string, unknown>;
+    const allowAgents = Array.isArray(subagents.allowAgents)
+      ? subagents.allowAgents.map((v) => String(v || '').trim()).filter(Boolean)
+      : [];
+    const allowAny = allowAgents.some((v) => v === '*');
+    if (!allowAny) {
+      issues.push(`${id}: subagents.allowAgents absent/incomplet.`);
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    maxSpawnDepth,
+  };
+}
+
+function enforceSubagentPolicy(config: Record<string, unknown>): {
+  changed: boolean;
+  report: SubagentPolicyReport;
+  nextConfig: Record<string, unknown>;
+} {
+  const agents = (config.agents ?? {}) as Record<string, unknown>;
+  const defaults = (agents.defaults ?? {}) as Record<string, unknown>;
+  const defaultsSubagents = (defaults.subagents ?? {}) as Record<string, unknown>;
+  let changed = false;
+
+  const currentDepth = Number(defaultsSubagents.maxSpawnDepth ?? 1);
+  if (!Number.isFinite(currentDepth) || currentDepth < 2) {
+    defaultsSubagents.maxSpawnDepth = 2;
+    changed = true;
+  }
+
+  const listRaw = Array.isArray(agents.list) ? (agents.list as unknown[]) : [];
+  const list = listRaw.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    const entry = item as Record<string, unknown>;
+    const id = normalizeAgentId(entry.id);
+    if (!id) return entry;
+
+    const subagents = (entry.subagents ?? {}) as Record<string, unknown>;
+    const allowAgents = Array.isArray(subagents.allowAgents)
+      ? subagents.allowAgents.map((v) => String(v || '').trim()).filter(Boolean)
+      : [];
+    const allowAny = allowAgents.some((v) => v === '*');
+    if (!allowAny) {
+      changed = true;
+      return {
+        ...entry,
+        subagents: {
+          ...subagents,
+          allowAgents: ['*'],
+        },
+      };
+    }
+    return entry;
+  });
+
+  const nextConfig = {
+    ...config,
+    agents: {
+      ...agents,
+      defaults: {
+        ...defaults,
+        subagents: defaultsSubagents,
+      },
+      list,
+    },
+  } as Record<string, unknown>;
+  const report = diagnoseSubagentPolicy(nextConfig);
+  return { changed, report: { ...report, repaired: changed && report.ok }, nextConfig };
 }
 
 function detectOpenClawContainer(): string | null {
@@ -278,11 +374,13 @@ export const GET: APIRoute = async () => {
     const currentIds = exists
       ? (() => {
           const config = readOpenClawJson(path);
-          const agents = (config.agents ?? {}) as Record<string, unknown>;
           const currentEntries = parseOpenClawAgentsList(config);
           return currentEntries.map((a) => a.id);
         })()
       : [...new Set([...gatewayCurrentIds, ...virtualIds])];
+    const subagentPolicy = exists
+      ? diagnoseSubagentPolicy(readOpenClawJson(path))
+      : ({ ok: false, issues: ['openclaw.json introuvable: politique subagents non vérifiable.'] } as SubagentPolicyReport);
 
     if (!exists && !agentsRes.ok) {
       return new Response(
@@ -321,6 +419,7 @@ export const GET: APIRoute = async () => {
         ? `Config locale introuvable (${path}) ; aperçu basé sur agents_list (API gateway).`
         : undefined,
       virtualRegistry: !exists ? virtualIds : [],
+      subagentPolicy,
     }), { status: 200 });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
@@ -362,11 +461,12 @@ export async function performOpenClawAgentsSync(containerNameOverride?: string):
       const agents = (config.agents ?? {}) as Record<string, unknown>;
       const existingEntries = parseOpenClawAgentsList(config);
       const newList = sanitizeAgentsListForSync(existingEntries, normalizeAgentIds(forgeAgentIds));
-      const nextConfig = { ...config, agents: { ...agents, list: newList } } as Record<string, unknown>;
-      if (!isLikelyHealthyOpenClawConfig(nextConfig)) {
+      const syncedConfig = { ...config, agents: { ...agents, list: newList } } as Record<string, unknown>;
+      const repairedPolicy = enforceSubagentPolicy(syncedConfig);
+      if (!isLikelyHealthyOpenClawConfig(repairedPolicy.nextConfig)) {
         throw new Error('Sync refusée: structure openclaw.json invalide après merge (gateway/models/agents.list requis).');
       }
-      writeOpenClawJson(path, nextConfig);
+      writeOpenClawJson(path, repairedPolicy.nextConfig);
       try {
         const reloaded = readOpenClawJson(path);
         if (!isLikelyHealthyOpenClawConfig(reloaded)) {

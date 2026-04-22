@@ -10,6 +10,7 @@ import {
   resolveSessionsSendKey,
 } from '../../lib/openclaw-gateway';
 import { getConfig } from '../../lib/config-db';
+import { attemptOpenClawPreRepair } from './_openclaw-pre-repair';
 
 const MAX_MESSAGE = 120_000;
 const execFileAsync = promisify(execFile);
@@ -271,6 +272,12 @@ export const POST: APIRoute = async ({ request }) => {
       ? Math.floor(body.timeoutSeconds)
       : 120;
 
+  const isSwarmCommand = /\[FORGE_SWARM_COMMAND\]/i.test(message);
+  let preRepair: { attempted: boolean; ok: boolean; note?: string; error?: string } | undefined;
+  if (isSwarmCommand) {
+    preRepair = await attemptOpenClawPreRepair('directive-swarm-command');
+  }
+
   const resolvedSessionKey =
     (await resolveSessionsSendKey(undefined, [sessionKey]).catch(() => null)) || sessionKey;
 
@@ -287,6 +294,7 @@ export const POST: APIRoute = async ({ request }) => {
       JSON.stringify({
         ok: true,
         via: 'sessions_send',
+        preRepair,
         routedSessionKey: resolvedSessionKey,
         result: reply ? { status: 'completed', reply } : { status: 'accepted' },
         detail: result.detail ?? { ok: true },
@@ -310,6 +318,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: 'agents_invoke_fallback',
+          preRepair,
           routedSessionKey: resolvedSessionKey,
           detail: fallback.detail ?? { accepted: true },
         }),
@@ -328,6 +337,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: fallback2.via,
+          preRepair,
           routedSessionKey: resolvedSessionKey,
           result: {
             status: 'completed',
@@ -354,6 +364,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           ok: true,
           via: fallback3.via,
+          preRepair,
           routedSessionKey: resolvedSessionKey,
           result: { status: 'accepted' },
           detail: {
@@ -382,6 +393,7 @@ export const POST: APIRoute = async ({ request }) => {
         ...(shouldAttachToolsRemediation(result.error, fallback.error, fallback2.error)
           ? { remediation: await buildGatewayToolsRemediation() }
           : {}),
+        preRepair,
         detail: {
           sessionsSend: result.detail,
           agentsInvoke: fallback.detail,
@@ -409,6 +421,7 @@ export const POST: APIRoute = async ({ request }) => {
         ...(shouldAttachToolsRemediation(result.error, null, null)
           ? { remediation: await buildGatewayToolsRemediation() }
           : {}),
+        preRepair,
         detail: result.detail,
       }),
       {

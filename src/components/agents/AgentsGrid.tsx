@@ -51,6 +51,13 @@ type AppVersionCheck = {
   error?: string;
 };
 
+type WakePreRepair = {
+  attempted?: boolean;
+  ok?: boolean;
+  note?: string;
+  error?: string;
+};
+
 function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>, teamProfiles: Record<string, AgentTeamProfile>) {
   /** Palette alignée Forge (vert marque + variantes lisibles sur fond blanc) */
   const CHART_COLORS = [
@@ -272,10 +279,21 @@ export default function AgentsGrid() {
         }),
       });
       const data = await r.json().catch(() => ({}));
+      const preRepair =
+        data?.preRepair && typeof data.preRepair === 'object'
+          ? (data.preRepair as WakePreRepair)
+          : null;
       if (!r.ok || data.ok === false) {
+        const preRepairHint = preRepair?.attempted
+          ? preRepair.ok
+            ? ' (auto-reparation OpenClaw appliquee)'
+            : ` (auto-reparation echouee: ${preRepair.error || 'inconnue'})`
+          : '';
         setCommandMsgByAgent((prev) => ({
           ...prev,
-          [agentId]: typeof data.error === 'string' && data.error ? data.error : 'Commande refusée',
+          [agentId]:
+            (typeof data.error === 'string' && data.error ? data.error : 'Commande refusée') +
+            preRepairHint,
         }));
         return;
       }
@@ -288,7 +306,9 @@ export default function AgentsGrid() {
         ...prev,
         [agentId]: reply
           ? `Réponse reçue (${via})`
-          : `Commande envoyée (${command.replace('_', ' ')}, via ${via})`,
+          : `Commande envoyée (${command.replace('_', ' ')}, via ${via})${
+              preRepair?.attempted ? (preRepair.ok ? ' · auto-repair' : ' · auto-repair KO') : ''
+            }`,
       }));
       // Feedback immédiat sur la carte : le statut affiché se base sur sessions_list,
       // qui peut avoir quelques secondes de retard.
@@ -331,14 +351,22 @@ export default function AgentsGrid() {
       const data = await r.json().catch(() => ({}));
       const sentCount = Array.isArray(data?.sent) ? data.sent.length : 0;
       const failedCount = Array.isArray(data?.failed) ? data.failed.length : 0;
+      const preRepair = (data?.preRepair && typeof data.preRepair === 'object'
+        ? (data.preRepair as WakePreRepair)
+        : null);
       if (!r.ok && r.status !== 207) {
         setWakeMsg(typeof data?.error === 'string' ? data.error : 'Reveil impossible');
         return;
       }
+      const repairSuffix = preRepair?.attempted
+        ? preRepair.ok
+          ? ' · auto-reparation OpenClaw appliquee'
+          : ` · auto-reparation echouee (${preRepair.error || 'inconnue'})`
+        : '';
       if (failedCount > 0) {
-        setWakeMsg(`Reveil partiel: ${sentCount} ok, ${failedCount} en echec`);
+        setWakeMsg(`Reveil partiel: ${sentCount} ok, ${failedCount} en echec${repairSuffix}`);
       } else {
-        setWakeMsg(`Reveil lance pour ${sentCount} agent(s)`);
+        setWakeMsg(`Reveil lance pour ${sentCount} agent(s)${repairSuffix}`);
       }
       await refreshAgentsNow();
       window.setTimeout(() => void refreshAgentsNow(), 2200);

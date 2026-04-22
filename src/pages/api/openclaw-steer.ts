@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { fetchOpenClawJson } from '../../lib/openclaw-gateway';
+import { attemptOpenClawPreRepair } from './_openclaw-pre-repair';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   try {
@@ -12,6 +13,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     const email = (locals as { user?: { email?: string } }).user?.email;
+    const preRepair = await attemptOpenClawPreRepair('sessions-steer');
 
     const result = await fetchOpenClawJson(email, '/tools/invoke', {
       method: 'POST',
@@ -25,12 +27,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (!result.ok) {
       return new Response(
-        JSON.stringify({ error: result.error || `Gateway HTTP ${result.status}`, detail: result.data }),
+        JSON.stringify({ error: result.error || `Gateway HTTP ${result.status}`, detail: result.data, preRepair }),
         { status: result.status || 502, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    return new Response(JSON.stringify({ ok: true, detail: result.data }), {
+    return new Response(JSON.stringify({ ok: true, detail: result.data, preRepair }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
