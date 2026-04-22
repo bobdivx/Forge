@@ -5,7 +5,8 @@ import { getAgentApiSecretsBundle } from '../../lib/custom-api-tokens-db';
  * Jetons pour les agents sur le réseau local (même modèle que /api/forge-hook).
  * GET → { forgePublicUrl, githubToken, vercelToken, openclawToken, custom: { CLÉ: "secret", ... } }
  *
- * Exemple : `curl -s http://127.0.0.1:4321/api/agent-api-secrets`
+ * Exemple local : `curl -s http://127.0.0.1:4321/api/agent-api-secrets`
+ * Exemple NAS (port hôte publié) : `curl -s http://<ip-nas>:4331/api/agent-api-secrets`
  * (depuis la machine / LAN autorisé par le middleware).
  */
 export const GET: APIRoute = async ({ url }) => {

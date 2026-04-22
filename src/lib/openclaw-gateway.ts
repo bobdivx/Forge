@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const GATEWAY_HTTP_TIMEOUT_MS = 1_500;
+const OPENCLAW_GATEWAY_INTERNAL_PORT = 18789;
+const OPENCLAW_GATEWAY_PUBLISHED_PORT = 24190;
 
 export type OpenClawLocalDiskConfig = {
   path: string;
@@ -56,8 +58,12 @@ export async function getOpenClawGatewayBaseUrl(): Promise<string> {
   if (fromDb) return fromDb.replace(/\/$/, '');
   const localCfg = await readOpenClawLocalConfigFile();
   if (localCfg?.gatewayPort) return `http://127.0.0.1:${localCfg.gatewayPort}`;
-  /* Aligné sur la config OpenClaw locale (gateway.port = 18789). */
-  return 'http://127.0.0.1:18789';
+  /*
+   * Fallback minimal sans config:
+   * - 18789 = port interne gateway OpenClaw (dans openclaw.json)
+   * - 24190 = port publie CasaOS/NAS typique (teste via les candidates plus bas)
+   */
+  return `http://127.0.0.1:${OPENCLAW_GATEWAY_INTERNAL_PORT}`;
 }
 
 function normalizeBaseUrl(raw: string): string {
@@ -113,34 +119,34 @@ async function discoverGatewayBaseUrlCandidates(): Promise<string[]> {
 
   const localCfg = await readOpenClawLocalConfigFile();
   if (localCfg) {
-    const p = localCfg.gatewayPort || 18789;
+    const p = localCfg.gatewayPort || OPENCLAW_GATEWAY_INTERNAL_PORT;
     push(`http://127.0.0.1:${p}`);
     push(`http://localhost:${p}`);
-    if (p !== 24190) {
-      push('http://127.0.0.1:24190');
-      push('http://localhost:24190');
+    if (p !== OPENCLAW_GATEWAY_PUBLISHED_PORT) {
+      push(`http://127.0.0.1:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
+      push(`http://localhost:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
     }
-    if (p !== 18789) {
-      push('http://127.0.0.1:18789');
-      push('http://localhost:18789');
+    if (p !== OPENCLAW_GATEWAY_INTERNAL_PORT) {
+      push(`http://127.0.0.1:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
+      push(`http://localhost:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
     }
     const hosts = extractIpv4Candidates(localCfg.trustedProxies);
     for (const h of hosts) {
       push(`http://${h}:${p}`);
-      push(`http://${h}:18789`);
-      push(`http://${h}:24190`);
+      push(`http://${h}:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
+      push(`http://${h}:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
     }
   } else if (appDataDir) {
     // Garde-fou : dossier configuré mais fichier absent -> on tente quand même les ports usuels.
-    push('http://127.0.0.1:18789');
-    push('http://127.0.0.1:24190');
+    push(`http://127.0.0.1:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
+    push(`http://127.0.0.1:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
   }
 
   if (!out.length) {
-    push('http://127.0.0.1:18789');
-    push('http://127.0.0.1:24190');
-    push('http://localhost:18789');
-    push('http://localhost:24190');
+    push(`http://127.0.0.1:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
+    push(`http://127.0.0.1:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
+    push(`http://localhost:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
+    push(`http://localhost:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
   }
 
   return out;
@@ -148,7 +154,7 @@ async function discoverGatewayBaseUrlCandidates(): Promise<string[]> {
 
 export async function getOpenClawGatewayCandidateBases(): Promise<string[]> {
   const candidates = await discoverGatewayBaseUrlCandidates();
-  return candidates.length ? candidates : ['http://127.0.0.1:18789'];
+  return candidates.length ? candidates : [`http://127.0.0.1:${OPENCLAW_GATEWAY_INTERNAL_PORT}`];
 }
 
 export async function getOpenClawToken(): Promise<string> {

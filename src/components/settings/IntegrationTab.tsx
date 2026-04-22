@@ -1,5 +1,6 @@
 import FormField from '../ui/FormField';
 import SaveRow from '../ui/SaveRow';
+import { useState } from 'preact/hooks';
 
 type Config = {
   forgePublicUrl: string;
@@ -28,6 +29,38 @@ type OpenClawProbe = {
 };
 
 type BindSuggestion = { hostPath: string; containerPath: string };
+type ValueSource = 'env' | 'database' | 'fallback';
+type NetworkMatrixPayload = {
+  forge?: {
+    resolvedBaseUrl?: string;
+    source?: ValueSource;
+    envValue?: string | null;
+    dbValue?: string | null;
+  };
+  openclaw?: {
+    resolvedBaseUrl?: string;
+    source?: ValueSource | string;
+    envValue?: string | null;
+    dbValue?: string | null;
+    candidates?: string[];
+    tokenConfigured?: boolean;
+    tokenSource?: string;
+  };
+  ollama?: {
+    resolvedBaseUrl?: string | null;
+    source?: ValueSource;
+    envHost?: string | null;
+    envOrigin?: string | null;
+    dbValue?: string | null;
+    endpointTags?: string | null;
+  };
+  probes?: {
+    forgeLogin?: { ok?: boolean; status?: number; error?: string };
+    openclawHealth?: { ok?: boolean; status?: number; error?: string };
+    ollamaTags?: { ok?: boolean; status?: number; error?: string };
+  };
+  timestamp?: string;
+};
 
 type ReposHealth = {
   status?: string;
@@ -71,6 +104,54 @@ export default function IntegrationTab({
   reposHealth,
   onRefreshHealth,
 }: Props) {
+  const [networkMatrix, setNetworkMatrix] = useState<NetworkMatrixPayload | null>(null);
+  const [networkLoading, setNetworkLoading] = useState(false);
+  const [networkError, setNetworkError] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
+
+  const loadNetworkMatrix = async () => {
+    setNetworkLoading(true);
+    setNetworkError('');
+    try {
+      const res = await fetch('/api/network-matrix');
+      const data = (await res.json().catch(() => ({}))) as NetworkMatrixPayload;
+      if (!res.ok) {
+        setNetworkError('Diagnostic réseau indisponible.');
+        setNetworkMatrix(null);
+        return;
+      }
+      setNetworkMatrix(data);
+    } catch {
+      setNetworkError('Erreur réseau pendant le diagnostic.');
+      setNetworkMatrix(null);
+    } finally {
+      setNetworkLoading(false);
+    }
+  };
+
+  const sourceBadgeClass = (source?: string) => {
+    if (source === 'env') return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (source === 'database') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    return 'bg-amber-50 text-amber-700 border-amber-200';
+  };
+  const probeBadgeClass = (ok?: boolean) =>
+    ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200';
+
+  const copyNetworkMatrix = async () => {
+    if (!networkMatrix) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      setCopyMessage('Copie non disponible dans ce navigateur.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(networkMatrix, null, 2));
+      setCopyMessage('Diagnostic copié dans le presse-papiers.');
+    } catch {
+      setCopyMessage('Échec de copie.');
+    }
+    setTimeout(() => setCopyMessage(''), 2200);
+  };
+
   const st = reposHealth?.status ?? '';
   const healthyRepos = st === 'ok';
   const probe = reposHealth?.openclawProbe;
@@ -93,9 +174,91 @@ export default function IntegrationTab({
         <SectionTitle
           n="Étape 1"
           title="OpenClaw — gateway & conteneur"
-          subtitle="Les URLs sont résolues par le serveur Forge, pas par votre navigateur. En production sur un NAS, utilisez l’IP LAN ou un nom d’hôte joignable depuis le processus Astro."
+          subtitle="Les URLs sont résolues par le serveur Forge, pas par votre navigateur. En production NAS/Docker, renseignez l’URL réellement joignable depuis le process Forge (interne conteneur ou port publié hôte selon votre architecture)."
         />
         <div class="space-y-4 max-w-3xl">
+          <div class="rounded-xl border border-gray-200 bg-gray-50/70 p-3">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <p class="text-xs text-gray-600">
+                Diagnostic live des URLs réellement résolues par le serveur Forge.
+              </p>
+              <button
+                type="button"
+                onClick={loadNetworkMatrix}
+                class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
+                disabled={networkLoading}
+              >
+                {networkLoading ? 'Diagnostic…' : 'Diagnostic réseau'}
+              </button>
+            </div>
+            {networkError && <p class="text-[11px] text-red-600 mt-2">{networkError}</p>}
+            {networkMatrix && (
+              <div class="mt-3 space-y-2 text-[11px]">
+                {(networkMatrix.forge?.source === 'env' && networkMatrix.forge?.dbValue) ||
+                (networkMatrix.openclaw?.source === 'env' && networkMatrix.openclaw?.dbValue) ? (
+                  <p class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-2 py-1.5">
+                    Une variable d’environnement écrase une valeur enregistrée en base. C’est normal, mais la valeur UI peut sembler ignorée tant que l’env est définie.
+                  </p>
+                ) : null}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div class="rounded-lg border border-gray-200 bg-white p-2">
+                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Forge</p>
+                    <p class="font-mono break-all text-gray-800">{networkMatrix.forge?.resolvedBaseUrl || '—'}</p>
+                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.forge?.source)}`}>
+                      source: {networkMatrix.forge?.source || '—'}
+                    </span>
+                  </div>
+                  <div class="rounded-lg border border-gray-200 bg-white p-2">
+                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">OpenClaw</p>
+                    <p class="font-mono break-all text-gray-800">{networkMatrix.openclaw?.resolvedBaseUrl || '—'}</p>
+                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.openclaw?.source)}`}>
+                      source: {networkMatrix.openclaw?.source || '—'}
+                    </span>
+                  </div>
+                  <div class="rounded-lg border border-gray-200 bg-white p-2">
+                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Ollama</p>
+                    <p class="font-mono break-all text-gray-800">{networkMatrix.ollama?.resolvedBaseUrl || '—'}</p>
+                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.ollama?.source)}`}>
+                      source: {networkMatrix.ollama?.source || '—'}
+                    </span>
+                  </div>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-white p-2">
+                  <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Probes serveur</p>
+                  <div class="flex flex-wrap gap-2">
+                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.forgeLogin?.ok)}`}>
+                      Forge /login: {networkMatrix.probes?.forgeLogin?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.forgeLogin?.status ?? 0})
+                    </span>
+                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.openclawHealth?.ok)}`}>
+                      OpenClaw /health: {networkMatrix.probes?.openclawHealth?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.openclawHealth?.status ?? 0})
+                    </span>
+                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.ollamaTags?.ok)}`}>
+                      Ollama /api/tags: {networkMatrix.probes?.ollamaTags?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.ollamaTags?.status ?? 0})
+                    </span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={copyNetworkMatrix}
+                    class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
+                  >
+                    Copier diagnostic
+                  </button>
+                  {copyMessage && <p class="text-[11px] text-gray-600">{copyMessage}</p>}
+                </div>
+                <details class="rounded-lg border border-gray-200 bg-white p-2">
+                  <summary class="cursor-pointer text-gray-700 font-medium">
+                    Détails techniques (env/base/fallback)
+                  </summary>
+                  <pre class="mt-2 text-[10px] leading-relaxed whitespace-pre-wrap break-all text-gray-700">
+                    {JSON.stringify(networkMatrix, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            )}
+          </div>
+
           <FormField
             label="Nom du conteneur OpenClaw (Docker)"
             hint="Vide = auto (docker ps, nom contenant « openclaw »). Sert à lister les volumes et à vérifier que le répertoire des apps existe dans le conteneur."
@@ -112,11 +275,11 @@ export default function IntegrationTab({
           </FormField>
           <FormField
             label="URL Forge joignable par les agents (hooks)"
-            hint="Vue depuis OpenClaw (ex. http://forge-host:4321). Vide = variables d’environnement / localhost."
+            hint="Vue depuis OpenClaw/agents. Exemple Docker interne: http://forge-host:4321. Exemple hôte NAS publié: http://<ip-nas>:4331."
           >
             <input
               type="url"
-              placeholder="http://forge-host:4321"
+              placeholder="http://forge-host:4321 ou http://192.168.x.x:4331"
               value={settings.forgePublicUrl}
               onInput={(e) =>
                 setSettings({ ...settings, forgePublicUrl: (e.target as HTMLInputElement).value })
@@ -124,10 +287,10 @@ export default function IntegrationTab({
               class={inputCls}
             />
           </FormField>
-          <FormField label="URL du gateway OpenClaw" hint="Où écoute la passerelle (souvent port publié CasaOS, ex. 24190).">
+          <FormField label="URL du gateway OpenClaw" hint="URL joignable depuis Forge. En general: port publié hôte 24190. En interne OpenClaw: 18789.">
             <input
               type="url"
-              placeholder="http://127.0.0.1:24190"
+              placeholder="http://127.0.0.1:24190 (ou :18789 en interne)"
               value={settings.openclawGatewayUrl}
               onInput={(e) =>
                 setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })

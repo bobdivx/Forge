@@ -13,8 +13,11 @@ export type ForgeConfig = {
   forgePublicUrl: string;
   /** Nom du contèneur Docker OpenClaw pour docker inspect/exec (vide = auto-détection name=openclaw). */
   openclawContainerName: string;
+  /** URL Gateway joignable depuis Forge (souvent port hôte 24190, ou 18789 en accès interne). */
   openclawGatewayUrl: string;
   openclawToken: string;
+  /** Jeton machine-to-machine pour les appels agents -> API Forge. */
+  forgeApiToken: string;
   /** URL de l’API Ollama (GET /api/tags), ex. http://host.docker.internal:11434 — même rôle que OLLAMA_HOST. */
   ollamaUrl: string;
   githubToken: string;
@@ -39,6 +42,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   openclawContainerName: '',
   openclawGatewayUrl: '',
   openclawToken: '',
+  forgeApiToken: '',
   ollamaUrl: '',
   githubToken: '',
   vercelToken: '',
