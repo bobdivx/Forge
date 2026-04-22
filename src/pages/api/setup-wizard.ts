@@ -4,12 +4,15 @@ import type { ForgeConfig } from '../../lib/config-db';
 import { readForgeSetupState } from '../../lib/forge-setup';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
 import { inferOpenClawBackedPathDefaults } from '../../lib/openclaw-path-defaults';
+import { randomBytes } from 'node:crypto';
+import { performOpenClawAgentsSync } from './openclaw-sync-agents';
 
 const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubWebhookSecret',
   'githubToken',
   'vercelToken',
   'openclawToken',
+  'forgeApiToken',
 ];
 
 function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig> {
@@ -19,6 +22,7 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
     'openclawContainerName',
     'openclawGatewayUrl',
     'openclawToken',
+    'forgeApiToken',
     'ollamaUrl',
     'githubToken',
     'vercelToken',
@@ -92,9 +96,37 @@ export const POST: APIRoute = async ({ request, locals }) => {
         });
       }
     }
+    const current = await getAllConfig();
+    if (!payload.forgeApiToken?.trim() && !current.forgeApiToken?.trim()) {
+      payload.forgeApiToken = `forge_${randomBytes(24).toString('hex')}`;
+    }
+    if (!payload.forgePublicUrl?.trim() && !current.forgePublicUrl?.trim()) {
+      try {
+        const u = new URL(request.url);
+        payload.forgePublicUrl = `${u.protocol}//${u.host}`;
+      } catch {
+        /* ignore */
+      }
+    }
+
     await setConfig(payload);
     await setConfig({ forgeSetupState: 'done' });
-    return new Response(JSON.stringify({ ok: true, state: 'done' }), {
+
+    let openclawSync: { ok: boolean; error?: string; synchronized?: number; mode?: string } = { ok: false };
+    try {
+      const syncResult = await performOpenClawAgentsSync(
+        typeof body.containerName === 'string' ? body.containerName : undefined,
+      );
+      openclawSync = {
+        ok: true,
+        synchronized: syncResult.synchronized,
+        mode: syncResult.mode,
+      };
+    } catch (e: unknown) {
+      openclawSync = { ok: false, error: e instanceof Error ? e.message : 'sync impossible' };
+    }
+
+    return new Response(JSON.stringify({ ok: true, state: 'done', openclawSync }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

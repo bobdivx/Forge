@@ -42,6 +42,15 @@ type TaskStats = {
   pending: number;
 };
 
+type AppVersionCheck = {
+  ok?: boolean;
+  updateAvailable?: boolean;
+  latestVersion?: string | null;
+  currentVersion?: string | null;
+  latestUrl?: string | null;
+  error?: string;
+};
+
 function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>, teamProfiles: Record<string, AgentTeamProfile>) {
   /** Palette alignée Forge (vert marque + variantes lisibles sur fond blanc) */
   const CHART_COLORS = [
@@ -105,6 +114,31 @@ export default function AgentsGrid() {
   const [commandMsgByAgent, setCommandMsgByAgent] = useState<Record<string, string>>({});
   const [wakeBusy, setWakeBusy] = useState(false);
   const [wakeMsg, setWakeMsg] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<AppVersionCheck | null>(null);
+
+  const buildVersionUpdateDirective = async (): Promise<string> => {
+    try {
+      const res = await fetch('/api/app-version');
+      const data = (await res.json().catch(() => ({}))) as AppVersionCheck;
+      if (!res.ok || !data?.updateAvailable) return '';
+      const latest = String(data.latestVersion || '').trim();
+      const current = String(data.currentVersion || '').trim();
+      const releaseUrl = String(data.latestUrl || '').trim();
+      if (!latest || !current) return '';
+      return [
+        '',
+        '[FORGE_APP_UPDATE_CHECK]',
+        `Version installée: ${current}`,
+        `Version GitHub disponible: ${latest}`,
+        releaseUrl ? `Release: ${releaseUrl}` : '',
+        "Avant de démarrer la mission, prends en compte cette version plus récente et adapte le travail demandé.",
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } catch {
+      return '';
+    }
+  };
 
   const refreshAgentsNow = async () => {
     try {
@@ -138,6 +172,18 @@ export default function AgentsGrid() {
         .catch(() => setError('Impossible de contacter le gateway OpenClaw.'))
         .finally(() => setLoading(false));
     };
+    const loadAppVersion = () => {
+      fetch('/api/app-version')
+        .then((r) => r.json().catch(() => ({})))
+        .then((data) => {
+          if (data && typeof data === 'object') {
+            setAppVersion(data as AppVersionCheck);
+          } else {
+            setAppVersion(null);
+          }
+        })
+        .catch(() => setAppVersion(null));
+    };
     const loadModels = () => {
       fetch('/api/models')
         .then((r) => r.json())
@@ -156,6 +202,7 @@ export default function AgentsGrid() {
         });
     };
     load();
+    loadAppVersion();
     loadModels();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
@@ -213,7 +260,8 @@ export default function AgentsGrid() {
     setCommandBusyByAgent((prev) => ({ ...prev, [agentId]: true }));
     setCommandMsgByAgent((prev) => ({ ...prev, [agentId]: 'Envoi…' }));
     try {
-      const directive = buildSwarmWorkDirective(command, 'direct');
+      const versionHint = command === 'start_work' ? await buildVersionUpdateDirective() : '';
+      const directive = `${buildSwarmWorkDirective(command, 'direct')}${versionHint}`;
       const r = await fetch('/api/openclaw-directive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -370,6 +418,28 @@ export default function AgentsGrid() {
   return (
     <div class="space-y-8">
       <AgentActivityChart barData={barData} doughnutData={doughnutData} />
+
+      {appVersion?.updateAvailable && appVersion.latestVersion && appVersion.currentVersion && (
+        <div class="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <span class="font-semibold">Mise à jour disponible :</span>{' '}
+          v{appVersion.currentVersion} → v{appVersion.latestVersion}
+          {appVersion.latestUrl && (
+            <>
+              {' '}
+              ·{' '}
+              <a
+                href={appVersion.latestUrl}
+                target="_blank"
+                rel="noreferrer"
+                class="font-medium underline"
+                style={{ color: '#175B37' }}
+              >
+                Voir la release
+              </a>
+            </>
+          )}
+        </div>
+      )}
 
       <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <span class="text-sm text-gray-500">

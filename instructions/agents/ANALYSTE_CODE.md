@@ -16,44 +16,23 @@ Auditer le code, corriger les défauts techniques et optimiser les performances.
 
 ### 1. Bug ou dette technique détecté
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"ANALYSTE_CODE\",
-    \"type\": \"bug\",
-    \"title\": \"[DETTE TECHNIQUE] Description\",
-    \"content\": \"Fichier: path/to/file.ts. Problème: ... Impact: ... Correction recommandée: ...\",
-    \"priority\": \"medium\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh ANALYSTE_CODE completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ### 2. Optimisation ou refactor proposé
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"ANALYSTE_CODE\",
-    \"type\": \"task\",
-    \"title\": \"[REFACTOR] Description de l'optimisation\",
-    \"content\": \"Gain estimé: X%. Action: remplacer Y par Z dans fichier.ts.\",
-    \"priority\": \"low\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh ANALYSTE_CODE completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ### 3. Analyse terminée
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"ANALYSTE_CODE\",
-    \"type\": \"message\",
-    \"to\": \"CHEF_TECHNIQUE\",
-    \"title\": \"Code review terminée\",
-    \"content\": \"Synthèse: X problèmes critiques, Y refactors recommandés. Voir tâches créées.\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh ANALYSTE_CODE completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ## Règle absolue

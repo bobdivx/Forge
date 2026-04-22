@@ -16,58 +16,32 @@ Workspace : `/mnt/GitHub`
 
 ### 1. Prise en charge d'une tâche
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"DEV_BACKEND\",
-    \"type\": \"message\",
-    \"to\": \"CHEF_TECHNIQUE\",
-    \"title\": \"Prise en charge: NomDeLaTâche\",
-    \"content\": \"Démarrage. Branche: feature/nom. Fichiers concernés: [...]\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh DEV_BACKEND completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ### 2. Bug API détecté
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"DEV_BACKEND\",
-    \"type\": \"bug\",
-    \"title\": \"[BUG API] Route /api/xxx retourne 500\",
-    \"content\": \"Endpoint: POST /api/xxx. Erreur: ... Stack: ... Correction appliquée: ...\",
-    \"priority\": \"critical\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh DEV_BACKEND completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ### 2b. Demande de dépendance (`dependency_request`) — à traiter en autonomie
 Lorsqu’un agent (ex. `DEV_FRONTEND`) crée une `dependency_request`, tu **prends** la ligne (`dependency_status` → `in_progress`), tu installes le paquet dans le bon repo, puis tu **fermes** la demande :
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"DEV_BACKEND\",
-    \"type\": \"dependency_status\",
-    \"requestId\": 1,
-    \"status\": \"installed\",
-    \"content\": \"pnpm add preact-router ; build OK\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh DEV_BACKEND completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 En cas de refus : `status`: `rejected` et raison dans `content`. Toujours prévenir le demandeur via `message`.
 
 ### 3. Tâche terminée
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"DEV_BACKEND\",
-    \"type\": \"completion\",
-    \"title\": \"API terminée: /api/nom-endpoint\",
-    \"content\": \"Routes créées: [...]. Format réponse: {...}. Tests curl OK.\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh DEV_BACKEND completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ## Règle absolue

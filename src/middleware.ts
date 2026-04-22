@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { defineMiddleware } from 'astro:middleware';
 import { verifySessionToken } from './lib/auth';
+import { getConfig } from './lib/config-db';
 import { ensureAstroLocalDbSchemaOnce } from './lib/forge-astro-db-bootstrap';
 import { getForgeSetupRedirect } from './lib/forge-setup';
 import { startScheduler } from './lib/forge-work-scheduler';
@@ -50,6 +51,7 @@ const LOCAL_ONLY_PATHS = [
   '/api/agent-repl',
   '/api/forge-tools',
   '/api/agent-api-secrets',
+  '/api/config/secrets',
   '/api/docker-health',
   '/api/system-status',
   '/api/work-system',
@@ -99,6 +101,32 @@ function isPublic(pathname: string) {
   return pathname.startsWith('/_astro') || pathname === '/favicon.svg';
 }
 
+function extractBearerToken(value: string | null): string {
+  if (!value) return '';
+  const s = value.trim();
+  if (!s) return '';
+  const m = /^Bearer\s+(.+)$/i.exec(s);
+  return (m?.[1] || s).trim();
+}
+
+async function hasForgeAgentToken(request: Request): Promise<boolean> {
+  let expected = String(process.env.FORGE_API_TOKEN || '').trim();
+  if (!expected) {
+    try {
+      expected = String(await getConfig('forgeApiToken')).trim();
+    } catch {
+      expected = '';
+    }
+  }
+  if (!expected) return false;
+  const candidates = [
+    extractBearerToken(request.headers.get('authorization')),
+    extractBearerToken(request.headers.get('x-forge-token')),
+    extractBearerToken(request.headers.get('x-agent-token')),
+  ].filter(Boolean);
+  return candidates.includes(expected);
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
   try {
     await ensureAstroLocalDbSchemaOnce();
@@ -118,7 +146,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // de reporting sans cookie de session.
   if (
     LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p)) &&
-    isLocalRequest(context.request, clientIp)
+    (isLocalRequest(context.request, clientIp) || (await hasForgeAgentToken(context.request)))
   ) {
     context.locals.user = { email: 'agent@forge.local' };
     return next();

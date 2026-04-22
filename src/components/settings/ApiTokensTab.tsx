@@ -1,7 +1,7 @@
 import FormField from '../ui/FormField';
 import SaveRow from '../ui/SaveRow';
 
-type Config = { githubToken: string; vercelToken: string; [k: string]: string };
+type Config = { githubToken: string; vercelToken: string; forgeApiToken: string; [k: string]: string };
 
 export type CustomTokenRow = {
   id?: number;
@@ -33,6 +33,27 @@ export default function ApiTokensTab({
   saving,
   message,
 }: Props) {
+  const generateForgeApiToken = () => {
+    const bytes = new Uint8Array(24);
+    if (typeof globalThis.crypto?.getRandomValues === 'function') {
+      globalThis.crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    const token = `forge_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+    setSettings({ ...settings, forgeApiToken: token });
+  };
+
+  const copyForgeApiToken = async () => {
+    const token = String(settings.forgeApiToken || '').trim();
+    if (!token || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(token);
+    } catch {
+      /* no-op */
+    }
+  };
+
   const addRow = () => {
     setCustomTokens([...customTokens, { key: '', label: '', secret: '', hasSecret: false }]);
   };
@@ -61,6 +82,39 @@ export default function ApiTokensTab({
           FORGE_API_CONTRACT).
         </p>
         <div class="space-y-4">
+          <FormField
+            label="Jeton API Forge (agents)"
+            hint="Utilisé par OpenClaw/agents pour appeler les endpoints Forge depuis une machine distante. Header accepté : Authorization: Bearer <token>."
+          >
+            <div class="space-y-2">
+              <input
+                type="password"
+                placeholder="forge_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                value={settings.forgeApiToken}
+                onInput={(e) =>
+                  setSettings({ ...settings, forgeApiToken: (e.target as HTMLInputElement).value })
+                }
+                class={monoInputCls}
+              />
+              <div class="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  class="border border-gray-300 text-gray-700 text-xs px-3 py-1.5 rounded-full hover:bg-gray-50 transition-colors"
+                  onClick={generateForgeApiToken}
+                >
+                  Générer un jeton Forge
+                </button>
+                <button
+                  type="button"
+                  class="border border-gray-200 text-gray-600 text-xs px-3 py-1.5 rounded-full hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={copyForgeApiToken}
+                  disabled={!settings.forgeApiToken}
+                >
+                  Copier
+                </button>
+              </div>
+            </div>
+          </FormField>
           <FormField label="GitHub (PAT)">
             <input
               type="password"

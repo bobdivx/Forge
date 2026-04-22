@@ -327,9 +327,16 @@ export const GET: APIRoute = async () => {
   }
 };
 
-export const POST: APIRoute = async ({ request }) => {
-  try {
-    const body = await request.json().catch(() => ({}));
+export async function performOpenClawAgentsSync(containerNameOverride?: string): Promise<{
+  ok: true;
+  synchronized: number;
+  mode: 'api' | 'file' | 'api-virtual';
+  via: string | null;
+  note?: string;
+  autoEnabled: string[];
+  adoptedFromGateway: boolean;
+  restart: unknown;
+}> {
     const { path, candidates } = await resolveOpenClawJsonPath();
     const { db, ActivityLog } = await loadAstroDb();
     const now = new Date();
@@ -384,7 +391,7 @@ export const POST: APIRoute = async ({ request }) => {
       createdAt: now,
     });
 
-    const containerName = body.containerName || detectOpenClawContainer();
+    const containerName = containerNameOverride || detectOpenClawContainer();
     let restartResult = null;
     if (containerName) {
       try {
@@ -395,22 +402,28 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        synchronized: forgeAgentIds.length,
-        mode: syncMode,
-        via: syncVia,
-        note:
-          syncMode === 'api-virtual'
-            ? `Gateway joignable mais sans outils d'écriture d'agents ; Forge conserve un registre virtuel (${VIRTUAL_AGENTS_CONFIG_KEY}) en attendant l'activation d'un tool de sync côté OpenClaw.`
-            : undefined,
-        autoEnabled,
-        adoptedFromGateway,
-        restart: restartResult,
-      }),
-      { status: 200 },
+    return {
+      ok: true,
+      synchronized: forgeAgentIds.length,
+      mode: syncMode,
+      via: syncVia,
+      note:
+        syncMode === 'api-virtual'
+          ? `Gateway joignable mais sans outils d'écriture d'agents ; Forge conserve un registre virtuel (${VIRTUAL_AGENTS_CONFIG_KEY}) en attendant l'activation d'un tool de sync côté OpenClaw.`
+          : undefined,
+      autoEnabled,
+      adoptedFromGateway,
+      restart: restartResult,
+    };
+}
+
+export const POST: APIRoute = async ({ request }) => {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const result = await performOpenClawAgentsSync(
+      typeof body.containerName === 'string' ? body.containerName : undefined,
     );
+    return new Response(JSON.stringify(result), { status: 200 });
   } catch (e: any) {
     return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
   }

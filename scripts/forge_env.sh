@@ -3,6 +3,7 @@
 #
 # Définissez avant d'inclure ce fichier (optionnel) :
 #   export FORGE_HOOK_BASE_URL=http://forge-host:4321
+#   export FORGE_API_TOKEN=forge_xxx   # ou FORGE_AGENT_TOKEN
 #
 # Si vide : lecture de **forgePublicUrl** renseigné dans Paramètres → Connexion OpenClaw
 # (GET /api/agent-api-secrets, joignable depuis cette machine — souvent http://127.0.0.1:4321 sur l’hôte).
@@ -14,10 +15,19 @@
 #   • Si la commande tourne dans un conteneur avec extra_hosts forge-host → http://forge-host:4321
 #   • Sinon → http://127.0.0.1:4321 (Forge sur la même machine que le shell)
 
+_FORGE_AUTH_TOKEN="${FORGE_API_TOKEN:-${FORGE_AGENT_TOKEN:-}}"
+if [ -n "${_FORGE_AUTH_TOKEN:-}" ]; then
+  export FORGE_AUTH_HEADER="Authorization: Bearer ${_FORGE_AUTH_TOKEN}"
+  export FORGE_AUTH_CURL_ARGS=(-H "$FORGE_AUTH_HEADER")
+else
+  export FORGE_AUTH_HEADER=""
+  export FORGE_AUTH_CURL_ARGS=()
+fi
+
 if [ -z "${FORGE_HOOK_BASE_URL:-}" ] && [ -z "${PUBLIC_FORGE_URL:-}" ] && [ -z "${PUBLIC_SITE_URL:-}" ]; then
-  _EP="${FORGE_AGENT_SECRETS_ENDPOINT:-http://127.0.0.1:4321/api/agent-api-secrets}"
+  _EP="${FORGE_AGENT_SECRETS_ENDPOINT:-http://127.0.0.1:4321/api/config/secrets}"
   if command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-    _FP="$(curl -sf "$_EP" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('forgePublicUrl') or '').strip())" 2>/dev/null || true)"
+    _FP="$(curl -sf "${FORGE_AUTH_CURL_ARGS[@]}" "$_EP" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('forgePublicUrl') or '').strip())" 2>/dev/null || true)"
     if [ -n "${_FP:-}" ]; then
       export FORGE_HOOK_BASE_URL="$_FP"
     fi

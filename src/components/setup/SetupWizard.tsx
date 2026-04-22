@@ -2,10 +2,13 @@ import { useState, useEffect } from 'preact/hooks';
 import FormField from '../ui/FormField';
 
 type Config = {
+  forgePublicUrl: string;
   openclawGatewayUrl: string;
   openclawToken: string;
+  forgeApiToken: string;
   ollamaUrl: string;
   forgeReposRoot: string;
+  forgeReposRootAgent: string;
   dockerYamlDir: string;
   dockerAppDataDir: string;
   githubToken: string;
@@ -16,10 +19,13 @@ type Config = {
 const STEPS = ['OpenClaw', 'Applications & Docker', 'Jetons API', 'Validation'];
 
 const empty: Config = {
+  forgePublicUrl: '',
   openclawGatewayUrl: '',
   openclawToken: '',
+  forgeApiToken: '',
   ollamaUrl: '',
   forgeReposRoot: '',
+  forgeReposRootAgent: '',
   dockerYamlDir: '',
   dockerAppDataDir: '',
   githubToken: '',
@@ -46,10 +52,13 @@ export default function SetupWizard() {
         }
         const c = d.config || {};
         setCfg({
+          forgePublicUrl: String(c.forgePublicUrl || ''),
           openclawGatewayUrl: String(c.openclawGatewayUrl || empty.openclawGatewayUrl).trim(),
           openclawToken: String(c.openclawToken || ''),
+          forgeApiToken: String(c.forgeApiToken || ''),
           ollamaUrl: String(c.ollamaUrl || ''),
           forgeReposRoot: String(c.forgeReposRoot || empty.forgeReposRoot),
+          forgeReposRootAgent: String(c.forgeReposRootAgent || ''),
           dockerYamlDir: String(c.dockerYamlDir || empty.dockerYamlDir),
           dockerAppDataDir: String(c.dockerAppDataDir || empty.dockerAppDataDir),
           githubToken: String(c.githubToken || ''),
@@ -88,6 +97,16 @@ export default function SetupWizard() {
   }, [step, cfg.forgeReposRoot, cfg.dockerYamlDir, cfg.dockerAppDataDir]);
 
   const merge = (patch: Partial<Config>) => setCfg((p) => ({ ...p, ...patch }));
+
+  const generateForgeToken = () => {
+    const bytes = new Uint8Array(24);
+    if (typeof globalThis.crypto?.getRandomValues === 'function') {
+      globalThis.crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    merge({ forgeApiToken: `forge_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}` });
+  };
 
   const testOpenClaw = async () => {
     setHealthMsg(null);
@@ -200,6 +219,16 @@ export default function SetupWizard() {
         {step === 0 && (
           <>
             <FormField
+              label="URL Forge joignable par les agents"
+              hint="Ex. http://forge-host:4321. Si vide, Forge l'infère automatiquement."
+            >
+              <input
+                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                value={cfg.forgePublicUrl}
+                onInput={(e) => merge({ forgePublicUrl: (e.target as HTMLInputElement).value })}
+              />
+            </FormField>
+            <FormField
               label="URL du gateway OpenClaw"
               hint="Ex. http://127.0.0.1:24190 ou l’URL du conteneur sur votre NAS."
             >
@@ -218,6 +247,25 @@ export default function SetupWizard() {
                 placeholder="(optionnel)"
                 autoComplete="off"
               />
+            </FormField>
+            <FormField label="Jeton API Forge (agents -> Forge)">
+              <div class="space-y-2">
+                <input
+                  type="password"
+                  class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20 font-mono"
+                  value={cfg.forgeApiToken}
+                  onInput={(e) => merge({ forgeApiToken: (e.target as HTMLInputElement).value })}
+                  placeholder="forge_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                  onClick={generateForgeToken}
+                >
+                  Générer un jeton Forge
+                </button>
+              </div>
             </FormField>
             <FormField
               label="URL Ollama (optionnel)"
@@ -275,6 +323,13 @@ export default function SetupWizard() {
                 onInput={(e) => merge({ dockerAppDataDir: (e.target as HTMLInputElement).value })}
               />
             </FormField>
+            <FormField label="Racine des projets vue par les agents (NAS)">
+              <input
+                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-mono outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                value={cfg.forgeReposRootAgent}
+                onInput={(e) => merge({ forgeReposRootAgent: (e.target as HTMLInputElement).value })}
+              />
+            </FormField>
           </>
         )}
 
@@ -318,6 +373,12 @@ export default function SetupWizard() {
             <p class="font-medium text-gray-900">Récapitulatif</p>
             <ul class="space-y-2 font-mono text-xs bg-gray-50 rounded-xl border border-gray-100 p-4">
               <li>
+                <span class="text-gray-400">Forge URL</span> {cfg.forgePublicUrl || '(auto)'}
+              </li>
+              <li>
+                <span class="text-gray-400">Jeton Forge API</span> {cfg.forgeApiToken ? '•••• renseigné' : '(auto-généré si vide)'}
+              </li>
+              <li>
                 <span class="text-gray-400">OpenClaw</span> {cfg.openclawGatewayUrl}
               </li>
               <li>
@@ -325,6 +386,9 @@ export default function SetupWizard() {
               </li>
               <li>
                 <span class="text-gray-400">Applications</span> {cfg.forgeReposRoot}
+              </li>
+              <li>
+                <span class="text-gray-400">Racine agents NAS</span> {cfg.forgeReposRootAgent || '(vide)'}
               </li>
               <li>
                 <span class="text-gray-400">YAML / AppData</span> {cfg.dockerYamlDir} · {cfg.dockerAppDataDir}

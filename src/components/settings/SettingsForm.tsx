@@ -18,6 +18,7 @@ type Config = {
   vercelToken: string;
   githubWebhookSecret: string;
   openclawToken: string;
+  forgeApiToken: string;
   openclawGatewayUrl: string;
   ollamaUrl: string;
 };
@@ -51,6 +52,7 @@ export default function SettingsForm() {
     vercelToken:       '',
     githubWebhookSecret: '',
     openclawToken:     '',
+    forgeApiToken: '',
     openclawGatewayUrl: '',
     ollamaUrl: '',
   });
@@ -111,6 +113,7 @@ export default function SettingsForm() {
           vercelToken: s.vercelToken || '',
           githubWebhookSecret: s.githubWebhookSecret || '',
           openclawToken: s.openclawToken || '',
+          forgeApiToken: s.forgeApiToken || '',
           openclawGatewayUrl:
             String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
           ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
@@ -149,6 +152,7 @@ export default function SettingsForm() {
       githubWebhookSecret:
         typeof s.githubWebhookSecret === 'string' ? s.githubWebhookSecret : prev.githubWebhookSecret,
       openclawToken: typeof s.openclawToken === 'string' ? s.openclawToken : prev.openclawToken,
+      forgeApiToken: typeof s.forgeApiToken === 'string' ? s.forgeApiToken : prev.forgeApiToken,
       openclawGatewayUrl:
         String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
       ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
@@ -192,6 +196,7 @@ export default function SettingsForm() {
           githubToken: settings.githubToken,
           vercelToken: settings.vercelToken,
           githubWebhookSecret: settings.githubWebhookSecret,
+          forgeApiToken: settings.forgeApiToken,
         }),
       });
       const resTokens = await fetch('/api/custom-api-tokens', {

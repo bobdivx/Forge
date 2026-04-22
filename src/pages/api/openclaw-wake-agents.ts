@@ -8,12 +8,27 @@ import {
   resolveSessionsSendKey,
 } from '../../lib/openclaw-gateway';
 import { buildSwarmWorkDirective } from '../../lib/forge-agent-protocol';
+import { getAppUpdateInfo } from '../../lib/app-update-check';
 
 const CHIEF_AGENT_ID = 'CHEF_TECHNIQUE';
 
 export const POST: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
-  const directive = buildSwarmWorkDirective('start_work', 'direct');
+  let directive = buildSwarmWorkDirective('start_work', 'direct');
+  const updateInfo = await getAppUpdateInfo().catch(() => null);
+  if (updateInfo?.updateAvailable && updateInfo.latestVersion && updateInfo.currentVersion) {
+    directive = [
+      directive,
+      '',
+      '[FORGE_APP_UPDATE_CHECK]',
+      `Version installée: ${updateInfo.currentVersion}`,
+      `Version GitHub disponible: ${updateInfo.latestVersion}`,
+      updateInfo.latestUrl ? `Release: ${updateInfo.latestUrl}` : '',
+      "Avant de démarrer la mission, prends en compte cette version plus récente et adapte le travail demandé.",
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
 
   const registry = await fetchOpenClawAgentsList(email);
   if (!registry.ok) {

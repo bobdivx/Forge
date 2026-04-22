@@ -16,42 +16,23 @@ Définir la structure, les conventions et les patterns avant toute génération 
 
 ### 1. Plan d'architecture défini
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"ARCHITECTE_LOGICIEL\",
-    \"type\": \"completion\",
-    \"title\": \"Architecture définie: NomDuProjet\",
-    \"content\": \"Stack: [...]. Structure: [...]. Conventions: [...]. Prêt pour DEV_BACKEND et DEV_FRONTEND.\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh ARCHITECTE_LOGICIEL completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ### 2. Décision architecturale clé à mémoriser
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"ARCHITECTE_LOGICIEL\",
-    \"type\": \"memory\",
-    \"title\": \"Décision archi: NomDeLaDécision\",
-    \"content\": \"Raison du choix: ... Alternative rejetée: ... Impact: ...\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh ARCHITECTE_LOGICIEL completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ### 3. Problème d'architecture détecté dans le code existant
 ```bash
-curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"agentId\": \"ARCHITECTE_LOGICIEL\",
-    \"type\": \"bug\",
-    \"title\": \"[ARCHI] Violation de convention\",
-    \"content\": \"Fichier: path/to/file. Problème: React utilisé au lieu de Preact. Correction: migrer vers Preact.\",
-    \"priority\": \"high\",
-    \"project\": \"NomDuProjet\"
-  }"
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+# export FORGE_API_TOKEN=forge_xxx   # requis si Forge n'est pas vu comme local
+./scripts/forge-hook.sh ARCHITECTE_LOGICIEL completion "Titre" "Detail du travail" '{"project":"NomDuProjet"}'
 ```
 
 ## Règle absolue

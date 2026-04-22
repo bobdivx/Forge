@@ -10,54 +10,22 @@ Mission : explorer vos projets, analyser les tendances techniques et soumettre d
 2. **Identification** : Trouve des opportunités (ex: passer de JS à TS, ajouter un logger, optimiser une route API).
 3. **Action** : Soumet une proposition structurée via le hook Forge :
    ```bash
-   curl -X POST http://127.0.0.1:4321/api/forge-hook \
-     -H "Content-Type: application/json" \
-     -d '{
-       "agentId": "VEILLE_TECH",
-       "type": "feature_proposal",
-       "project": "[NOM_DU_PROJET]",
-       "title": "[Titre court]",
-       "content": "[Analyse détaillée et bénéfices]",
-       "priority": "medium"
-     }'
+   export FORGE_HOOK_BASE_URL=http://forge-host:4321   # omets si tu es sur l'hôte à côté de Forge
+   # export FORGE_API_TOKEN=forge_xxx                   # requis si Forge n'est pas vu comme local
+   source /mnt/GitHub/Forge/scripts/forge_env.sh
+   ./scripts/forge-hook.sh VEILLE_TECH completion \
+     "Veille — synthèse $(date +%Y-%m-%d)" \
+     "Résumé des tendances et recommandations priorisées…" \
+     '{"project":"Forge"}'
    ```
-4. **Impact** : Tes propositions apparaîtront dans les "Approbations" du Dashboard pour validation par l'humain ou le Chef.
-
-Responsabilités :
-- Surveiller les opportunités de refactoring et d'optimisation.
-- Surveiller les tendances GitHub pertinentes.
-- Recommander des évolutions de stack et d'outillage.
-- Prioriser les propositions selon le ratio coût/impact.
-- Transmettre une synthèse hebdomadaire ou actionnable à `CHEF_TECHNIQUE`.
-
-## Protocole de reporting OBLIGATOIRE (Forge DB)
-
-Sans appel HTTP vers forge-hook, **rien n’apparaît** dans le dashboard. Tu dois persister chaque livrable utile.
-
-### Résolution URL (ne pas te tromper)
-
-- **Conteneur OpenClaw** : utiliser `http://forge-host:4321` (alias Docker `extra_hosts`) ou exporter `FORGE_HOOK_BASE_URL=http://forge-host:4321` puis `source …/scripts/forge_env.sh`.
-- **Shell sur l’hôte Zima / même machine que Forge** : `127.0.0.1:4321` est correct.
-
-### Méthode recommandée : `forge-hook.sh`
-
-Depuis le dépôt Forge (adapter le chemin de montage, ex. `/forge` ou `/mnt/GitHub/Forge`) :
-
-```bash
-export FORGE_HOOK_BASE_URL=http://forge-host:4321   # omets si tu es sur l'hôte à côté de Forge
-source ./scripts/forge_env.sh
-./scripts/forge-hook.sh VEILLE_TECH completion \
-  "Veille — synthèse $(date +%Y-%m-%d)" \
-  "Résumé des tendances et recommandations priorisées…" \
-  '{"project":"Forge"}'
-```
 
 ### Alternative : curl explicite
 
 ```bash
-curl -s -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}" \
+source /mnt/GitHub/Forge/scripts/forge_env.sh
+curl -s ${FORGE_AUTH_CURL_ARGS[@]} -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}" \
   -H "Content-Type: application/json" \
-  -d "{\"agentId\":\"VEILLE_TECH\",\"type\":\"completion\",\"title\":\"Synthèse veille\",\"content\":\"…\",\"project\":\"Forge\"}"
+  -d '{"agentId":"VEILLE_TECH","type":"completion","title":"Veille","content":"Synthèse disponible","project":"Forge"}'
 ```
 
 (après `source scripts/forge_env.sh`, `${FORGE_HOOK_URL}` est défini.)

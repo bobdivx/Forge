@@ -59,6 +59,7 @@ RESPONSE_FILE=$(mktemp)
 HTTP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w "%{http_code}" \
   -X POST "$FORGE_HOOK_URL" \
   -H "Content-Type: application/json; charset=utf-8" \
+  "${FORGE_AUTH_CURL_ARGS[@]}" \
   --data-binary "$BODY") || die "curl a échoué"
 
 cat "$RESPONSE_FILE"

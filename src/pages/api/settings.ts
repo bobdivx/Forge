@@ -25,6 +25,7 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubToken',
   'vercelToken',
   'openclawToken',
+  'forgeApiToken',
 ];
 
 export const POST: APIRoute = async ({ request }) => {
@@ -37,6 +38,7 @@ export const POST: APIRoute = async ({ request }) => {
       'openclawContainerName',
       'openclawGatewayUrl',
       'openclawToken',
+      'forgeApiToken',
       'ollamaUrl',
       'githubToken', 'vercelToken', 'githubWebhookSecret',
       'forgeReposRoot', 'dockerYamlDir', 'dockerAppDataDir',
