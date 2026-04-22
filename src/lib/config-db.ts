@@ -34,6 +34,16 @@ export type ForgeConfig = {
    * `done` / `skipped` → plus d’assistant. Défaut `done` si absent en base (installations existantes).
    */
   forgeSetupState: string;
+  /** Active la routine Forge de surveillance/amélioration (true|false). */
+  routineEnabled: string;
+  /** Intervalle en minutes entre deux passes routine. */
+  routineIntervalMinutes: string;
+  /** Répertoire GitHub à surveiller côté utilisateur (chemin hôte, non hardcodé). */
+  routineGithubRoot: string;
+  /** Agent dédié à la surveillance GitHub. */
+  routineWatchAgentId: string;
+  /** Agent dédié aux propositions d'amélioration (vTech). */
+  routineImproveAgentId: string;
 };
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
@@ -52,6 +62,11 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   dockerAppDataDir: '',
   forgeReposRootAgent: '',
   forgeSetupState: 'done',
+  routineEnabled: 'false',
+  routineIntervalMinutes: '60',
+  routineGithubRoot: '',
+  routineWatchAgentId: 'MAINTENANCE_REPO',
+  routineImproveAgentId: 'VEILLE_TECH',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);
