@@ -15,6 +15,83 @@ import { loadAstroDb } from '../../lib/load-astro-db';
 import { fetchOpenClawAgentsList, fetchOpenClawJson } from '../../lib/openclaw-gateway';
 
 const VIRTUAL_AGENTS_CONFIG_KEY = 'openclawVirtualAgents';
+const RESERVED_AGENT_IDS = new Set(['MAIN']);
+const AGENT_ID_RE = /^[A-Z0-9_]{2,72}$/;
+const SUBAGENT_MARKER = '__APP_';
+
+type OpenClawAgentEntry = { id: string; model?: string };
+
+function normalizeAgentId(input: unknown): string {
+  const raw = String(input ?? '').trim();
+  if (!raw) return '';
+  const upper = raw.toUpperCase().replace(/[^A-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!upper) return '';
+  if (RESERVED_AGENT_IDS.has(upper)) return '';
+  return AGENT_ID_RE.test(upper) ? upper : '';
+}
+
+function normalizeAgentIds(ids: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const n = normalizeAgentId(id);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+function isProjectScopedSubagent(id: string): boolean {
+  return id.includes(SUBAGENT_MARKER);
+}
+
+function parseOpenClawAgentsList(config: Record<string, unknown>): OpenClawAgentEntry[] {
+  const agents = (config.agents ?? {}) as Record<string, unknown>;
+  const list = Array.isArray(agents.list) ? (agents.list as unknown[]) : [];
+  const out: OpenClawAgentEntry[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const o = item as Record<string, unknown>;
+    const id = normalizeAgentId(o.id);
+    if (!id) continue;
+    const model = typeof o.model === 'string' && o.model.trim() ? o.model.trim() : undefined;
+    out.push({ id, model });
+  }
+  return out;
+}
+
+function sanitizeAgentsListForSync(
+  existingEntries: OpenClawAgentEntry[],
+  forgeAgentIds: string[],
+): OpenClawAgentEntry[] {
+  const byId = new Map(existingEntries.map((e) => [e.id, e]));
+  const forgeSet = new Set(forgeAgentIds);
+  const next: OpenClawAgentEntry[] = [];
+
+  // Base canonique Forge (ajout/retrait piloté par Forge)
+  for (const id of forgeAgentIds) {
+    const previous = byId.get(id);
+    next.push(previous?.model ? { id, model: previous.model } : { id });
+  }
+
+  // Conserver seulement les sous-agents applicatifs valides déjà présents.
+  for (const item of existingEntries) {
+    if (forgeSet.has(item.id)) continue;
+    if (!isProjectScopedSubagent(item.id)) continue;
+    next.push(item.model ? { id: item.id, model: item.model } : { id: item.id });
+  }
+
+  return next;
+}
+
+function isLikelyHealthyOpenClawConfig(parsed: Record<string, unknown>): boolean {
+  const hasGateway = parsed.gateway && typeof parsed.gateway === 'object';
+  const hasModels = parsed.models && typeof parsed.models === 'object';
+  const agents = parsed.agents && typeof parsed.agents === 'object' ? (parsed.agents as Record<string, unknown>) : null;
+  const hasAgentsList = agents && Array.isArray(agents.list);
+  return Boolean(hasGateway && hasModels && hasAgentsList);
+}
 
 async function resolveOpenClawJsonCandidates(): Promise<string[]> {
   const appDataDir = (await getConfig('dockerAppDataDir')).trim() || 'C:\\DATA\\AppData';
@@ -64,7 +141,7 @@ async function getForgeAgentIds(autoEnableIfEmpty = false): Promise<{ ids: strin
     const rows = await db
       .select({ agentId: AgentInstruction.agentId, enabled: AgentInstruction.enabled })
       .from(AgentInstruction);
-    const enabledIds = rows.filter((r) => r.enabled === 1).map((r) => r.agentId);
+    const enabledIds = normalizeAgentIds(rows.filter((r) => r.enabled === 1).map((r) => r.agentId));
     if (enabledIds.length > 0 || !autoEnableIfEmpty || rows.length === 0) {
       return { ids: enabledIds, autoEnabled: [] };
     }
@@ -75,12 +152,14 @@ async function getForgeAgentIds(autoEnableIfEmpty = false): Promise<{ ids: strin
         .update(AgentInstruction)
         .set({ enabled: 1, updatedAt: new Date() })
         .where(eq(AgentInstruction.agentId, row.agentId));
-      autoEnabled.push(row.agentId);
+      const normalized = normalizeAgentId(row.agentId);
+      if (normalized) autoEnabled.push(normalized);
     }
-    return { ids: autoEnabled, autoEnabled };
+    const cleaned = normalizeAgentIds(autoEnabled);
+    return { ids: cleaned, autoEnabled: cleaned };
   } catch {
     return {
-      ids: ['CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL', 'DEV_BACKEND', 'DEV_FRONTEND'],
+      ids: normalizeAgentIds(['CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL', 'DEV_BACKEND', 'DEV_FRONTEND']),
       autoEnabled: [],
     };
   }
@@ -88,12 +167,12 @@ async function getForgeAgentIds(autoEnableIfEmpty = false): Promise<{ ids: strin
 
 async function resolveSyncTargetAgentIds(autoEnableIfEmpty = false): Promise<{ ids: string[]; autoEnabled: string[]; adoptedFromGateway: boolean }> {
   const { ids: baseIds, autoEnabled } = await getForgeAgentIds(autoEnableIfEmpty);
-  if (baseIds.length > 0) return { ids: [...new Set(baseIds)], autoEnabled, adoptedFromGateway: false };
+  if (baseIds.length > 0) return { ids: normalizeAgentIds(baseIds), autoEnabled, adoptedFromGateway: false };
 
-  const defaults = FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId);
+  const defaults = normalizeAgentIds(FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId));
   const gw = await fetchOpenClawAgentsList(undefined);
-  const fromGateway = gw.ok ? gw.agents.map((a) => String(a.id || '').trim()).filter(Boolean) : [];
-  const merged = [...new Set([...defaults, ...fromGateway])];
+  const fromGateway = gw.ok ? normalizeAgentIds(gw.agents.map((a) => String(a.id || '').trim())) : [];
+  const merged = normalizeAgentIds([...defaults, ...fromGateway]);
   if (merged.length > 0) {
     return { ids: merged, autoEnabled, adoptedFromGateway: fromGateway.length > 0 };
   }
@@ -107,7 +186,7 @@ async function readVirtualAgentsFromForgeConfig(): Promise<string[]> {
     if (!rows.length) return [];
     const parsed = JSON.parse(String(rows[0].value || '[]'));
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((v) => String(v || '').trim()).filter(Boolean);
+    return normalizeAgentIds(parsed.map((v) => String(v || '').trim()));
   } catch {
     return [];
   }
@@ -115,7 +194,7 @@ async function readVirtualAgentsFromForgeConfig(): Promise<string[]> {
 
 async function writeVirtualAgentsToForgeConfig(agentIds: string[]): Promise<void> {
   const { db, Config } = await loadAstroDb();
-  const value = JSON.stringify([...new Set(agentIds)]);
+  const value = JSON.stringify(normalizeAgentIds(agentIds));
   const existing = await db.select().from(Config).where(eq(Config.key, VIRTUAL_AGENTS_CONFIG_KEY)).limit(1);
   if (existing.length) {
     await db.update(Config).set({ value, updatedAt: new Date() }).where(eq(Config.key, VIRTUAL_AGENTS_CONFIG_KEY));
@@ -191,7 +270,7 @@ export const GET: APIRoute = async () => {
     let { ids: forgeAgentIds } = await resolveSyncTargetAgentIds(false);
     const container = detectOpenClawContainer();
     const agentsRes = await fetchOpenClawAgentsList(undefined);
-    const gatewayCurrentIds = agentsRes.agents.map((a) => a.id);
+    const gatewayCurrentIds = normalizeAgentIds(agentsRes.agents.map((a) => a.id));
     if (forgeAgentIds.length === 0 && gatewayCurrentIds.length > 0) {
       forgeAgentIds = [...new Set(gatewayCurrentIds)];
     }
@@ -200,8 +279,8 @@ export const GET: APIRoute = async () => {
       ? (() => {
           const config = readOpenClawJson(path);
           const agents = (config.agents ?? {}) as Record<string, unknown>;
-          const currentList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
-          return currentList.map((a) => a.id).filter((id) => typeof id === 'string');
+          const currentEntries = parseOpenClawAgentsList(config);
+          return currentEntries.map((a) => a.id);
         })()
       : [...new Set([...gatewayCurrentIds, ...virtualIds])];
 
@@ -220,8 +299,8 @@ export const GET: APIRoute = async () => {
         { status: 200 },
       );
     }
-    const forgeSet = new Set(forgeAgentIds);
-    const currentSet = new Set(currentIds);
+    const forgeSet = new Set(normalizeAgentIds(forgeAgentIds));
+    const currentSet = new Set(normalizeAgentIds(currentIds));
 
     return new Response(JSON.stringify({
       ok: true,
@@ -233,11 +312,11 @@ export const GET: APIRoute = async () => {
         status: agentsRes.status,
         error: agentsRes.error,
       },
-      current: currentIds,
-      forgeAgents: forgeAgentIds,
-      toAdd: forgeAgentIds.filter((id) => !currentSet.has(id)),
-      notInForge: currentIds.filter((id) => !forgeSet.has(id)),
-      upToDate: forgeAgentIds.every((id) => currentSet.has(id)),
+      current: normalizeAgentIds(currentIds),
+      forgeAgents: normalizeAgentIds(forgeAgentIds),
+      toAdd: normalizeAgentIds(forgeAgentIds).filter((id) => !currentSet.has(id)),
+      notInForge: normalizeAgentIds(currentIds).filter((id) => !forgeSet.has(id)),
+      upToDate: normalizeAgentIds(forgeAgentIds).every((id) => currentSet.has(id)),
       warning: !exists
         ? `Config locale introuvable (${path}) ; aperçu basé sur agents_list (API gateway).`
         : undefined,
@@ -271,14 +350,26 @@ export const POST: APIRoute = async ({ request }) => {
         await writeVirtualAgentsToForgeConfig([]);
       }
     } else {
-      const config = readOpenClawJson(path);
+      const beforeRaw = readFileSync(path, 'utf-8');
+      const config = JSON.parse(beforeRaw) as Record<string, unknown>;
       const agents = (config.agents ?? {}) as Record<string, unknown>;
-      const existingList = Array.isArray(agents.list) ? (agents.list as any[]) : [];
-      const forgeSet = new Set(forgeAgentIds);
-      const keepExisting = existingList.filter((a) => !forgeSet.has(a.id));
-      const newList = [...forgeAgentIds.map((id) => ({ id })), ...keepExisting];
-      config.agents = { ...agents, list: newList };
-      writeOpenClawJson(path, config);
+      const existingEntries = parseOpenClawAgentsList(config);
+      const newList = sanitizeAgentsListForSync(existingEntries, normalizeAgentIds(forgeAgentIds));
+      const nextConfig = { ...config, agents: { ...agents, list: newList } } as Record<string, unknown>;
+      if (!isLikelyHealthyOpenClawConfig(nextConfig)) {
+        throw new Error('Sync refusée: structure openclaw.json invalide après merge (gateway/models/agents.list requis).');
+      }
+      writeOpenClawJson(path, nextConfig);
+      try {
+        const reloaded = readOpenClawJson(path);
+        if (!isLikelyHealthyOpenClawConfig(reloaded)) {
+          writeFileSync(path, beforeRaw, 'utf-8');
+          throw new Error('Sync annulée: vérification post-écriture invalide, rollback effectué.');
+        }
+      } catch (e) {
+        writeFileSync(path, beforeRaw, 'utf-8');
+        throw e;
+      }
       await writeVirtualAgentsToForgeConfig([]);
     }
 
