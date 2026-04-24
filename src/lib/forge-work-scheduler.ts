@@ -32,6 +32,7 @@ import {
 import { scanOpenClawForForgeDoneSignals } from './forge-openclaw-done-scan';
 import { insertForgeActivityLog } from './forge-activity-log';
 import { ensureProjectScopedSubagent } from './openclaw-app-subagents';
+import { checkGithubActionsForProjects } from './forge-github-actions';
 import { cleanupIdleProjectScopedSubagents } from './openclaw-app-subagents';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -757,6 +758,13 @@ async function stopWorkCycle(reason: string) {
 
 async function tick() {
   if (_state === 'stopped') return;
+
+  // Background monitorings
+  try {
+    await checkGithubActionsForProjects();
+  } catch (e) {
+    console.error('[work-scheduler] github monitoring error:', e);
+  }
 
   // Mode manuel « En cours » : redispatch régulier (la directive complète a été envoyée au démarrage).
   if (_state === 'running') {

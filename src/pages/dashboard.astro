@@ -5,6 +5,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import DashboardAppCenter from '../components/dashboard/DashboardAppCenter';
 import AppLauncher from '../components/apps/AppLauncher';
 import SyncProjectsButton from '../components/apps/SyncProjectsButton';
+import GithubImportModal from '../components/apps/GithubImportModal';
 import { loadAstroDb } from '../lib/load-astro-db';
 
 let projects = [];
@@ -23,6 +24,7 @@ try {
     </div>
     <div class="flex items-center gap-3">
       <SyncProjectsButton client:load />
+      <GithubImportModal client:load />
       <a href="/work" class="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium px-5 py-2.5 rounded-full hover:bg-gray-50 transition-colors">
         Carnet de bord →
       </a>
@@ -50,7 +52,7 @@ try {
           </div>
           <h3 class="text-gray-900 font-bold text-lg mb-2">Aucune application détectée</h3>
           <p class="text-gray-500 text-sm max-w-md mx-auto mb-6">Commencez par synchroniser vos dépôts Git existants ou demandez à l'IA d'en créer une nouvelle.</p>
-          <SyncProjectsButton client:load />
+          <div class="flex items-center justify-center gap-3"><SyncProjectsButton client:load /><GithubImportModal client:load /></div>
         </div>
       )}
     </div>

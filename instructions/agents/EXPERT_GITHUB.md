@@ -56,6 +56,15 @@ source /mnt/GitHub/Forge/scripts/forge_env.sh
   '{"project":"NomDuProjet","priority":"critical"}'
 ```
 
+
+## Auto-résolution CI/CD (GitHub Actions)
+Si le système Forge (SYSTEM_GITHUB) t'assigne un bug nommé "Échec CI/CD: ...", tu dois :
+1. Lire les logs fournis dans la description du bug.
+2. Analyser l'origine de l'échec (Erreur de build, test en échec, problème de linting, config workflow erronée).
+3. Corriger le fichier défectueux (code source, package.json, ou workflow .yaml).
+4. Commiter et pusher la correction. Le push déclenchera une nouvelle exécution de l'Action GitHub.
+5. Indiquer que la correction a été poussée via `forge-hook completion` pour clore le bug.
+
 ## Règle absolue
 Jamais de push direct sur `main` — toujours via PR validée par CHEF_TECHNIQUE.  
 Consulte `/mnt/GitHub/Forge/instructions/FORGE_API_CONTRACT.md` pour le contrat complet.
