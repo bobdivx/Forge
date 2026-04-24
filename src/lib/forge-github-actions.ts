@@ -27,6 +27,7 @@ export async function checkGithubActionsForProjects() {
 
     for (const project of projects) {
 console.log('Project:', project.name);
+console.log('Project:', project.name);
       const projectPath = await resolveProjectPathFromDbProject(project);
       if (!projectPath || !fs.existsSync(projectPath)) { console.log('Path not found', projectPath); continue; }
 

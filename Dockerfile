@@ -1,6 +1,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
+COPY scripts/ ./scripts/
 RUN npm install --no-fund --no-audit
 
 FROM node:22-alpine AS builder
@@ -22,10 +23,10 @@ ENV ASTRO_DATABASE_FILE=file:/app/.astro/content.db
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json .npmrc ./
+COPY scripts/ ./scripts/
 RUN npm install --omit=dev --no-fund --no-audit
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/db ./db
 
 EXPOSE 4321
