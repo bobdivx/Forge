@@ -11,7 +11,7 @@ const userName = userEmail.split('@')[0];
 
 const menuItems = [
   {
-    name: "Vue d'ensemble",
+    name: "Applications",
     path: "/dashboard",
     icon: `<path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>`,
     solid: true,
@@ -30,13 +30,6 @@ const menuItems = [
     path: "/agents/flux",
     icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>`,
     match: ["/agents/flux"],
-    badge: null,
-  },
-  {
-    name: "Projets",
-    path: "/apps",
-    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-10.5v9"/>`,
-    match: ["/apps"],
     badge: null,
   },
   {

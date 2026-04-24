@@ -13,8 +13,8 @@ type Props = {
   commits: GitCommitUi[];
   gitLogError: string | null;
   isRepo: boolean;
-  /** Lien optionnel (vhost dev) */
   appHttpUrl?: string;
+  appName?: string;
 };
 
 function truncate(s: string, max: number) {
@@ -23,15 +23,25 @@ function truncate(s: string, max: number) {
   return t.slice(0, max - 1).trimEnd() + '…';
 }
 
-export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUrl }: Props) {
+export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUrl, appName }: Props) {
   const list = Array.isArray(commits) ? commits : [];
   const [open, setOpen] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<string | null>(null);
+  const [diffContent, setDiffContent] = useState<string | null>(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
   const latest = list[0];
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !selectedCommit) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        if (selectedCommit) {
+          setSelectedCommit(null);
+          setDiffContent(null);
+        } else {
+          setOpen(false);
+        }
+      }
     }
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -40,7 +50,27 @@ export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUr
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open]);
+  }, [open, selectedCommit]);
+
+  const fetchDiff = async (hash: string) => {
+    if (!appName) return;
+    setSelectedCommit(hash);
+    setLoadingDiff(true);
+    setDiffContent(null);
+    try {
+      const res = await fetch(`/api/git-commit?app=${appName}&hash=${hash}`);
+      if (res.ok) {
+        const data = await res.json();
+        setDiffContent(data.diff);
+      } else {
+        setDiffContent('Erreur lors du chargement des modifications.');
+      }
+    } catch (e) {
+      setDiffContent('Erreur réseau.');
+    } finally {
+      setLoadingDiff(false);
+    }
+  };
 
   const disabled = list.length === 0;
 
@@ -64,11 +94,11 @@ export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUr
           <div class="flex items-start justify-between gap-4 mb-4">
             <div>
               <h3 class="text-base font-semibold text-gray-900 group-hover:text-[#175B37] transition-colors">
-                Historique Git
+                Historique Git & Modifications
               </h3>
               {!disabled && (
                 <p class="text-[11px] text-gray-400 mt-1">
-                  Cliquez pour voir les {list.length} dernier{list.length > 1 ? 's' : ''} commit{list.length > 1 ? 's' : ''}
+                  Cliquez pour voir le détail des modifications des agents
                 </p>
               )}
             </div>
@@ -101,14 +131,14 @@ export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUr
           {latest ? (
             <div class="rounded-xl border border-gray-100 bg-gray-50/80 p-4 space-y-2">
               <div class="flex items-center justify-between gap-2 flex-wrap">
-                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white border border-gray-100 text-gray-600">
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white border border-gray-100 text-[#175B37] font-bold">
                   {latest.shortHash}
                 </span>
                 <span class="text-[11px] text-gray-400">{latest.date}</span>
               </div>
               <p class="text-sm font-medium text-gray-900 leading-snug">{truncate(latest.subject, 140)}</p>
               <p class="text-xs text-gray-500">
-                <span class="text-gray-400">Auteur · </span>
+                <span class="text-gray-400">Par · </span>
                 <span class="font-mono text-[#175B37]">{latest.author}</span>
               </p>
             </div>
@@ -127,56 +157,112 @@ export default function GitHistoryCard({ commits, gitLogError, isRepo, appHttpUr
           class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-[2px]"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="git-history-modal-title"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
+            if (e.target === e.currentTarget) {
+              if (selectedCommit) {
+                setSelectedCommit(null);
+                setDiffContent(null);
+              } else {
+                setOpen(false);
+              }
+            }
           }}
         >
           <div
-            class="w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden"
+            class="w-full max-w-3xl max-h-[85vh] bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 shrink-0">
-              <h2 id="git-history-modal-title" class="text-base font-semibold text-gray-900">
-                Historique Git
+            <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 shrink-0 bg-gray-50">
+              <h2 class="text-base font-bold text-gray-900">
+                {selectedCommit ? 'Détails de la modification' : 'Journal des modifications'}
               </h2>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                class="rounded-full p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                aria-label="Fermer"
+                onClick={() => {
+                  if (selectedCommit) {
+                    setSelectedCommit(null);
+                    setDiffContent(null);
+                  } else {
+                    setOpen(false);
+                  }
+                }}
+                class="rounded-full p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
               >
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  {selectedCommit ? (
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  ) : (
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  )}
                 </svg>
               </button>
             </div>
-            <div class="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-              {list.map((c) => (
-                <article
-                  key={c.hash}
-                  class="border border-gray-100 rounded-xl p-4 bg-gray-50 hover:bg-gray-100/80 transition-colors"
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <h4 class="font-medium text-gray-900 text-sm break-words flex-1">{c.subject}</h4>
-                    <span class="text-[11px] text-gray-400 shrink-0 whitespace-nowrap">{c.date}</span>
-                  </div>
-                  <p class="text-gray-500 mt-1.5 font-mono text-[11px]">
-                    {c.shortHash} — {c.hash}
-                  </p>
-                  <p class="text-xs text-gray-400 mt-2">
-                    Auteur : <span class="font-mono text-[#175B37]">{c.author}</span>
-                  </p>
-                </article>
-              ))}
+
+            <div class="overflow-y-auto flex-1 p-5">
+              {!selectedCommit ? (
+                <div class="space-y-4">
+                  {list.map((c) => (
+                    <article
+                      key={c.hash}
+                      class="border border-gray-100 rounded-xl p-4 bg-white hover:border-[#175B37]/30 hover:shadow-sm transition-all"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="flex-1">
+                          <h4 class="font-bold text-gray-900 text-sm mb-1 break-words">{c.subject}</h4>
+                          <div class="flex items-center gap-3 text-[11px]">
+                            <span class="text-gray-500 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{c.shortHash}</span>
+                            <span class="text-gray-400 flex items-center gap-1">
+                              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                              {c.author}
+                            </span>
+                            <span class="text-gray-400 flex items-center gap-1">
+                              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                              {c.date}
+                            </span>
+                          </div>
+                        </div>
+                        {appName && (
+                          <button
+                            onClick={() => fetchDiff(c.hash)}
+                            class="shrink-0 text-xs font-medium bg-[#E9F3EB] text-[#175B37] px-3 py-1.5 rounded-lg hover:bg-[#dceee0] transition-colors whitespace-nowrap"
+                          >
+                            Voir le code
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div class="h-full flex flex-col">
+                  {loadingDiff ? (
+                    <div class="flex items-center justify-center flex-1 text-[#175B37]">
+                      <div class="w-6 h-6 border-2 border-[#175B37]/30 border-t-[#175B37] rounded-full animate-spin"></div>
+                      <span class="ml-3 text-sm font-medium">Chargement du diff...</span>
+                    </div>
+                  ) : (
+                    <pre class="bg-[#1e1e1e] text-gray-300 p-4 rounded-xl text-xs font-mono overflow-auto flex-1 whitespace-pre-wrap break-all custom-scrollbar">
+                      {diffContent}
+                    </pre>
+                  )}
+                </div>
+              )}
             </div>
-            <div class="px-5 py-3 border-t border-gray-100 bg-gray-50/80 shrink-0">
+            
+            <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 shrink-0 flex justify-end">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                class="w-full sm:w-auto px-4 py-2 rounded-full text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                onClick={() => {
+                  if (selectedCommit) {
+                    setSelectedCommit(null);
+                    setDiffContent(null);
+                  } else {
+                    setOpen(false);
+                  }
+                }}
+                class="px-5 py-2 rounded-xl text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors"
               >
-                Fermer
+                {selectedCommit ? 'Retour' : 'Fermer'}
               </button>
             </div>
           </div>

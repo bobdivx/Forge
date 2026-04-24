@@ -41,7 +41,7 @@ const issuesJson    = JSON.stringify(issues.map(i => ({ ...i, _type: 'issue', cr
 const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : null })));
 ---
 
-<DashboardLayout title="Carnet de bord" currentPath="/work">
+<DashboardLayout title="Carnet de Commandes (Tasks)" currentPath="/work">
 
   <!-- Registre global des données (pour les modals détail) -->
   <script define:vars={{ requestsJson, issuesJson, depsJson }}>
@@ -60,11 +60,13 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
   <div class="max-w-7xl mx-auto space-y-6">
 
     <!-- En-tête -->
-    <div>
-      <h1 class="text-4xl font-bold mb-2 text-gray-900">Carnet de bord</h1>
-      <p class="text-gray-500 text-sm">
-        Toutes les demandes, bugs, propositions et dépendances. Cliquez sur une ligne pour voir le détail.
-      </p>
+    <div class="flex items-end justify-between flex-wrap gap-4">
+      <div>
+        <h1 class="text-4xl font-bold mb-2 text-gray-900">Carnet de Commandes</h1>
+        <p class="text-gray-500 text-sm max-w-2xl">
+          Passez vos commandes asynchrones à l'équipe. Les agents s'attribuent automatiquement les tâches (Demandes, Bugs, Dépendances) en fonction de leur expertise.
+        </p>
+      </div>
     </div>
 
     <!-- KPIs -->

@@ -135,6 +135,7 @@ const app = {
         <GitHistoryCard
           client:load
           commits={commits}
+          appName={folderKey}
           gitLogError={gitLogError}
           isRepo={gitSummary.isRepo}
           appHttpUrl={`http://${app.url}`}

@@ -115,6 +115,26 @@ export default function ApiTokensTab({
               </div>
             </div>
           </FormField>
+          <FormField label="Cloudflare (API Token Tunnel)">
+            <input
+              type="password"
+              placeholder="Clé API (Zone/Tunnel)..."
+              value={settings.cloudflareToken || ''}
+              onInput={(e) =>
+                setSettings({ ...settings, cloudflareToken: (e.target as HTMLInputElement).value })
+              }
+              class={monoInputCls}
+            />
+            <div class="mt-2 text-xs text-gray-500 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+              <p class="font-semibold text-blue-800 mb-1">Pour générer ce jeton, autorisations requises sur votre compte Cloudflare :</p>
+              <ul class="list-disc pl-4 space-y-0.5 text-blue-700/80">
+                <li>Zone : DNS (Édition)</li>
+                <li>Compte : Cloudflare Tunnel (Édition)</li>
+                <li>Compte : Account Settings (Lecture)</li>
+              </ul>
+              <p class="mt-2 text-[10px] text-gray-400">Ne donnez pas d'accès global "Éditer toutes les ressources". Limitez l'accès à la zone DNS que vous souhaitez utiliser (ex: briseteia.me).</p>
+            </div>
+          </FormField>
           <FormField label="GitHub (PAT)">
             <input
               type="password"
