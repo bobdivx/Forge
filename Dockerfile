@@ -2,7 +2,7 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY scripts/ ./scripts/
-RUN npm install --no-fund --no-audit
+RUN npm install --no-fund --no-audit --force
 
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -24,7 +24,7 @@ RUN apk add --no-cache git
 
 COPY package.json package-lock.json .npmrc ./
 COPY scripts/ ./scripts/
-RUN npm install --omit=dev --no-fund --no-audit
+RUN npm install --omit=dev --no-fund --no-audit --force
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/db ./db

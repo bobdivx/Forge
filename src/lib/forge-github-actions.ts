@@ -17,9 +17,10 @@ function parseGithubRepo(remoteUrl: string | null): { owner: string; repo: strin
 }
 
 export async function checkGithubActionsForProjects() {
+console.log('checkGithubActionsForProjects called');
   try {
-    const githubToken = await getConfig('githubToken', true);
-    if (!githubToken) return;
+    const githubToken = await getConfig('githubToken');
+    if (!githubToken) { console.log('No GitHub Token in Config'); return; }
 
     const { db, Project, AgentAppIssue } = await loadAstroDb();
     const projects = await db.select().from(Project);
