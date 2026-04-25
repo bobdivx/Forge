@@ -1,0 +1,142 @@
+---
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+---
+
+<DashboardLayout title="Supervision Docker" currentPath="/docker">
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold text-white flex items-center gap-2">
+      <svg class="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+      Supervision Docker (CasaOS)
+    </h1>
+    <p class="text-slate-400 text-sm mt-1">Gérez les conteneurs de votre NAS directement depuis DevForge.</p>
+  </div>
+
+  <div class="bg-white/[0.02] border border-cyan-500/15 rounded-xl p-6 shadow-neon-card">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-lg font-semibold text-white">Conteneurs en cours d'exécution</h2>
+      <button id="refresh-btn" class="btn btn-sm bg-cyan-500/20 text-cyan-100 hover:bg-cyan-500/30 border-cyan-400/30">
+        Rafraîchir
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm text-slate-300">
+        <thead class="bg-black/20 text-slate-400 text-xs uppercase font-semibold">
+          <tr>
+            <th class="px-4 py-3 rounded-tl-lg">Nom</th>
+            <th class="px-4 py-3">Image</th>
+            <th class="px-4 py-3">Statut</th>
+            <th class="px-4 py-3">Ports</th>
+            <th class="px-4 py-3 text-right rounded-tr-lg">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="containers-body" class="divide-y divide-white/5">
+          <tr>
+            <td colspan="5" class="px-4 py-8 text-center text-slate-500">
+              <span class="loading loading-spinner loading-md text-cyan-500"></span>
+              <p class="mt-2">Chargement des conteneurs...</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const tbody = document.getElementById('containers-body');
+  const refreshBtn = document.getElementById('refresh-btn');
+
+  async function fetchContainers() {
+    try {
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500"><span class="loading loading-spinner loading-md text-cyan-500"></span><p class="mt-2">Chargement...</p></td></tr>`;
+      const res = await fetch('/api/docker/containers');
+      if (!res.ok) throw new Error("Erreur de chargement");
+      const containers = await res.json();
+      renderContainers(containers);
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-red-400">Impossible de charger les conteneurs : ${err.message}</td></tr>`;
+    }
+  }
+
+  function getStatusBadge(state, status) {
+    if (state === 'running' && !status.includes('unhealthy')) {
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>En ligne</span>`;
+    }
+    if (state === 'restarting') {
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-orange-500/10 text-orange-400 text-xs font-medium border border-orange-500/20"><span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>Redémarrage</span>`;
+    }
+    if (status.includes('unhealthy')) {
+      return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 text-amber-400 text-xs font-medium border border-amber-500/20"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Instable</span>`;
+    }
+    return `<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/10 text-red-400 text-xs font-medium border border-red-500/20"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>Arrêté</span>`;
+  }
+
+  function formatPorts(ports) {
+    if (!ports || ports.length === 0) return '-';
+    return ports.map(p => {
+      if (p.PublicPort) return `<span class="text-cyan-300">${p.PublicPort}</span>:${p.PrivatePort}`;
+      return p.PrivatePort;
+    }).join(', ');
+  }
+
+  function renderContainers(containers) {
+    if (!containers || containers.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Aucun conteneur trouvé.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = containers.map(c => {
+      const name = c.Names[0].replace('/', '');
+      return `
+        <tr class="hover:bg-white/[0.02] transition-colors group">
+          <td class="px-4 py-3 font-medium text-white">${name}</td>
+          <td class="px-4 py-3 text-slate-400 text-xs font-mono truncate max-w-[150px]" title="${c.Image}">${c.Image}</td>
+          <td class="px-4 py-3">${getStatusBadge(c.State, c.Status)}<div class="text-[10px] text-slate-500 mt-1">${c.Status}</div></td>
+          <td class="px-4 py-3 text-xs font-mono">${formatPorts(c.Ports)}</td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+              <button onclick="actionContainer('${c.Id}', 'restart')" class="p-1.5 rounded bg-slate-800 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/20 transition" title="Redémarrer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              </button>
+              <button onclick="actionContainer('${c.Id}', 'stop')" class="p-1.5 rounded bg-slate-800 text-slate-300 hover:text-orange-300 hover:bg-orange-500/20 transition" title="Arrêter">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" /></svg>
+              </button>
+              <button onclick="if(confirm('Supprimer ce conteneur ?')) actionContainer('${c.Id}', 'remove')" class="p-1.5 rounded bg-slate-800 text-slate-300 hover:text-red-300 hover:bg-red-500/20 transition" title="Supprimer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  window.actionContainer = async (id, action) => {
+    try {
+      const res = await fetch('/api/docker/containers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action })
+      });
+      if (res.ok) {
+        fetchContainers();
+      } else {
+        alert('Erreur lors de l\'action sur le conteneur');
+      }
+    } catch (err) {
+      alert('Erreur réseau');
+    }
+  };
+
+  refreshBtn.addEventListener('click', fetchContainers);
+  
+  // Initial load
+  fetchContainers();
+  
+  // Auto-refresh every 10s
+  setInterval(fetchContainers, 10000);
+</script>
