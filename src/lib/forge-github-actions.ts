@@ -17,20 +17,29 @@ function parseGithubRepo(remoteUrl: string | null): { owner: string; repo: strin
 }
 
 export async function checkGithubActionsForProjects() {
-console.log('checkGithubActionsForProjects called');
+
   try {
-    const githubToken = await getConfig('githubToken');
+    const astroDb = await loadAstroDb();
+    const db = astroDb.db;
+    const Config = astroDb.Config;
+    const Project = astroDb.Project;
+    const AgentAppIssue = astroDb.AgentAppIssue;
+    let githubToken = '';
+    try {
+      const rows = await db.select().from(Config).where(eq(Config.key, 'githubToken'));
+      if (rows.length) githubToken = rows[0].value;
+    } catch {}
     if (!githubToken) { console.log('No GitHub Token in Config'); return; }
 
-    const { db, Project, AgentAppIssue } = await loadAstroDb();
+    
     const projects = await db.select().from(Project);
     const reposRoot = await getReposRootResolved();
 
     for (const project of projects) {
-console.log('Project:', project.name);
-console.log('Project:', project.name);
+
+
       const projectPath = await resolveProjectPathFromDbProject(project);
-      if (!projectPath || !fs.existsSync(projectPath)) { console.log('Path not found', projectPath); continue; }
+      if (!projectPath || !fs.existsSync(projectPath)) continue;
 
       let meta;
       try {
@@ -48,7 +57,7 @@ console.log('Project:', project.name);
       const { owner, repo } = repoInfo;
 
       // Fetch latest workflow runs
-      const runsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=3`, {
+      const runsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=10`, {
         headers: {
           'Authorization': `token ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -59,68 +68,81 @@ console.log('Project:', project.name);
       if (!runsRes.ok) { console.log('not ok:', runsRes.status); continue; }
       const runsData = await runsRes.json();
       
+      
       for (const run of runsData.workflow_runs || []) {
-        if (run.status === 'completed' && run.conclusion === 'failure') {
-          // Check if an issue already exists for this run URL
-          const existingIssues = await db.select().from(AgentAppIssue)
-            .where(eq(AgentAppIssue.url, run.html_url));
-            
-          if (existingIssues.length === 0) {
-            // Try to fetch the failed job logs
-            let logsSnippet = 'Logs non disponibles.';
-            try {
-              const jobsRes = await fetch(run.jobs_url, {
-                headers: {
-                  'Authorization': `token ${githubToken}`,
-                  'Accept': 'application/vnd.github.v3+json',
-                  'User-Agent': 'DevForge'
-                }
-              });
-              if (jobsRes.ok) {
-                const jobsData = await jobsRes.json();
-                const failedJob = jobsData.jobs.find((j: any) => j.conclusion === 'failure');
-                
-                if (failedJob) {
-                  // Fetch text logs for this specific job
-                  const logRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/jobs/${failedJob.id}/logs`, {
-                    headers: {
-                      'Authorization': `token ${githubToken}`,
-                      'Accept': 'application/vnd.github.v3+json',
-                      'User-Agent': 'DevForge'
-                    }
-                  });
-                  
-                  if (logRes.ok) {
-                    const fullLog = await logRes.text();
-                    // Extract last 50 lines to keep it manageable
-                    const logLines = fullLog.split('\n');
-                    logsSnippet = logLines.slice(-50).join('\n');
+        if (run.status === 'completed') {
+          if (run.conclusion === 'failure') {
+            // Check if an issue already exists for this run URL
+            const existingIssues = await db.select().from(AgentAppIssue)
+              .where(eq(AgentAppIssue.url, run.html_url));
+              
+            if (existingIssues.length === 0) {
+              // Try to fetch the failed job logs
+              let logsSnippet = 'Logs non disponibles.';
+              try {
+                const jobsRes = await fetch(run.jobs_url, {
+                  headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'DevForge'
                   }
+                });
+                if (jobsRes.ok) {
+                  const jobsData = await jobsRes.json();
+                  const failedJob = jobsData.jobs.find((j: any) => j.conclusion === 'failure');
                   
-                  logsSnippet = `Job en échec: ${failedJob.name}\n\nLogs:\n${logsSnippet}`;
+                  if (failedJob) {
+                    // Fetch text logs for this specific job
+                    const logRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/jobs/${failedJob.id}/logs`, {
+                      headers: {
+                        'Authorization': `token ${githubToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'User-Agent': 'DevForge'
+                      }
+                    });
+                    
+                    if (logRes.ok) {
+                      const fullLog = await logRes.text();
+                      // Extract last 50 lines to keep it manageable
+                      const logLines = fullLog.split('\n');
+                      logsSnippet = logLines.slice(-50).join('\n');
+                    }
+                    
+                    logsSnippet = `Job en échec: ${failedJob.name}\n\nLogs:\n${logsSnippet}`;
+                  }
                 }
+              } catch (e) {
+                 console.error('[github-actions] Erreur logs:', e);
               }
-            } catch (e) {
-               console.error('[github-actions] Erreur logs:', e);
-            }
 
-            // Create issue
-            await db.insert(AgentAppIssue).values({
-              projectId: project.id,
-              url: run.html_url,
-              errorType: 'ci_cd_failure',
-              title: `Échec CI/CD: ${run.name} (branche ${run.head_branch})`,
-              detail: `Le workflow GitHub Actions a échoué sur le commit ${run.head_sha}.\n\n${logsSnippet}`,
-              status: 'open',
-              reportedByAgentId: 'SYSTEM_GITHUB',
-              assigneeAgentId: 'EXPERT_GITHUB', // Assigne par défaut à l'expert github ou au backend
-              createdAt: new Date(),
-              updatedAt: new Date()
-            });
-            console.log(`[github-actions] Issue créée pour l'échec CI/CD du projet ${project.name}`);
+              // Create issue
+              try { await db.insert(AgentAppIssue).values({
+                projectId: project.id,
+                url: run.html_url,
+                errorType: 'ci_cd_failure',
+                title: `Échec CI/CD: ${run.name} (branche ${run.head_branch})`,
+                detail: `Le workflow GitHub Actions a échoué sur le commit ${run.head_sha}.\n\n${logsSnippet}`,
+                status: 'open',
+                reportedByAgentId: 'SYSTEM_GITHUB',
+                assigneeAgentId: 'EXPERT_GITHUB',
+                createdAt: new Date(),
+                updatedAt: new Date()
+              });
+              console.log(`[github-actions] Issue créée pour l'échec CI/CD du projet ${project.name}`); } catch (e) { console.error('Failed to insert issue:', e); }
+            }
+          } else if (run.conclusion === 'success') {
+             // If success, find any open CI/CD issues for this exact branch and close them!
+             const openBranchIssues = await db.select().from(AgentAppIssue).where(eq(AgentAppIssue.projectId, project.id));
+             for (const issue of openBranchIssues) {
+                if (issue.status === 'open' && issue.errorType === 'ci_cd_failure' && issue.title.includes(`(branche ${run.head_branch})`)) {
+                   await db.update(AgentAppIssue).set({ status: 'resolved', updatedAt: new Date() }).where(eq(AgentAppIssue.id, issue.id));
+                   console.log(`[github-actions] Issue résolue automatiquement suite au succès de CI/CD: ${issue.title}`);
+                }
+             }
           }
         }
       }
+
     }
   } catch (error) {
     console.error('[github-actions] Erreur lors de la vérification:', error);

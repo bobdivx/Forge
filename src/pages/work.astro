@@ -21,7 +21,7 @@ try {
   requests = await db.select().from(Request).orderBy(desc(Request.createdAt));
   issues   = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt));
   deps     = await db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt));
-} catch { /* DB unavailable */ }
+} catch(e) { console.error('WORK PAGE DB ERROR:', e); }
 
 const openIssues       = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
 const openDeps         = deps.filter(d => d.status === 'open' || d.status === 'in_progress');

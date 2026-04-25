@@ -15,7 +15,24 @@
 #   • Si la commande tourne dans un conteneur avec extra_hosts forge-host → http://forge-host:4321
 #   • Sinon → http://127.0.0.1:4321 (Forge sur la même machine que le shell)
 
+
 _FORGE_AUTH_TOKEN="${FORGE_API_TOKEN:-${FORGE_AGENT_TOKEN:-}}"
+
+# 1. Tenter de lire directement depuis la base SQLite si accessible (cas DevForge complet)
+_DB_PATH="$(dirname "${BASH_SOURCE[0]}")/../.astro/content.db"
+if [ -z "${FORGE_HOOK_BASE_URL:-}" ] && [ -f "$_DB_PATH" ] && command -v python3 >/dev/null 2>&1; then
+  _FP="$(python3 -c "import sqlite3; db=sqlite3.connect('$_DB_PATH'); row=db.execute('SELECT value FROM Config WHERE key=\"forgePublicUrl\"').fetchone(); print(row[0] if row else '')" 2>/dev/null || true)"
+  if [ -n "${_FP:-}" ]; then
+    export FORGE_HOOK_BASE_URL="$_FP"
+  fi
+  if [ -z "${_FORGE_AUTH_TOKEN:-}" ]; then
+    _FT="$(python3 -c "import sqlite3; db=sqlite3.connect('$_DB_PATH'); row=db.execute('SELECT value FROM Config WHERE key=\"forgeApiToken\"').fetchone(); print(row[0] if row else '')" 2>/dev/null || true)"
+    if [ -n "${_FT:-}" ]; then
+      _FORGE_AUTH_TOKEN="$_FT"
+    fi
+  fi
+fi
+
 if [ -n "${_FORGE_AUTH_TOKEN:-}" ]; then
   export FORGE_AUTH_HEADER="Authorization: Bearer ${_FORGE_AUTH_TOKEN}"
   export FORGE_AUTH_CURL_ARGS=(-H "$FORGE_AUTH_HEADER")
@@ -42,9 +59,11 @@ elif [ -n "${PUBLIC_SITE_URL:-}" ]; then
   export FORGE_BASE_URL="${PUBLIC_SITE_URL%/}"
 elif [ -f /.dockerenv ] && getent hosts forge-host >/dev/null 2>&1; then
   export FORGE_BASE_URL="http://forge-host:4321"
+elif [ -f /.dockerenv ]; then
+  # Dans un conteneur CasaOS typique (OpenClaw), l'hôte (où tourne Forge Prod sur le port 4331) est 172.17.0.1
+  export FORGE_BASE_URL="http://172.17.0.1:4331"
 else
   export FORGE_BASE_URL="http://127.0.0.1:4321"
 fi
-
 export FORGE_HOOK_URL="${FORGE_BASE_URL}/api/forge-hook"
 export FORGE_API_URL="${FORGE_BASE_URL}/api"
