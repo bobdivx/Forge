@@ -15,7 +15,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     let command = '';
 
-    if (action === 'start') {
+    if (action === 'start' || action === 'start_prod') {
       if (!scriptPath) return new Response(JSON.stringify({ error: 'scriptPath required to start' }), { status: 400 });
       // Build env variables string
       let envString = '';
@@ -25,24 +25,51 @@ export const POST: APIRoute = async ({ request }) => {
         }
       }
       
-      // Auto-detect the right script from package.json
-      let npmScript = 'dev';
+      let npmScript = action === 'start_prod' ? 'start' : 'dev';
+      
+      // Auto-detect the right script from package.json if default not found
       const pkgPath = scriptPath + '/package.json';
       try {
         if (fs.existsSync(pkgPath)) {
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
           if (pkg.scripts) {
-            if (pkg.scripts.dev) npmScript = 'dev';
-            else if (pkg.scripts.start) npmScript = 'start';
-            else if (pkg.scripts.preview) npmScript = 'preview';
-            else if (pkg.scripts.serve) npmScript = 'serve';
+            if (action === 'start_prod') {
+                if (pkg.scripts.start) npmScript = 'start';
+                else if (pkg.scripts.preview) npmScript = 'preview';
+                else if (pkg.scripts.serve) npmScript = 'serve';
+            } else {
+                if (pkg.scripts.dev) npmScript = 'dev';
+                else if (pkg.scripts.start) npmScript = 'start';
+                else if (pkg.scripts.preview) npmScript = 'preview';
+                else if (pkg.scripts.serve) npmScript = 'serve';
+            }
           }
         }
       } catch (e) {
         console.error('Error reading package.json', e);
       }
       
-      command = `cd ${scriptPath} && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+      // If we are starting prod and we have a build script, we might want to build first,
+      // but building might take too long for a synchronous request. We'll just run the script.
+      // E.g. `npm run build && pm2 start npm --name ... -- run start`
+      if (action === 'start_prod') {
+          // Check if build is required
+          let hasBuild = false;
+          try {
+              if (fs.existsSync(pkgPath)) {
+                  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                  if (pkg.scripts && pkg.scripts.build) hasBuild = true;
+              }
+          } catch(e) {}
+          
+          if (hasBuild) {
+              command = `cd ${scriptPath} && npm run build && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+          } else {
+              command = `cd ${scriptPath} && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+          }
+      } else {
+          command = `cd ${scriptPath} && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+      }
   
       // Alternatively, check if ecosystem.config or entry.mjs exists.
       // But let's assume `npm run dev` for dev environment for now, or build and run.
