@@ -95,38 +95,30 @@ function installFromPackRoot(scopedName, version, opts) {
   installFromPackInto(scopedName, version, path.join(root, "node_modules"), opts);
 }
 
+function addEsbuildDir(out, seen, dir) {
+  const pkg = path.join(dir, "package.json");
+  if (seen.has(dir) || !fs.existsSync(pkg)) return;
+  try {
+    if (readJson(pkg).name === "esbuild") {
+      seen.add(dir);
+      out.push(dir);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Parcourt node_modules à la recherche de …/esbuild/package.json (name === esbuild).
- * @param {string} nmBase chemin …/node_modules
- * @param {number} depth
+ * Vérifie uniquement les copies réellement utilisées par le stack Forge.
+ * Un scan récursif ou une lecture exhaustive du lockfile peut bloquer longtemps
+ * sur lecteur réseau.
  * @param {string[]} out
  */
-function collectEsbuildDirs(nmBase, depth, out) {
-  if (depth > 10 || !fs.existsSync(nmBase)) return;
-  const esbuildPkg = path.join(nmBase, "esbuild", "package.json");
-  if (fs.existsSync(esbuildPkg)) {
-    try {
-      if (readJson(esbuildPkg).name === "esbuild") {
-        out.push(path.join(nmBase, "esbuild"));
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  let entries;
-  try {
-    entries = fs.readdirSync(nmBase, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const ent of entries) {
-    if (!ent.isDirectory()) continue;
-    if (ent.name === ".bin" || ent.name === ".cache") continue;
-    const sub = path.join(nmBase, ent.name, "node_modules");
-    if (fs.existsSync(sub)) {
-      collectEsbuildDirs(sub, depth + 1, out);
-    }
-  }
+function collectKnownEsbuildDirs(out) {
+  const seen = new Set();
+  addEsbuildDir(out, seen, path.join(root, "node_modules", "esbuild"));
+  addEsbuildDir(out, seen, path.join(root, "node_modules", "astro", "node_modules", "esbuild"));
+  addEsbuildDir(out, seen, path.join(root, "node_modules", "@astrojs", "vercel", "node_modules", "esbuild"));
 }
 
 function esbuildNativePackageName() {
@@ -159,7 +151,7 @@ try {
   }
 
   const esbuildDirs = [];
-  collectEsbuildDirs(path.join(root, "node_modules"), 0, esbuildDirs);
+  collectKnownEsbuildDirs(esbuildDirs);
   const nativeName = esbuildNativePackageName();
 
   for (const esbuildDir of esbuildDirs) {
