@@ -327,7 +327,7 @@ export default function ZimaOSModelsPanel() {
             </thead>
             <tbody>
               {data.rows.map((row) => {
-                const ping = pingByAgent[row.agentId];
+                const pingResult = pingByAgent[row.agentId];
                 return (
                   <tr key={row.agentId} class="border-b border-slate-800/80 align-top">
                     <td class="py-3 pr-3">
@@ -364,16 +364,16 @@ export default function ZimaOSModelsPanel() {
                           }
                         />
                       </div>
-                      {ping && (
+                      {pingResult && (
                         <p
-                          class={`mt-2 text-xs font-mono ${ping.ok ? 'text-emerald-300' : 'text-rose-300'}`}
+                          class={`mt-2 text-xs font-mono ${pingResult.ok ? 'text-emerald-300' : 'text-rose-300'}`}
                         >
-                          {ping.ok
-                            ? `${ping.latencyMs} ms — ${(ping.preview ?? '').slice(0, 120)}`
-                            : `${ping.latencyMs} ms — ${ping.error ?? 'erreur'}`}
+                          {pingResult.ok
+                            ? `${pingResult.latencyMs} ms — ${(pingResult.preview ?? '').slice(0, 120)}`
+                            : `${pingResult.latencyMs} ms — ${pingResult.error ?? 'erreur'}`}
                         </p>
                       )}
-                      {ping?.hint && <p class="text-[10px] text-slate-500 mt-1">{ping.hint}</p>}
+                      {pingResult?.hint && <p class="text-[10px] text-slate-500 mt-1">{pingResult.hint}</p>}
                     </td>
                     <td class="py-3 pr-0">
                       <div class="flex flex-wrap gap-2">

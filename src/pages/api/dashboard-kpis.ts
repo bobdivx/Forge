@@ -7,8 +7,9 @@ import {
 } from '../../lib/zimaos-gateway';
 
 function countRunningSessions(sessions: unknown[]): number {
-  return sessions.filter((s: Record<string, unknown>) => {
-    const st = String(s?.status || s?.state || '').toLowerCase();
+  return sessions.filter((s) => {
+    const row = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
+    const st = String(row.status || row.state || '').toLowerCase();
     return (
       st === 'running' ||
       st === 'active' ||

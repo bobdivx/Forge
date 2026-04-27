@@ -38,12 +38,12 @@ export default function DashOrcheStatus() {
             data: [pct, 100 - pct],
             backgroundColor: ['#175B37', '#E5E7EB'],
             borderWidth: 0,
-            cutout: '75%',
           }],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          cutout: '75%',
           rotation: 225,
           circumference: 270,
           plugins: {

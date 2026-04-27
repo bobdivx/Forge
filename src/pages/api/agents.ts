@@ -39,7 +39,9 @@ function canonicalAgentIdCandidate(raw: string): string {
   return s;
 }
 
-const CANONICAL_AGENT_ID_SET = new Set(FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId));
+const CANONICAL_AGENT_ID_SET: Set<string> = new Set(
+  FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId),
+);
 
 /**
  * Rattache les lignes AgentTask / forge-hook (github, Expert GitHub…) à l’id canonique Forge.

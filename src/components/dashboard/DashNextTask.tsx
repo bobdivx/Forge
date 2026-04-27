@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'preact/hooks';
 
 type Issue = { id: number; title: string; errorType: string; status: string; reportedByAgentId: string };
-type Proposal = { id: number; title: string; priority: string; author: string; projectName: string };
+type Proposal = {
+  id: number;
+  title: string;
+  priority: string;
+  author: string;
+  projectName: string;
+  status?: string;
+};
 
 export default function DashNextTask() {
   const [issue, setIssue] = useState<Issue | null>(null);
@@ -16,7 +23,7 @@ export default function DashNextTask() {
         const issues: Issue[] = Array.isArray(id.issues) ? id.issues : [];
         const proposals: Proposal[] = Array.isArray(pd.proposals) ? pd.proposals : [];
         setIssue(issues.find((i) => /^(open|in_progress)$/i.test(i.status)) ?? null);
-        setProposal(proposals.find((p) => /^(pending|in_progress)$/i.test(p.status)) ?? null);
+        setProposal(proposals.find((p) => /^(pending|in_progress)$/i.test(String(p.status ?? ''))) ?? null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

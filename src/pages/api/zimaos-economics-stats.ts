@@ -18,14 +18,18 @@ export const GET: APIRoute = async () => {
     );
   }
 
-  const sessions = normalizeZimaOSSessions(result.data);
+  const sessions = normalizeZimaOSSessions(result.data) as Array<{
+    estimatedCostUsd?: number;
+    totalTokens?: number;
+    status?: string;
+  }>;
 
   let totalCost = 0;
   let totalTokens = 0;
   let activeSessions = 0;
   let failedSessions = 0;
 
-  sessions.forEach((s: { estimatedCostUsd?: number; totalTokens?: number; status?: string }) => {
+  sessions.forEach((s) => {
     totalCost += s.estimatedCostUsd || 0;
     totalTokens += s.totalTokens || 0;
     const status = String(s.status || '').toLowerCase();

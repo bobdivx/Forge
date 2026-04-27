@@ -249,7 +249,7 @@ export default function AgentRepl() {
           style={{ caretColor: FORGE }}
           autoComplete="off"
           autoCorrect="off"
-          spellCheck={false}
+          spellcheck={false}
         />
 
         <button

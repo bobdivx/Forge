@@ -14,7 +14,7 @@ type AgentSanityRow = {
   enabledInForge: boolean;
   hasDbPrompt: boolean;
   hasInstructionFile: boolean;
-  /** Fichier attendu absent sur l’hôte (ex. déploiement Vercel sans copie `instructions/`). */
+  /** Fichier attendu absent sur l’hôte (ex. déploiement sans copie `doc/` ni fallback legacy). */
   instructionFileMissingOnHost: boolean;
   instructionFilePath: string;
   inZimaOSAgentsListApi: boolean;

@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ request }) => {
     const stream = new ReadableStream({
       start(controller) {
         // Préparer les variables d'environnement en injectant le modèle choisi
-        const env = { ...process.env, CI: "true", FORCE_COLOR: "1" };
+        const env: NodeJS.ProcessEnv = { ...process.env, CI: "true", FORCE_COLOR: "1" };
         if (model) {
           env.OLLAMA_MODEL = model;
         }

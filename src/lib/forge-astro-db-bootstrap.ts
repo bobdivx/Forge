@@ -65,7 +65,7 @@ function syncTablesViaNodeScript(dbHref: string): void {
 async function directSqliteForgeUserProbe(dbHref: string): Promise<'ok' | 'missing' | 'unknown'> {
   try {
     const { createClient } = await import('@astrojs/db/db-client/libsql-node.js');
-    const db = createClient({ url: dbHref });
+    const db = createClient({ url: dbHref, token: '' });
     await db.run(sql`SELECT 1 FROM ForgeUser LIMIT 1`);
     return 'ok';
   } catch (e) {

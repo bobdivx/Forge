@@ -83,7 +83,7 @@ export async function ensureProjectScopedSubagent(params: {
   const parent = parentRows[0];
   if (!parent) return { agentId: parentAgentId, created: false };
 
-  const filePath = `instructions/agents/apps/${agentId}.md`;
+  const filePath = `doc/agents/apps/${agentId}.md`;
   const prompt = buildProjectScopedPrompt({
     parentAgentId,
     basePrompt: String(parent.systemPrompt || ''),

@@ -55,7 +55,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const gw = await fetchZimaOSJson(email, '/health');
   let sessionSummary = '';
   if (gw.ok) {
-    const sessions = normalizeZimaOSSessions(gw.data);
+    const sessions = normalizeZimaOSSessions(gw.data) as Record<string, unknown>[];
     const rows = sessions.map(mapSessionToAgentRow);
     rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs);
     sessionSummary = rows

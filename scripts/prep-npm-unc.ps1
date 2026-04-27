@@ -1,5 +1,5 @@
 # Forge sur chemin UNC: CMD et certains outils npm refusent le cwd UNC.
-# Ce script se place sur une lettre de lecteur qui pointe VERS CE DEPOT (package.json forge-dashboard),
+# Ce script se place sur une lettre de lecteur qui pointe VERS CE DEPOT (package.json zimadev),
 # puis npm install (et optionnellement dev).
 param(
     [switch]$RunDev
@@ -12,7 +12,7 @@ function Test-ForgeRepoRoot {
     param([string]$Path)
     $pkg = Join-Path $Path "package.json"
     if (-not (Test-Path -LiteralPath $pkg)) { return $false }
-    return (Select-String -LiteralPath $pkg -Pattern '"name"\s*:\s*"forge-dashboard"' -Quiet)
+    return (Select-String -LiteralPath $pkg -Pattern '"name"\s*:\s*"zimadev"' -Quiet)
 }
 
 function Set-LocationToForgeOnLetter {
@@ -62,7 +62,7 @@ if ($repoRoot -match '^\\\\') {
 }
 
 if (-not (Test-ForgeRepoRoot -Path (Get-Location).Path)) {
-    throw "Ce dossier n est pas la racine Forge (package.json / name forge-dashboard introuvable): $(Get-Location)"
+    throw "Ce dossier n est pas la racine Forge (package.json / name zimadev introuvable): $(Get-Location)"
 }
 
 Write-Host "Répertoire: $(Get-Location)"

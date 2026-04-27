@@ -20,7 +20,7 @@ export const GET: APIRoute = async ({ locals }) => {
     );
   }
 
-  const sessions = normalizeZimaOSSessions(result.data);
+  const sessions = normalizeZimaOSSessions(result.data) as Record<string, unknown>[];
   const rows = sessions.map(mapSessionToAgentRow);
   rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs);
 

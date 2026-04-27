@@ -13,8 +13,12 @@ export default function DashActivity() {
   useEffect(() => {
     fetch('/api/dashboard-kpis')
       .then((r) => (r.ok ? r.json() : {}))
-      .then((kpi) => {
-        const todayCount = kpi.tasksToday ?? 0;
+      .then((kpi: unknown) => {
+        const kpiObj = kpi && typeof kpi === 'object' ? (kpi as Record<string, unknown>) : {};
+        const todayCount =
+          typeof kpiObj.tasksToday === 'number'
+            ? kpiObj.tasksToday
+            : Number(kpiObj.tasksToday) || 0;
         const labels: string[] = [];
         const values: number[] = [];
         const today = new Date().getDay();

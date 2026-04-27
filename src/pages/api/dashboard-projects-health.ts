@@ -84,8 +84,16 @@ export const GET: APIRoute = async ({ locals }) => {
     };
 
     for (const p of projects as ProjectRow[]) {
-      let dev = {
-        ok: false as boolean,
+      let dev: {
+        ok: boolean;
+        running?: boolean;
+        pidTracked?: boolean;
+        portOccupiedExternally?: boolean;
+        label?: string;
+        port?: number;
+        hint?: string;
+      } = {
+        ok: false,
         hint: 'Chemin projet introuvable sur le serveur Forge',
       };
 
@@ -127,7 +135,7 @@ export const GET: APIRoute = async ({ locals }) => {
         id: p.id,
         name: p.name,
         swarmEnabled: Number(p.swarmEnabled) === 1,
-        devServer: dev as typeof payload.projects[0]['devServer'],
+        devServer: dev,
         tasks: countForProject(p.id),
       });
     }

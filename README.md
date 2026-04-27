@@ -9,4 +9,4 @@ docker compose -f docker-compose.nas.yml up -d
 
 Pour clarifier la logique de demarrage et les ports selon les environnements (local, Docker, NAS), voir:
 
-- `instructions/PORTS_ET_DEMARRAGE.md`
+- `doc/PORTS_ET_DEMARRAGE.md`

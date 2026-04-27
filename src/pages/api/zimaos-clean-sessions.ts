@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ locals }) => {
     });
   }
 
-  const sessions = normalizeZimaOSSessions(result.data);
+  const sessions = normalizeZimaOSSessions(result.data) as Record<string, unknown>[];
   const rows = sessions.map(mapSessionToAgentRow);
 
   const toClean = rows.filter((r) => {

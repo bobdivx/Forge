@@ -300,7 +300,7 @@ export default function SettingsForm() {
         {activeTab === 'integration' && (
           <IntegrationTab
             settings={settings}
-            setSettings={setSettings}
+            setSettings={(c) => setSettings(c as unknown as Config)}
             onSave={save}
             saving={saving}
             message={message}
@@ -311,7 +311,7 @@ export default function SettingsForm() {
         {activeTab === 'api' && (
           <ApiTokensTab
             settings={settings}
-            setSettings={setSettings}
+            setSettings={(c) => setSettings(c as unknown as Config)}
             customTokens={customTokens}
             setCustomTokens={setCustomTokens}
             onSave={saveApiSection}

@@ -20,7 +20,7 @@ export const GET: APIRoute = async ({ locals }) => {
     );
   }
 
-  const sessions = normalizeZimaOSSessions(result.data);
+  const sessions = normalizeZimaOSSessions(result.data) as Record<string, unknown>[];
   const rows = sessions.map(mapSessionToAgentRow);
   const byName = new Map<string, (typeof rows)[0]>();
   for (const r of rows) {

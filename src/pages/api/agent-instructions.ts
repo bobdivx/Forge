@@ -93,7 +93,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const defaultRow = FORGE_AGENT_INSTRUCTION_ROWS.find((r) => r.agentId === agentId);
-  const filePath = customPath || defaultRow?.filePath || `instructions/agents/${agentId}.md`;
+  const filePath = customPath || defaultRow?.filePath || `doc/agents/${agentId}.md`;
   const prompt =
     systemPrompt ||
     `# ${agentId}\n\nVous êtes l'agent ${agentId}. Répondez de manière concise, structurée et orientée action.\n\n${SWARM_WORK_PROTOCOL_SUMMARY}`;

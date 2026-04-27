@@ -25,6 +25,7 @@ export type ForgeConfig = {
   ollamaUrl: string;
   githubToken: string;
   vercelToken: string;
+  cloudflareToken: string;
   /** Secret HMAC du webhook GitHub (PR Jules) — même valeur que dans les réglages du dépôt GitHub. */
   githubWebhookSecret: string;
   forgeReposRoot: string;
@@ -60,6 +61,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   ollamaUrl: '',
   githubToken: '',
   vercelToken: '',
+  cloudflareToken: '',
   githubWebhookSecret: '',
   forgeReposRoot: '',
   dockerYamlDir: '',
@@ -89,7 +91,7 @@ export async function getOllamaOriginResolved(): Promise<string> {
   );
 }
 
-export async function getConfig(key: keyof ForgeConfig): Promise<string> {
+export async function getConfig(key: keyof ForgeConfig, _legacyAllowEmpty?: boolean): Promise<string> {
   try {
     const { db, Config } = await loadAstroDb();
     const rows = await db.select().from(Config).where(eq(Config.key, key));

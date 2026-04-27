@@ -95,7 +95,7 @@ export const GET: APIRoute = async ({ locals }) => {
   if (email) {
     const result = await fetchZimaOSSessionsPayload(email);
     if (result.ok) {
-      const sessions = normalizeZimaOSSessions(result.data);
+      const sessions = normalizeZimaOSSessions(result.data) as Record<string, unknown>[];
       const rows = sessions.map(mapSessionToAgentRow);
       rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs);
       for (const r of rows.slice(0, 40)) {

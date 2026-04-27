@@ -346,8 +346,15 @@ export async function fetchZimaOSSessionsPayload(
   const health = await fetchZimaOSJson(_email, '/health');
   pushAttempt('/health', health);
 
-  if (best) {
-    return { ok: true, status: best.status, data: best.data, via: best.via, attempts };
+  const fallbackBest = best as BestPayload | null;
+  if (fallbackBest) {
+    return {
+      ok: true,
+      status: fallbackBest.status,
+      data: fallbackBest.data,
+      via: fallbackBest.via,
+      attempts,
+    };
   }
 
   return {
