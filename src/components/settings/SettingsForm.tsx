@@ -17,9 +17,8 @@ type Config = {
   githubToken: string;
   vercelToken: string;
   githubWebhookSecret: string;
-  zimaosToken: string;
   forgeApiToken: string;
-  zimaosGatewayUrl: string;
+  zimaosRuntimeUrl: string;
   ollamaUrl: string;
 };
 
@@ -51,9 +50,8 @@ export default function SettingsForm() {
     githubToken:       '',
     vercelToken:       '',
     githubWebhookSecret: '',
-    zimaosToken:     '',
     forgeApiToken: '',
-    zimaosGatewayUrl: '',
+    zimaosRuntimeUrl: '',
     ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({
@@ -112,10 +110,9 @@ export default function SettingsForm() {
           githubToken: s.githubToken || '',
           vercelToken: s.vercelToken || '',
           githubWebhookSecret: s.githubWebhookSecret || '',
-          zimaosToken: s.zimaosToken || '',
           forgeApiToken: s.forgeApiToken || '',
-          zimaosGatewayUrl:
-            String(s.zimaosGatewayUrl || '').trim() || prev.zimaosGatewayUrl,
+          zimaosRuntimeUrl:
+            String(s.zimaosRuntimeUrl || s.zimaosGatewayUrl || '').trim() || prev.zimaosRuntimeUrl,
           ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
@@ -151,10 +148,9 @@ export default function SettingsForm() {
       vercelToken: typeof s.vercelToken === 'string' ? s.vercelToken : prev.vercelToken,
       githubWebhookSecret:
         typeof s.githubWebhookSecret === 'string' ? s.githubWebhookSecret : prev.githubWebhookSecret,
-      zimaosToken: typeof s.zimaosToken === 'string' ? s.zimaosToken : prev.zimaosToken,
       forgeApiToken: typeof s.forgeApiToken === 'string' ? s.forgeApiToken : prev.forgeApiToken,
-      zimaosGatewayUrl:
-        String(s.zimaosGatewayUrl || '').trim() || prev.zimaosGatewayUrl,
+      zimaosRuntimeUrl:
+        String(s.zimaosRuntimeUrl || s.zimaosGatewayUrl || '').trim() || prev.zimaosRuntimeUrl,
       ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
     }));
   };

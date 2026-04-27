@@ -175,8 +175,7 @@ export async function getZimaOSToken(): Promise<string> {
   if (fromDb) return fromDb;
   const localCfg = await readZimaOSLocalConfigFile();
   if (localCfg?.gatewayToken) return localCfg.gatewayToken;
-  /* Aligné sur le défaut CasaOS/ZimaOS sur ZimaOS */
-  return 'casaos';
+  return '';
 }
 
 /**
@@ -495,9 +494,6 @@ export async function invokeZimaOSSessionsSend(params: {
   asyncDelivery?: boolean;
 }): Promise<InvokeSessionsSendResult> {
   const token = (await getZimaOSToken()).trim();
-  if (!token) {
-    return { ok: false, error: 'Token ZimaOS manquant (ZIMAOS_GATEWAY_TOKEN ou table Config).' };
-  }
   const bases = await getZimaOSGatewayCandidateBases();
   const message = params.message.slice(0, MAX_SESSIONS_SEND_MESSAGE);
 
@@ -528,7 +524,7 @@ export async function invokeZimaOSSessionsSend(params: {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          ...getGatewayAuthHeaders(token),
+          ...(token ? getGatewayAuthHeaders(token) : {}),
         },
         body: JSON.stringify({
           tool: 'sessions_send',
@@ -597,9 +593,6 @@ export async function invokeZimaOSAgentTask(params: {
   message: string;
 }): Promise<InvokeAgentTaskResult> {
   const token = (await getZimaOSToken()).trim();
-  if (!token) {
-    return { ok: false, error: 'Token ZimaOS manquant (ZIMAOS_GATEWAY_TOKEN ou table Config).' };
-  }
   const bases = await getZimaOSGatewayCandidateBases();
 
   const agentId = String(params.agentId || '').trim();
@@ -615,7 +608,7 @@ export async function invokeZimaOSAgentTask(params: {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          ...getGatewayAuthHeaders(token),
+          ...(token ? getGatewayAuthHeaders(token) : {}),
         },
         body: JSON.stringify({
           tool: 'agents_invoke',
@@ -673,9 +666,6 @@ export async function invokeZimaOSV1ChatFallback(params: {
   message: string;
 }): Promise<InvokeV1ChatFallbackResult> {
   const token = (await getZimaOSToken()).trim();
-  if (!token) {
-    return { ok: false, error: 'Token ZimaOS manquant (ZIMAOS_GATEWAY_TOKEN ou table Config).' };
-  }
   const bases = await getZimaOSGatewayCandidateBases();
   const input = String(params.message || '').slice(0, MAX_SESSIONS_SEND_MESSAGE);
   const agentId = String(params.agentId || '').trim();
@@ -693,7 +683,7 @@ export async function invokeZimaOSV1ChatFallback(params: {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          ...getGatewayAuthHeaders(token),
+          ...(token ? getGatewayAuthHeaders(token) : {}),
           ...(extraHeaders || {}),
         },
         body: JSON.stringify({

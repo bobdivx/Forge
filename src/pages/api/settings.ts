@@ -25,7 +25,6 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubToken',
   'vercelToken',
   'cloudflareToken',
-  'zimaosToken',
   'forgeApiToken',
 ];
 
@@ -37,8 +36,8 @@ export const POST: APIRoute = async ({ request }) => {
     const allowed: (keyof ForgeConfig)[] = [
       'forgePublicUrl',
       'zimaosContainerName',
+      'zimaosRuntimeUrl',
       'zimaosGatewayUrl',
-      'zimaosToken',
       'forgeApiToken',
       'ollamaUrl',
       'githubToken', 'vercelToken', 'githubWebhookSecret', 'cloudflareToken',
@@ -59,6 +58,10 @@ export const POST: APIRoute = async ({ request }) => {
         }
       }
       payload[key] = val;
+    }
+    // Garder compatibilité interne: runtime URL devient aussi gateway URL.
+    if (payload.zimaosRuntimeUrl && !payload.zimaosGatewayUrl) {
+      payload.zimaosGatewayUrl = payload.zimaosRuntimeUrl;
     }
 
     await setConfig(payload);

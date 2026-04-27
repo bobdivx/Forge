@@ -5,8 +5,7 @@ import { useState } from 'preact/hooks';
 type Config = {
   forgePublicUrl: string;
   zimaosContainerName: string;
-  zimaosGatewayUrl: string;
-  zimaosToken: string;
+  zimaosRuntimeUrl: string;
   ollamaUrl: string;
   forgeReposRoot: string;
   forgeReposRootAgent: string;
@@ -43,8 +42,6 @@ type NetworkMatrixPayload = {
     envValue?: string | null;
     dbValue?: string | null;
     candidates?: string[];
-    tokenConfigured?: boolean;
-    tokenSource?: string;
   };
   ollama?: {
     resolvedBaseUrl?: string | null;
@@ -173,8 +170,8 @@ export default function IntegrationTab({
       <section>
         <SectionTitle
           n="Étape 1"
-          title="ZimaOS — gateway & conteneur"
-          subtitle="Les URLs sont résolues par le serveur Forge, pas par votre navigateur. En production NAS/Docker, renseignez l’URL réellement joignable depuis le process Forge (interne conteneur ou port publié hôte selon votre architecture)."
+          title="ZimaOS — runtime & conteneur"
+          subtitle="Communication Docker-first: URL runtime + montages volumes. Les URLs sont résolues côté serveur Forge, pas dans le navigateur."
         />
         <div class="space-y-4 max-w-3xl">
           <div class="rounded-xl border border-gray-200 bg-gray-50/70 p-3">
@@ -287,29 +284,17 @@ export default function IntegrationTab({
               class={inputCls}
             />
           </FormField>
-          <FormField label="URL du gateway ZimaOS" hint="URL joignable depuis Forge. Production Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190. En interne ZimaOS: 18789.">
+          <FormField label="URL runtime ZimaOS" hint="URL joignable depuis Forge. Production Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190. En interne ZimaOS: 18789.">
             <input
               type="url"
               placeholder="http://host.docker.internal:24190"
-              value={settings.zimaosGatewayUrl}
+              value={settings.zimaosRuntimeUrl}
               onInput={(e) =>
-                setSettings({ ...settings, zimaosGatewayUrl: (e.target as HTMLInputElement).value })
+                setSettings({ ...settings, zimaosRuntimeUrl: (e.target as HTMLInputElement).value })
               }
               class={inputCls}
             />
           </FormField>
-          <FormField label="Token d’accès (gateway token)">
-            <input
-              type="password"
-              placeholder="Token zimaos.json / gateway"
-              value={settings.zimaosToken}
-              onInput={(e) =>
-                setSettings({ ...settings, zimaosToken: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
-
           <FormField
             label="URL API Ollama"
             hint="GET /api/tags (ex. http://host.docker.internal:11434). Utilisée par les sondes modèles / audit."

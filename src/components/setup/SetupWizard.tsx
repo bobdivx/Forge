@@ -4,7 +4,6 @@ import FormField from '../ui/FormField';
 type Config = {
   forgePublicUrl: string;
   zimaosRuntimeUrl: string;
-  zimaosToken: string;
   forgeApiToken: string;
   ollamaUrl: string;
   forgeReposRoot: string;
@@ -26,7 +25,6 @@ const STEPS = ['Utilisateur', 'Connexion ZimaOS', 'Montages', 'Clés API', 'Vali
 const empty: Config = {
   forgePublicUrl: '',
   zimaosRuntimeUrl: '',
-  zimaosToken: '',
   forgeApiToken: '',
   ollamaUrl: '',
   forgeReposRoot: '',
@@ -63,7 +61,6 @@ export default function SetupWizard() {
         setCfg({
           forgePublicUrl: String(c.forgePublicUrl || ''),
           zimaosRuntimeUrl: String(c.zimaosRuntimeUrl || c.zimaosGatewayUrl || '').trim(),
-          zimaosToken: String(c.zimaosToken || c.zimaosToken || ''),
           forgeApiToken: String(c.forgeApiToken || ''),
           ollamaUrl: String(c.ollamaUrl || ''),
           forgeReposRoot: String(c.forgeReposRoot || empty.forgeReposRoot),
@@ -303,16 +300,6 @@ export default function SetupWizard() {
                 onInput={(e) => merge({ zimaosRuntimeUrl: (e.target as HTMLInputElement).value })}
               />
             </FormField>
-            <FormField label="Jeton runtime ZimaOS" hint="Bearer optionnel pour protéger la passerelle runtime.">
-              <input
-                type="password"
-                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20 font-mono"
-                value={cfg.zimaosToken}
-                onInput={(e) => merge({ zimaosToken: (e.target as HTMLInputElement).value })}
-                placeholder="(optionnel)"
-                autoComplete="off"
-              />
-            </FormField>
             <FormField label="Jeton API Forge (agents -> Forge)">
               <div class="space-y-2">
                 <input
@@ -445,9 +432,6 @@ export default function SetupWizard() {
               </li>
               <li>
                 <span class="text-gray-400">Runtime ZimaOS</span> {cfg.zimaosRuntimeUrl}
-              </li>
-              <li>
-                <span class="text-gray-400">Jeton runtime</span> {cfg.zimaosToken ? '•••• renseigné' : '(vide)'}
               </li>
               <li>
                 <span class="text-gray-400">Applications</span> {cfg.forgeReposRoot}

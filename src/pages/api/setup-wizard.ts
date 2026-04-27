@@ -12,8 +12,6 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubWebhookSecret',
   'githubToken',
   'vercelToken',
-  'zimaosToken',
-  'zimaosToken',
   'forgeApiToken',
 ];
 
@@ -23,10 +21,8 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
     'forgePublicUrl',
     'zimaosContainerName',
     'zimaosRuntimeUrl',
-    'zimaosToken',
     'zimaosContainerName',
     'zimaosGatewayUrl',
-    'zimaosToken',
     'forgeApiToken',
     'ollamaUrl',
     'githubToken',
@@ -130,7 +126,6 @@ export const GET: APIRoute = async ({ locals, request }) => {
   const hydrated = {
     ...config,
     zimaosRuntimeUrl: (config as Record<string, string>).zimaosRuntimeUrl || config.zimaosGatewayUrl || zimaosDefault || `http://${requestHost}`,
-    zimaosToken: (config as Record<string, string>).zimaosToken || config.zimaosToken || '',
     forgeReposRoot: config.forgeReposRoot || inferred.forgeReposRoot || config.forgeReposRoot,
     dockerYamlDir: config.dockerYamlDir || inferred.dockerYamlDir || config.dockerYamlDir,
     dockerAppDataDir: config.dockerAppDataDir || inferred.dockerAppDataDir || config.dockerAppDataDir,
@@ -200,9 +195,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (payload.zimaosRuntimeUrl && !payload.zimaosGatewayUrl) {
       payload.zimaosGatewayUrl = payload.zimaosRuntimeUrl;
-    }
-    if (payload.zimaosToken && !payload.zimaosToken) {
-      payload.zimaosToken = payload.zimaosToken;
     }
     await setConfig(payload);
     await setConfig({ forgeSetupState: 'done' });
