@@ -54,6 +54,7 @@ const LOCAL_ONLY_PATHS = [
   '/api/config/secrets',
   '/api/docker-health',
   '/api/system-status',
+  '/api/dump-config',
   '/api/work-system',
   '/api/work-schedules',
 ];
