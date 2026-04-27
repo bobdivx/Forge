@@ -106,8 +106,8 @@ export const GET: APIRoute = async () => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message || 'Error fetching PM2 status' }), {
-      status: 500,
+    return new Response(JSON.stringify([]), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }

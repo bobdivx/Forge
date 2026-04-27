@@ -92,6 +92,19 @@ let _dispatchInProgress = false;
 let _lastSubagentCleanupAt = 0;
 /** Pour le mode planifié : évite une directive « début de session » à chaque minute dans la plage. */
 let _prevScheduledInWindow = false;
+let _initialTickHandle: ReturnType<typeof setTimeout> | null = null;
+
+function isViteModuleRunnerClosedError(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+  return /vite module runner has been closed/i.test(message);
+}
+
+function stopSchedulerAfterViteClose(source: string, error: unknown): boolean {
+  if (!isViteModuleRunnerClosedError(error)) return false;
+  console.warn(`[work-scheduler] ${source}: module runner Vite fermé, arrêt du scheduler.`);
+  stopScheduler();
+  return true;
+}
 
 // ── Helpers temps ────────────────────────────────────────────────────────────
 
@@ -157,6 +170,19 @@ function orderDirectiveTargets(ids: string[]): string[] {
     const rb = rank(b);
     if (ra !== rb) return ra - rb;
     return a.localeCompare(b);
+  });
+}
+
+function normalizeAgentTarget(id: string): string {
+  return String(id || '').trim().replace(/^openclaw\//i, '').toUpperCase();
+}
+
+function isAgentTargeted(agentId: string, targetIds: string[]): boolean {
+  if (!targetIds.length) return true;
+  const agent = normalizeAgentTarget(agentId);
+  return targetIds.some((targetId) => {
+    const target = normalizeAgentTarget(targetId);
+    return agent === target || agent.startsWith(`${target}__APP_`);
   });
 }
 
@@ -231,7 +257,6 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
     for (const issue of open) {
       if (issue.projectId != null && !activeIds.has(issue.projectId)) continue;
       const idStr = String(issue.id);
-      if (seenIssueIds.has(idStr)) continue;
 
       const parentAssignee = String(issue.assigneeAgentId || 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE';
       const scoped = await ensureProjectScopedSubagent({
@@ -239,11 +264,21 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
         projectId: issue.projectId,
       });
       const assignee = scoped.agentId || parentAssignee;
-      if (
-        agentIds.length &&
-        !agentIds.includes(parentAssignee) &&
-        !agentIds.includes(assignee)
-      ) continue;
+      if (!isAgentTargeted(parentAssignee, agentIds) && !isAgentTargeted(assignee, agentIds)) continue;
+
+      if (seenIssueIds.has(idStr)) {
+        if (String(issue.status).toLowerCase() === 'open' || !issue.assigneeAgentId) {
+          await db
+            .update(AgentAppIssue)
+            .set({
+              status: 'in_progress',
+              assigneeAgentId: String(issue.assigneeAgentId || assignee),
+              updatedAt: new Date(),
+            })
+            .where(eq(AgentAppIssue.id, issue.id));
+        }
+        continue;
+      }
 
       const taskTitle = `[AppIssue #${issue.id}] ${issue.title}`;
       const taskInputBase = [
@@ -288,6 +323,14 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
             title: String(issue.title || '').slice(0, 240),
           },
         });
+        await db
+          .update(AgentAppIssue)
+          .set({
+            status: 'in_progress',
+            assigneeAgentId: assignee,
+            updatedAt: new Date(),
+          })
+          .where(eq(AgentAppIssue.id, issue.id));
       }
       seenIssueIds.add(idStr);
     }
@@ -329,11 +372,7 @@ async function dispatchPendingForgeRequests(agentIds: string[]) {
         projectId: req.projectId,
       });
       const assignee = scoped.agentId || parentAssignee;
-      if (
-        agentIds.length &&
-        !agentIds.includes(parentAssignee) &&
-        !agentIds.includes(assignee)
-      ) continue;
+      if (!isAgentTargeted(parentAssignee, agentIds) && !isAgentTargeted(assignee, agentIds)) continue;
 
       if (hasOpenAgentTaskForRequest(req.id)) continue;
 
@@ -408,7 +447,7 @@ async function dispatchPendingTasks(agentIds: string[]) {
     const rows = await db.select().from(AgentTask).limit(50);
     const pending = rows.filter((r) => {
       if (!['pending', 'bug'].includes(r.status)) return false;
-      if (agentIds.length && !agentIds.includes(r.agentId)) return false;
+      if (!isAgentTargeted(r.agentId, agentIds)) return false;
       // Protection : on ne travaille que sur les projets activés (ou les tâches globales sans projet)
       if (r.projectId && !activeProjectIds.includes(r.projectId)) return false;
       return true;
@@ -763,6 +802,7 @@ async function tick() {
   try {
     await checkGithubActionsForProjects();
   } catch (e) {
+    if (stopSchedulerAfterViteClose('github monitoring', e)) return;
     console.error('[work-scheduler] github monitoring error:', e);
   }
 
@@ -772,6 +812,7 @@ async function tick() {
       const agentIds = await getEnabledAgentIds();
       await runDispatchOnly(agentIds);
     } catch (e) {
+      if (stopSchedulerAfterViteClose('tick running', e)) return;
       console.warn('[work-scheduler] tick (running) error:', e);
     }
     return;
@@ -807,6 +848,7 @@ async function tick() {
       }
     }
   } catch (e) {
+    if (stopSchedulerAfterViteClose('tick', e)) return;
     console.warn('[work-scheduler] tick error:', e);
   }
 }
@@ -825,16 +867,19 @@ export function startScheduler() {
     try {
       await tick();
     } catch (e: any) {
+      if (stopSchedulerAfterViteClose('critical tick', e)) return;
       console.error('[work-scheduler] CRITICAL TICK ERROR:', e.message);
     }
   }, 60_000);
 
   // Premier tick dans 5 s pour ne pas bloquer le démarrage
-  setTimeout(async () => {
+  _initialTickHandle = setTimeout(async () => {
+    _initialTickHandle = null;
     console.log('[work-scheduler] performing initial tick...');
     try {
       await tick();
     } catch (e: any) {
+      if (stopSchedulerAfterViteClose('initial tick', e)) return;
       console.error('[work-scheduler] initial tick failed:', e.message);
     }
   }, 5_000);
@@ -842,11 +887,19 @@ export function startScheduler() {
 
 /** Arrête l'interval (ex. en test). */
 export function stopScheduler() {
+  if (_initialTickHandle) {
+    clearTimeout(_initialTickHandle);
+    _initialTickHandle = null;
+  }
   if (_intervalHandle) {
     clearInterval(_intervalHandle);
     _intervalHandle = null;
   }
 }
+
+(import.meta as ImportMeta & { hot?: { dispose: (callback: () => void) => void } }).hot?.dispose(() => {
+  stopScheduler();
+});
 
 /** Démarrage manuel — le système passe en `running` seulement après contrôle budget (voir `runWorkCycle`). */
 export async function manualStart(agentIds: string[] = []): Promise<WorkCycleResult> {

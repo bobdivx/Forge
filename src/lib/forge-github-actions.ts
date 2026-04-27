@@ -6,6 +6,11 @@ import fs from 'fs';
 import path from 'path';
 import { eq } from 'drizzle-orm';
 
+function isViteModuleRunnerClosedError(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+  return /vite module runner has been closed/i.test(message);
+}
+
 function parseGithubRepo(remoteUrl: string | null): { owner: string; repo: string } | null {
   if (!remoteUrl) return null;
   // Match https://github.com/owner/repo.git or git@github.com:owner/repo.git
@@ -145,6 +150,7 @@ export async function checkGithubActionsForProjects() {
 
     }
   } catch (error) {
+    if (isViteModuleRunnerClosedError(error)) throw error;
     console.error('[github-actions] Erreur lors de la vérification:', error);
   }
 }

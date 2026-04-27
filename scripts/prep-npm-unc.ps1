@@ -1,5 +1,5 @@
-# Forge sur chemin UNC : CMD et certains outils npm refusent le cwd UNC.
-# Ce script se place sur une lettre de lecteur qui pointe VERS CE DÉPÔT (package.json forge-dashboard),
+# Forge sur chemin UNC: CMD et certains outils npm refusent le cwd UNC.
+# Ce script se place sur une lettre de lecteur qui pointe VERS CE DEPOT (package.json forge-dashboard),
 # puis npm install (et optionnellement dev).
 param(
     [switch]$RunDev
@@ -29,7 +29,7 @@ function Use-FirstFreeDriveLetter {
     $letters = @("Z", "Y", "X", "W", "V", "U", "T", "S", "R")
     foreach ($L in $letters) {
         if (Set-LocationToForgeOnLetter -Letter $L) {
-            Write-Host "Dépôt Forge trouvé sur ${L}:\ (lecteur déjà mappé)."
+        Write-Host "Depot Forge trouve sur ${L}:\ (lecteur deja mappe)."
             return
         }
         $ps = Get-PSDrive -Name $L -ErrorAction SilentlyContinue
@@ -42,27 +42,27 @@ function Use-FirstFreeDriveLetter {
             Remove-PSDrive -Name $L -Force -ErrorAction SilentlyContinue
             continue
         }
-        Write-Host "UNC mappé sur ${L}:\"
+        Write-Host "UNC mappe sur ${L}:\"
         return
     }
     Write-Host ""
-    Write-Host "Z: est souvent déjà pris par un autre partage : npm voit Z:\ sans package.json." -ForegroundColor Yellow
-    Write-Host "Vérifie les connexions : net use" -ForegroundColor Yellow
+    Write-Host "Z: est souvent deja pris par un autre partage: npm voit Z:\ sans package.json." -ForegroundColor Yellow
+    Write-Host "Verifie les connexions: net use" -ForegroundColor Yellow
     Write-Host "Puis soit : net use Z: /delete   puis   net use Z: `"$UncPath`"" -ForegroundColor Yellow
     Write-Host "Soit : net use Y: `"$UncPath`"   puis   cd Y:\" -ForegroundColor Yellow
     Write-Host ""
-    throw "Impossible de mapper le dépôt sur une lettre libre (Z–R). Libère un lecteur ou corrige le mapping (voir ci-dessus)."
+    throw "Impossible de mapper le depot sur une lettre libre (Z-R). Libere un lecteur ou corrige le mapping (voir ci-dessus)."
 }
 
 if ($repoRoot -match '^\\\\') {
-    Write-Host "Dépôt en UNC: $repoRoot"
+    Write-Host "Depot en UNC: $repoRoot"
     Use-FirstFreeDriveLetter -UncPath $repoRoot
 } else {
     Set-Location -LiteralPath $repoRoot
 }
 
 if (-not (Test-ForgeRepoRoot -Path (Get-Location).Path)) {
-    throw "Ce dossier n'est pas la racine Forge (package.json / name forge-dashboard introuvable): $(Get-Location)"
+    throw "Ce dossier n est pas la racine Forge (package.json / name forge-dashboard introuvable): $(Get-Location)"
 }
 
 Write-Host "Répertoire: $(Get-Location)"

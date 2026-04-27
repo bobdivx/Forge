@@ -4,7 +4,7 @@ Exécuté par : `CHEF_TECHNIQUE` (Bob) ou `MAINTENANCE_REPO`
 Fréquence surveillance : toutes les 30 minutes
 Fréquence sauvegarde : 1 fois par jour à 02:00
 
-**URL Forge :** au début des blocs bash ci‑dessous, ajoute `source /chemin/Forge/scripts/forge_env.sh` (montage du repo) pour que `FORGE_API_URL` et `FORGE_HOOK_URL` suivent `FORGE_HOOK_BASE_URL` (Docker → `http://forge-host:4321`).
+**URL Forge :** au début des blocs bash ci‑dessous, ajoute `source /chemin/Forge/scripts/forge_env.sh` (montage du repo) pour que `FORGE_API_URL` et `FORGE_HOOK_URL` suivent `FORGE_HOOK_BASE_URL` (production Docker Forge → `http://forge-host:4331`, dev hôte → `http://forge-host:4321`).
 
 ---
 

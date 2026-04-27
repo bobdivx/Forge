@@ -7,13 +7,14 @@
 ## Endpoint principal : forge-hook
 
 ```
-URL     : http://forge-host:4321/api/forge-hook
+URL     : http://forge-host:4331/api/forge-hook
           (ou http://127.0.0.1:4321/api/forge-hook si tu tournes hors Docker)
 Méthode : POST
 Auth    : locale auto (IP locale) OU token Bearer
 ```
 
 > `forge-host` résout vers le host Docker via `extra_hosts` dans OpenClaw.yaml.
+> En production `forge.yml`, Forge publie `4331 -> 4321`; utilisez donc `forge-host:4331`.
 > Si tu utilises la CLI openclaw directement sur le host, utilise `127.0.0.1`.
 > Hors réseau local, ajoute `Authorization: Bearer <FORGE_API_TOKEN>` (jeton généré dans Paramètres → Jetons API).
 
@@ -29,7 +30,7 @@ Les agents dans **Docker OpenClaw** ne doivent **pas** utiliser `127.0.0.1` pour
 Exemple minimal :
 
 ```bash
-export FORGE_HOOK_BASE_URL=http://forge-host:4321   # ou 127.0.0.1 depuis l’hôte uniquement
+export FORGE_HOOK_BASE_URL=http://forge-host:4331   # ou 127.0.0.1:4321 depuis l’hôte uniquement
 export FORGE_API_TOKEN=forge_xxx                    # requis si Forge n’est pas vu comme local
 source /chemin/vers/Forge/scripts/forge_env.sh
 ./scripts/forge-hook.sh DEV_FRONTEND completion "Titre" "Détail du travail" '{"project":"MonRepo"}'

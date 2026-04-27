@@ -4,6 +4,32 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+function dockerCliRowToContainer(row: Record<string, unknown>) {
+  const names = String(row.Names || row.Name || '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => (name.startsWith('/') ? name : `/${name}`));
+
+  return {
+    Id: String(row.ID || row.Id || ''),
+    Names: names,
+    Image: String(row.Image || ''),
+    State: String(row.State || '').toLowerCase(),
+    Status: String(row.Status || ''),
+    Ports: [],
+  };
+}
+
+async function readContainersFromDockerCli() {
+  const { stdout } = await execAsync('docker ps -a --format "{{json .}}"');
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => dockerCliRowToContainer(JSON.parse(line) as Record<string, unknown>));
+}
+
 export const GET: APIRoute = async () => {
   try {
     const { stdout } = await execAsync('curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json?all=1');
@@ -13,10 +39,18 @@ export const GET: APIRoute = async () => {
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message || String(error) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    try {
+      const containers = await readContainersFromDockerCli();
+      return new Response(JSON.stringify(containers), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 };
 

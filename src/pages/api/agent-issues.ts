@@ -5,6 +5,7 @@ import {
   normalizeErrorType,
   APP_ISSUE_STATUSES,
 } from '../../lib/forge-agent-work';
+import { triggerDispatchNow } from '../../lib/forge-work-scheduler';
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -70,7 +71,8 @@ export const POST: APIRoute = async ({ request }) => {
 
   const errorType = normalizeErrorType(String(body.errorType ?? 'other'));
   const detail = body.detail != null ? String(body.detail) : null;
-  const assignee = body.assigneeAgentId != null ? String(body.assigneeAgentId).trim() : null;
+  const assignee =
+    String(body.assigneeAgentId ?? 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE';
   const projectId =
     body.projectId != null && body.projectId !== '' ? Number(body.projectId) : null;
 
@@ -87,7 +89,7 @@ export const POST: APIRoute = async ({ request }) => {
         detail: detail || undefined,
         status: 'open',
         reportedByAgentId: reportedBy,
-        assigneeAgentId: assignee || undefined,
+        assigneeAgentId: assignee,
         createdAt: now,
         updatedAt: now,
       })
@@ -96,9 +98,13 @@ export const POST: APIRoute = async ({ request }) => {
     // Notification au chef d'orchestre (ou à l'assignee si précisé) pour prise en charge
     await db.insert(AgentMessage).values({
       fromAgent: reportedBy,
-      toAgent: assignee || 'CHEF_TECHNIQUE',
+      toAgent: assignee,
       content: `[AppIssue #${row?.id ?? '?'}] ${errorType} sur "${urlPath}" — "${title}"${detail ? ` | ${detail.slice(0, 200)}` : ''}`,
       timestamp: now,
+    });
+
+    await triggerDispatchNow([assignee]).catch((e) => {
+      console.warn('[agent-issues] dispatch immédiat impossible:', e);
     });
 
     return json({ ok: true, issue: row }, 201);

@@ -275,11 +275,11 @@ export default function IntegrationTab({
           </FormField>
           <FormField
             label="URL Forge joignable par les agents (hooks)"
-            hint="Vue depuis OpenClaw/agents. Exemple Docker interne: http://forge-host:4321. Exemple hôte NAS publié: http://<ip-nas>:4331."
+            hint="Vue depuis OpenClaw/agents. Production Docker: http://forge-host:4331. Dev hôte: http://forge-host:4321. Exemple LAN: http://<ip-nas>:4331."
           >
             <input
               type="url"
-              placeholder="http://forge-host:4321 ou http://192.168.x.x:4331"
+              placeholder="http://forge-host:4331 ou http://192.168.x.x:4331"
               value={settings.forgePublicUrl}
               onInput={(e) =>
                 setSettings({ ...settings, forgePublicUrl: (e.target as HTMLInputElement).value })
@@ -287,10 +287,10 @@ export default function IntegrationTab({
               class={inputCls}
             />
           </FormField>
-          <FormField label="URL du gateway OpenClaw" hint="URL joignable depuis Forge. En general: port publié hôte 24190. En interne OpenClaw: 18789.">
+          <FormField label="URL du gateway OpenClaw" hint="URL joignable depuis Forge. Production Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190. En interne OpenClaw: 18789.">
             <input
               type="url"
-              placeholder="http://127.0.0.1:24190 (ou :18789 en interne)"
+              placeholder="http://host.docker.internal:24190"
               value={settings.openclawGatewayUrl}
               onInput={(e) =>
                 setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })

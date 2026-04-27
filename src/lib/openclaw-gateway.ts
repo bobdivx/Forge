@@ -9,6 +9,10 @@ const GATEWAY_HTTP_TIMEOUT_MS = 1_500;
 const OPENCLAW_GATEWAY_INTERNAL_PORT = 18789;
 const OPENCLAW_GATEWAY_PUBLISHED_PORT = 24190;
 
+function isRunningInDockerContainer(): boolean {
+  return fs.existsSync('/.dockerenv');
+}
+
 export type OpenClawLocalDiskConfig = {
   path: string;
   gatewayPort?: number;
@@ -56,6 +60,7 @@ export async function getOpenClawGatewayBaseUrl(): Promise<string> {
   const { getConfig } = await import('./config-db');
   const fromDb = (await getConfig('openclawGatewayUrl')).trim();
   if (fromDb) return fromDb.replace(/\/$/, '');
+  if (isRunningInDockerContainer()) return `http://host.docker.internal:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`;
   const localCfg = await readOpenClawLocalConfigFile();
   if (localCfg?.gatewayPort) return `http://127.0.0.1:${localCfg.gatewayPort}`;
   /*
@@ -115,6 +120,11 @@ async function discoverGatewayBaseUrlCandidates(): Promise<string[]> {
     } catch {
       /* ignore */
     }
+  }
+
+  if (isRunningInDockerContainer()) {
+    push(`http://host.docker.internal:${OPENCLAW_GATEWAY_PUBLISHED_PORT}`);
+    push(`http://host.docker.internal:${OPENCLAW_GATEWAY_INTERNAL_PORT}`);
   }
 
   const localCfg = await readOpenClawLocalConfigFile();

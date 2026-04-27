@@ -42,6 +42,7 @@ const _readPositions: Map<string, number> = new Map();
 // ── État interne ─────────────────────────────────────────────────────────────
 
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
+let _initialScanHandle: ReturnType<typeof setTimeout> | null = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -199,7 +200,8 @@ async function scanAllProjects() {
 export function startBugDetector() {
   if (_intervalHandle) return;
   // Premier scan différé de 20 s (laisser les serveurs démarrer)
-  setTimeout(() => {
+  _initialScanHandle = setTimeout(() => {
+    _initialScanHandle = null;
     scanAllProjects().catch(() => undefined);
   }, 20_000);
   _intervalHandle = setInterval(() => {
@@ -209,11 +211,19 @@ export function startBugDetector() {
 
 /** Arrête le scanner (ex. en test). */
 export function stopBugDetector() {
+  if (_initialScanHandle) {
+    clearTimeout(_initialScanHandle);
+    _initialScanHandle = null;
+  }
   if (_intervalHandle) {
     clearInterval(_intervalHandle);
     _intervalHandle = null;
   }
 }
+
+(import.meta as ImportMeta & { hot?: { dispose: (callback: () => void) => void } }).hot?.dispose(() => {
+  stopBugDetector();
+});
 
 /** Force un scan immédiat (utilisable depuis le REPL ou les tests). */
 export async function forceScan(): Promise<void> {

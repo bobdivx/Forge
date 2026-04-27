@@ -220,7 +220,7 @@ export default function SetupWizard() {
           <>
             <FormField
               label="URL Forge joignable par les agents"
-              hint="Ex. http://forge-host:4321. Si vide, Forge l'infère automatiquement."
+              hint="Ex. production Docker: http://forge-host:4331. Dev hôte: http://forge-host:4321. Si vide, Forge l'infère automatiquement."
             >
               <input
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
@@ -230,7 +230,7 @@ export default function SetupWizard() {
             </FormField>
             <FormField
               label="URL du gateway OpenClaw"
-              hint="Ex. http://127.0.0.1:24190 ou l’URL du conteneur sur votre NAS."
+              hint="Ex. Forge Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190."
             >
               <input
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"

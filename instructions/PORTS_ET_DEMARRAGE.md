@@ -80,9 +80,11 @@ Ordre effectif:
 1. Forge interne reste sur `4321`
 2. Exposition hote (UI): ex. `4331 -> 4321`
 3. Pour les hooks agents vers Forge:
-   - `forgePublicUrl` doit etre joignable depuis OpenClaw (ex. `http://forge-host:4321` via `extra_hosts`)
+   - `forgePublicUrl` doit etre joignable depuis OpenClaw.
+   - Si Forge tourne sur l'hote en dev: `http://forge-host:4321` via `extra_hosts`.
+   - Si Forge tourne en conteneur avec `forge.yml`: `http://forge-host:4331` via `extra_hosts` (`4331 -> 4321`).
 4. Pour Forge vers OpenClaw:
-   - `openclawGatewayUrl` doit etre joignable depuis conteneur Forge (souvent IP LAN NAS + port publie, ex. `http://<ip-nas>:24190`)
+   - `openclawGatewayUrl` doit etre joignable depuis conteneur Forge (avec `forge.yml`: `http://host.docker.internal:24190`, sinon IP LAN NAS + port publie, ex. `http://<ip-nas>:24190`)
 
 ## C. OpenClaw hors machine Forge
 

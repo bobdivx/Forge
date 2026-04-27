@@ -10,7 +10,7 @@ Mission : explorer vos projets, analyser les tendances techniques et soumettre d
 2. **Identification** : Trouve des opportunités (ex: passer de JS à TS, ajouter un logger, optimiser une route API).
 3. **Action** : Soumet une proposition structurée via le hook Forge :
    ```bash
-   export FORGE_HOOK_BASE_URL=http://forge-host:4321   # omets si tu es sur l'hôte à côté de Forge
+   export FORGE_HOOK_BASE_URL=http://forge-host:4331   # Forge conteneurisé ; omets si tu es sur l'hôte à côté de Forge
    # export FORGE_API_TOKEN=forge_xxx                   # requis si Forge n'est pas vu comme local
    source /mnt/GitHub/Forge/scripts/forge_env.sh
    ./scripts/forge-hook.sh VEILLE_TECH completion \

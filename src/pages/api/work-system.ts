@@ -4,11 +4,13 @@ import {
   manualStart,
   manualStop,
   enableScheduledMode,
+  startScheduler,
 } from '../../lib/forge-work-scheduler';
 
 /** GET — état courant du système de travail. */
 export const GET: APIRoute = async () => {
   try {
+    startScheduler();
     const status = await getWorkSystemStatus();
     return new Response(JSON.stringify(status), {
       status: 200,
@@ -44,6 +46,7 @@ export const POST: APIRoute = async ({ request }) => {
   const agentIds = Array.isArray(body.agentIds) ? body.agentIds : [];
 
   try {
+    startScheduler();
     if (action === 'start') {
       const workCycle = await manualStart(agentIds);
       const status = await getWorkSystemStatus();

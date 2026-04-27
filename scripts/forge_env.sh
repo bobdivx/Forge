@@ -2,7 +2,7 @@
 # forge_env.sh — Base URL Forge pour hooks et API agents (sources pour shell / OpenClaw).
 #
 # Définissez avant d'inclure ce fichier (optionnel) :
-#   export FORGE_HOOK_BASE_URL=http://forge-host:4321
+#   export FORGE_HOOK_BASE_URL=http://forge-host:4331  # Forge en conteneur NAS (`4331 -> 4321`)
 #   export FORGE_API_TOKEN=forge_xxx   # ou FORGE_AGENT_TOKEN
 #
 # Si vide : lecture de **forgePublicUrl** renseigné dans Paramètres → Connexion OpenClaw
@@ -12,7 +12,7 @@
 # Détection automatique ensuite :
 #   • FORGE_HOOK_BASE_URL (priorité — même convention que Forge audit-launch et .env serveur)
 #   • PUBLIC_FORGE_URL puis PUBLIC_SITE_URL (secours Astro)
-#   • Si la commande tourne dans un conteneur avec extra_hosts forge-host → http://forge-host:4321
+#   • Si la commande tourne dans un conteneur avec extra_hosts forge-host → auto-probe 4321/4331
 #   • Sinon → http://127.0.0.1:4321 (Forge sur la même machine que le shell)
 
 
@@ -58,7 +58,17 @@ elif [ -n "${PUBLIC_FORGE_URL:-}" ]; then
 elif [ -n "${PUBLIC_SITE_URL:-}" ]; then
   export FORGE_BASE_URL="${PUBLIC_SITE_URL%/}"
 elif [ -f /.dockerenv ] && getent hosts forge-host >/dev/null 2>&1; then
-  export FORGE_BASE_URL="http://forge-host:4321"
+  _FORGE_HOST_PORT="${FORGE_HOST_PORT:-}"
+  if [ -n "$_FORGE_HOST_PORT" ]; then
+    export FORGE_BASE_URL="http://forge-host:${_FORGE_HOST_PORT}"
+  elif command -v curl >/dev/null 2>&1 && curl -sf --max-time 1 "http://forge-host:4321/login" >/dev/null 2>&1; then
+    export FORGE_BASE_URL="http://forge-host:4321"
+  elif command -v curl >/dev/null 2>&1 && curl -sf --max-time 1 "http://forge-host:4331/login" >/dev/null 2>&1; then
+    export FORGE_BASE_URL="http://forge-host:4331"
+  else
+    # Forge en conteneur NAS publie typiquement 4331 -> 4321 ; gardez FORGE_HOST_PORT pour surcharger.
+    export FORGE_BASE_URL="http://forge-host:4331"
+  fi
 elif [ -f /.dockerenv ]; then
   # Dans un conteneur CasaOS typique (OpenClaw), l'hôte (où tourne Forge Prod sur le port 4331) est 172.17.0.1
   export FORGE_BASE_URL="http://172.17.0.1:4331"

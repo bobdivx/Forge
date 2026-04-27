@@ -25,6 +25,7 @@ export default defineConfig({
           path.join(__dirname, '.env.local'),
           path.join(__dirname, '.env.development'),
           path.join(__dirname, '.env.production'),
+          path.join(__dirname, 'node_modules', '@astrojs', 'tailwind', 'base.css'),
         ],
       },
     },
