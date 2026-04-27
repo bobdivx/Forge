@@ -3,6 +3,7 @@ import TabBar from '../ui/TabBar';
 import AccountTab from './AccountTab';
 import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
 import IntegrationTab from './IntegrationTab';
+import ZimaOSTab from './ZimaOSTab';
 import AgentModelsTab from './AgentModelsTab';
 import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
@@ -19,6 +20,12 @@ type Config = {
   githubWebhookSecret: string;
   forgeApiToken: string;
   zimaosRuntimeUrl: string;
+  zimaosAccessMode: string;
+  zimaosHost: string;
+  zimaosSshPort: string;
+  zimaosSshUser: string;
+  zimaosSshAuth: string;
+  zimaosSshKeyPath: string;
   ollamaUrl: string;
 };
 
@@ -31,6 +38,7 @@ type AuthState = {
 
 const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
+  { id: 'zimaos', label: 'ZIMAOS' },
   { id: 'integration', label: 'Intégration' },
   { id: 'api', label: 'Jetons API' },
   { id: 'models', label: 'Modèles agents' },
@@ -52,6 +60,12 @@ export default function SettingsForm() {
     githubWebhookSecret: '',
     forgeApiToken: '',
     zimaosRuntimeUrl: '',
+    zimaosAccessMode: 'local_docker',
+    zimaosHost: '',
+    zimaosSshPort: '22',
+    zimaosSshUser: '',
+    zimaosSshAuth: 'key',
+    zimaosSshKeyPath: '',
     ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({
@@ -113,6 +127,13 @@ export default function SettingsForm() {
           forgeApiToken: s.forgeApiToken || '',
           zimaosRuntimeUrl:
             String(s.zimaosRuntimeUrl || s.zimaosGatewayUrl || '').trim() || prev.zimaosRuntimeUrl,
+          zimaosAccessMode: typeof s.zimaosAccessMode === 'string' ? s.zimaosAccessMode : prev.zimaosAccessMode,
+          zimaosHost: typeof s.zimaosHost === 'string' ? s.zimaosHost : prev.zimaosHost,
+          zimaosSshPort: typeof s.zimaosSshPort === 'string' ? s.zimaosSshPort : prev.zimaosSshPort,
+          zimaosSshUser: typeof s.zimaosSshUser === 'string' ? s.zimaosSshUser : prev.zimaosSshUser,
+          zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : prev.zimaosSshAuth,
+          zimaosSshKeyPath:
+            typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : prev.zimaosSshKeyPath,
           ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
@@ -151,6 +172,13 @@ export default function SettingsForm() {
       forgeApiToken: typeof s.forgeApiToken === 'string' ? s.forgeApiToken : prev.forgeApiToken,
       zimaosRuntimeUrl:
         String(s.zimaosRuntimeUrl || s.zimaosGatewayUrl || '').trim() || prev.zimaosRuntimeUrl,
+      zimaosAccessMode: typeof s.zimaosAccessMode === 'string' ? s.zimaosAccessMode : prev.zimaosAccessMode,
+      zimaosHost: typeof s.zimaosHost === 'string' ? s.zimaosHost : prev.zimaosHost,
+      zimaosSshPort: typeof s.zimaosSshPort === 'string' ? s.zimaosSshPort : prev.zimaosSshPort,
+      zimaosSshUser: typeof s.zimaosSshUser === 'string' ? s.zimaosSshUser : prev.zimaosSshUser,
+      zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : prev.zimaosSshAuth,
+      zimaosSshKeyPath:
+        typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : prev.zimaosSshKeyPath,
       ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
     }));
   };
@@ -302,6 +330,15 @@ export default function SettingsForm() {
             message={message}
             reposHealth={reposHealth}
             onRefreshHealth={refreshReposHealth}
+          />
+        )}
+        {activeTab === 'zimaos' && (
+          <ZimaOSTab
+            settings={settings}
+            setSettings={(c) => setSettings(c as unknown as Config)}
+            onSave={save}
+            saving={saving}
+            message={message}
           />
         )}
         {activeTab === 'api' && (

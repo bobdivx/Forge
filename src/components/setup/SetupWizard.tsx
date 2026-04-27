@@ -4,6 +4,12 @@ import FormField from '../ui/FormField';
 type Config = {
   forgePublicUrl: string;
   zimaosRuntimeUrl: string;
+  zimaosAccessMode: string;
+  zimaosHost: string;
+  zimaosSshPort: string;
+  zimaosSshUser: string;
+  zimaosSshAuth: string;
+  zimaosSshKeyPath: string;
   forgeApiToken: string;
   ollamaUrl: string;
   forgeReposRoot: string;
@@ -25,6 +31,12 @@ const STEPS = ['Utilisateur', 'Connexion ZimaOS', 'Montages', 'Clés API', 'Vali
 const empty: Config = {
   forgePublicUrl: '',
   zimaosRuntimeUrl: '',
+  zimaosAccessMode: 'local_docker',
+  zimaosHost: '',
+  zimaosSshPort: '22',
+  zimaosSshUser: '',
+  zimaosSshAuth: 'key',
+  zimaosSshKeyPath: '',
   forgeApiToken: '',
   ollamaUrl: '',
   forgeReposRoot: '',
@@ -61,6 +73,12 @@ export default function SetupWizard() {
         setCfg({
           forgePublicUrl: String(c.forgePublicUrl || ''),
           zimaosRuntimeUrl: String(c.zimaosRuntimeUrl || c.zimaosGatewayUrl || '').trim(),
+          zimaosAccessMode: String(c.zimaosAccessMode || 'local_docker'),
+          zimaosHost: String(c.zimaosHost || ''),
+          zimaosSshPort: String(c.zimaosSshPort || '22'),
+          zimaosSshUser: String(c.zimaosSshUser || ''),
+          zimaosSshAuth: String(c.zimaosSshAuth || 'key'),
+          zimaosSshKeyPath: String(c.zimaosSshKeyPath || ''),
           forgeApiToken: String(c.forgeApiToken || ''),
           ollamaUrl: String(c.ollamaUrl || ''),
           forgeReposRoot: String(c.forgeReposRoot || empty.forgeReposRoot),
@@ -300,6 +318,54 @@ export default function SetupWizard() {
                 onInput={(e) => merge({ zimaosRuntimeUrl: (e.target as HTMLInputElement).value })}
               />
             </FormField>
+            <FormField label="Mode d’accès ZimaOS">
+              <select
+                class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                value={cfg.zimaosAccessMode}
+                onChange={(e) => merge({ zimaosAccessMode: (e.target as HTMLSelectElement).value })}
+              >
+                <option value="local_docker">Même machine (Docker local)</option>
+                <option value="remote_ssh">Machine distante (SSH)</option>
+              </select>
+            </FormField>
+            {cfg.zimaosAccessMode === 'remote_ssh' && (
+              <>
+                <FormField label="Hôte SSH ZimaOS (IP/FQDN)">
+                  <input
+                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                    value={cfg.zimaosHost}
+                    onInput={(e) => merge({ zimaosHost: (e.target as HTMLInputElement).value })}
+                    placeholder="192.168.1.50"
+                  />
+                </FormField>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormField label="Utilisateur SSH">
+                    <input
+                      class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                      value={cfg.zimaosSshUser}
+                      onInput={(e) => merge({ zimaosSshUser: (e.target as HTMLInputElement).value })}
+                      placeholder="root"
+                    />
+                  </FormField>
+                  <FormField label="Port SSH">
+                    <input
+                      class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                      value={cfg.zimaosSshPort}
+                      onInput={(e) => merge({ zimaosSshPort: (e.target as HTMLInputElement).value })}
+                      placeholder="22"
+                    />
+                  </FormField>
+                </div>
+                <FormField label="Chemin clé SSH (si auth par clé)">
+                  <input
+                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20 font-mono"
+                    value={cfg.zimaosSshKeyPath}
+                    onInput={(e) => merge({ zimaosSshKeyPath: (e.target as HTMLInputElement).value })}
+                    placeholder="/run/secrets/zimadev_ssh_key"
+                  />
+                </FormField>
+              </>
+            )}
             <FormField label="Jeton API Forge (agents -> Forge)">
               <div class="space-y-2">
                 <input
@@ -432,6 +498,12 @@ export default function SetupWizard() {
               </li>
               <li>
                 <span class="text-gray-400">Runtime ZimaOS</span> {cfg.zimaosRuntimeUrl}
+              </li>
+              <li>
+                <span class="text-gray-400">Accès ZimaOS</span>{' '}
+                {cfg.zimaosAccessMode === 'remote_ssh'
+                  ? `SSH ${cfg.zimaosSshUser || '(user?)'}@${cfg.zimaosHost || '(host?)'}:${cfg.zimaosSshPort || '22'}`
+                  : 'Docker local'}
               </li>
               <li>
                 <span class="text-gray-400">Applications</span> {cfg.forgeReposRoot}

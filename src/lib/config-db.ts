@@ -19,6 +19,18 @@ export type ForgeConfig = {
   zimaosToken: string;
   /** Alias métier ZimaOS du runtime gateway (remplace zimaosGatewayUrl côté UI). */
   zimaosRuntimeUrl: string;
+  /** local_docker (même hôte Docker) | remote_ssh (machine distante). */
+  zimaosAccessMode: string;
+  /** Hôte/NAS ZimaOS distant si mode remote_ssh. */
+  zimaosHost: string;
+  /** Port SSH ZimaOS distant. */
+  zimaosSshPort: string;
+  /** Utilisateur SSH ZimaOS distant. */
+  zimaosSshUser: string;
+  /** Auth SSH: key | password (mot de passe non stocké ici). */
+  zimaosSshAuth: string;
+  /** Chemin clé privée lisible par le conteneur ZimaDev. */
+  zimaosSshKeyPath: string;
   /** Jeton machine-to-machine pour les appels agents -> API Forge. */
   forgeApiToken: string;
   /** URL de l’API Ollama (GET /api/tags), ex. http://host.docker.internal:11434 — même rôle que OLLAMA_HOST. */
@@ -57,6 +69,12 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   zimaosGatewayUrl: '',
   zimaosToken: '',
   zimaosRuntimeUrl: '',
+  zimaosAccessMode: 'local_docker',
+  zimaosHost: '',
+  zimaosSshPort: '22',
+  zimaosSshUser: '',
+  zimaosSshAuth: 'key',
+  zimaosSshKeyPath: '',
   forgeApiToken: '',
   ollamaUrl: '',
   githubToken: '',

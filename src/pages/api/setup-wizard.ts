@@ -21,6 +21,12 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
     'forgePublicUrl',
     'zimaosContainerName',
     'zimaosRuntimeUrl',
+    'zimaosAccessMode',
+    'zimaosHost',
+    'zimaosSshPort',
+    'zimaosSshUser',
+    'zimaosSshAuth',
+    'zimaosSshKeyPath',
     'zimaosContainerName',
     'zimaosGatewayUrl',
     'forgeApiToken',
@@ -44,6 +50,7 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
 
 async function validateSetup(data: Record<string, unknown>) {
   const checks: Record<string, { ok: boolean; detail: string }> = {};
+  const accessMode = String(data.zimaosAccessMode ?? 'local_docker').trim() || 'local_docker';
   const reposRoot = String(data.forgeReposRoot ?? '').trim();
   const yamlDir = String(data.dockerYamlDir ?? '').trim();
   const appDataDir = String(data.dockerAppDataDir ?? '').trim();
@@ -61,21 +68,41 @@ async function validateSetup(data: Record<string, unknown>) {
     detail: reposRoot && yamlDir && appDataDir ? 'Chemins de montage renseignés.' : 'Chemins de montage incomplets.',
   };
 
-  try {
-    const probe = await probeZimaOSContainerPath({ pathToTest: reposRoot || '/' });
+  if (accessMode === 'remote_ssh') {
+    const host = String(data.zimaosHost ?? '').trim();
+    const sshUser = String(data.zimaosSshUser ?? '').trim();
+    const sshPort = String(data.zimaosSshPort ?? '').trim() || '22';
+    checks.zimaosAccessMode = { ok: true, detail: 'Mode distant SSH actif.' };
+    checks.zimaosSsh = {
+      ok: Boolean(host && sshUser),
+      detail: host && sshUser ? `SSH prêt vers ${sshUser}@${host}:${sshPort}` : 'Renseigner hôte et utilisateur SSH.',
+    };
     checks.dockerZimaos = {
-      ok: Boolean(probe.attempted && !probe.dockerError),
-      detail: probe.dockerError || `Docker accessible, conteneur: ${probe.containerName || 'auto'}`,
+      ok: true,
+      detail: 'Vérification Docker locale ignorée (mode distant SSH).',
     };
     checks.mountVisibility = {
-      ok: probe.pathExistsInContainer || probe.likelyMountMatch,
-      detail:
-        probe.pathExistsInContainer || probe.likelyMountMatch
-          ? 'Le dossier apps semble visible depuis le conteneur.'
-          : 'Le dossier apps ne semble pas monté dans le conteneur.',
+      ok: true,
+      detail: 'Montages à vérifier sur l’hôte distant via SSH.',
     };
-  } catch (e: unknown) {
-    checks.dockerZimaos = { ok: false, detail: e instanceof Error ? e.message : 'Probe Docker impossible' };
+  } else {
+    checks.zimaosAccessMode = { ok: true, detail: 'Mode local Docker actif.' };
+    try {
+      const probe = await probeZimaOSContainerPath({ pathToTest: reposRoot || '/' });
+      checks.dockerZimaos = {
+        ok: Boolean(probe.attempted && !probe.dockerError),
+        detail: probe.dockerError || `Docker accessible, conteneur: ${probe.containerName || 'auto'}`,
+      };
+      checks.mountVisibility = {
+        ok: probe.pathExistsInContainer || probe.likelyMountMatch,
+        detail:
+          probe.pathExistsInContainer || probe.likelyMountMatch
+            ? 'Le dossier apps semble visible depuis le conteneur.'
+            : 'Le dossier apps ne semble pas monté dans le conteneur.',
+      };
+    } catch (e: unknown) {
+      checks.dockerZimaos = { ok: false, detail: e instanceof Error ? e.message : 'Probe Docker impossible' };
+    }
   }
 
   if (zimaosRuntimeUrl) {
