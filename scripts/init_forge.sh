@@ -29,4 +29,4 @@ Tu es le cerveau de la forge. Ton workspace est /media/Github.
 EOF
 
 echo "Fichiers de base créés dans $WORKSPACE_DIR/instructions/."
-echo "Note : La commande 'openclaw start' n'est pas standard pour démarrer un sous-agent de l'intérieur de l'instance."
+echo "Note : La commande 'zimaos start' n'est pas standard pour démarrer un sous-agent de l'intérieur de l'instance."

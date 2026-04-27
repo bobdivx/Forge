@@ -256,14 +256,14 @@ export default function AuditLauncher({
             <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 space-y-2">
               <p class="font-semibold">⚠ Agents non joignables — tâches en file DB</p>
               <p>
-                OpenClaw n'a pas de session active correspondant aux rôles.
+                ZimaOS n'a pas de session active correspondant aux rôles.
                 Clique sur <strong>Logs</strong> ci-dessus pour voir le détail des erreurs.
               </p>
               <p>
                 La session détectée est probablement <strong>en veille (Telegram)</strong>.
                 Pour la réveiller, envoie un message depuis Telegram ou démarre manuellement :
               </p>
-              <pre class="bg-amber-100 rounded p-2 text-[10px] font-mono overflow-x-auto whitespace-pre-wrap">{`docker exec openclaw openclaw start \\\n  --engine ollama --model qwen2.5:32b \\\n  --instructions /mnt/GitHub/Forge/instructions/SOUL.md`}</pre>
+              <pre class="bg-amber-100 rounded p-2 text-[10px] font-mono overflow-x-auto whitespace-pre-wrap">{`docker exec zimaos zimaos start \\\n  --engine ollama --model qwen2.5:32b \\\n  --instructions /mnt/GitHub/Forge/instructions/SOUL.md`}</pre>
               <p>
                 Ensuite relance l'audit, ou envoie une directive depuis la{' '}
                 <a href="/agents" class="underline font-medium">page Agents</a>.

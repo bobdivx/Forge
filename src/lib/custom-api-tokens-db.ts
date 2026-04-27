@@ -109,7 +109,7 @@ export async function getAgentApiSecretsBundle(agentId?: string): Promise<{
   forgePublicUrl: string;
   githubToken: string;
   vercelToken: string;
-  openclawToken: string;
+  zimaosToken: string;
   custom: Record<string, string>;
 }> {
   const { getAllConfig } = await import('./config-db');
@@ -125,7 +125,7 @@ export async function getAgentApiSecretsBundle(agentId?: string): Promise<{
     forgePublicUrl: config.forgePublicUrl || '',
     githubToken: githubAllowed ? config.githubToken || '' : '',
     vercelToken: config.vercelToken || '',
-    openclawToken: config.openclawToken || '',
+    zimaosToken: config.zimaosToken || '',
     custom,
   };
 }

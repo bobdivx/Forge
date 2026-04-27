@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 
-type OpenClawMsg = { role: string; preview: string; at: string };
-type OpenClawPanel = {
+type ZimaOSMsg = { role: string; preview: string; at: string };
+type ZimaOSPanel = {
   matched: boolean;
   sessionKey: string | null;
   status: string | null;
   model: string | null;
   lastSeen: string | null;
-  messages: OpenClawMsg[];
+  messages: ZimaOSMsg[];
 };
 type MissionTask = {
   id: number;
@@ -24,7 +24,7 @@ type PanelPayload = {
   ok?: boolean;
   error?: string;
   gatewayError?: string | null;
-  openClaw?: OpenClawPanel;
+  zimaos?: ZimaOSPanel;
   buckets?: { running: MissionTask[]; pending: MissionTask[]; recentDone: MissionTask[] };
 };
 
@@ -93,7 +93,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
     return () => window.removeEventListener('forge-swarm-refresh', onRefresh as EventListener);
   }, [agentId, load]);
 
-  const oc = panel?.openClaw;
+  const oc = panel?.zimaos;
   const buckets = panel?.buckets ?? { running: [], pending: [], recentDone: [] };
   const lastAssistant = [...(oc?.messages ?? [])].reverse().find((m) => {
     const r = String(m.role || '').toLowerCase();
@@ -138,7 +138,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
           const rdJson = (await rd.json().catch(() => ({}))) as { error?: string };
           if (!rd.ok) dispatchErr = rdJson.error || `Relance HTTP ${rd.status}`;
         } else {
-          dispatchErr = 'Aucune clé de session OpenClaw : mission créée en base uniquement.';
+          dispatchErr = 'Aucune clé de session ZimaOS : mission créée en base uniquement.';
         }
       }
       setTitle('');
@@ -171,7 +171,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
     <div class="space-y-4">
       {panel?.gatewayError ? (
         <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-          OpenClaw : {panel.gatewayError}
+          ZimaOS : {panel.gatewayError}
         </div>
       ) : null}
 
@@ -198,7 +198,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
               ) : null}
             </p>
           ) : (
-            <p class="text-xs text-gray-500">Pas de session OpenClaw associée à cet identifiant pour l’instant.</p>
+            <p class="text-xs text-gray-500">Pas de session ZimaOS associée à cet identifiant pour l’instant.</p>
           )}
           {buckets.running.length > 0 ? (
             <ul class="space-y-2">
@@ -217,7 +217,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
           )}
           {lastAssistant?.preview ? (
             <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-              <p class="text-[10px] font-bold uppercase text-gray-400 mb-1">Dernier message assistant (OpenClaw)</p>
+              <p class="text-[10px] font-bold uppercase text-gray-400 mb-1">Dernier message assistant (ZimaOS)</p>
               <p class="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap">{lastAssistant.preview}</p>
             </div>
           ) : oc?.matched && (oc.messages?.length ?? 0) === 0 ? (
@@ -228,7 +228,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
         {/* Historique récent */}
         <div class="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm space-y-3">
           <h2 class="text-sm font-bold text-gray-900">Historique récent</h2>
-          <p class="text-[11px] text-gray-500">Missions terminées ou closes (Astro DB) et fil de session OpenClaw.</p>
+          <p class="text-[11px] text-gray-500">Missions terminées ou closes (Astro DB) et fil de session ZimaOS.</p>
           {buckets.recentDone.length > 0 ? (
             <ul class="max-h-56 overflow-y-auto space-y-2 pr-1">
               {buckets.recentDone.map((x) => (
@@ -268,7 +268,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
         <div class="rounded-[1.5rem] border border-[#175B37]/20 bg-[#f6faf7] p-5 shadow-sm space-y-3">
           <h2 class="text-sm font-bold text-gray-900">Mettre au travail</h2>
           <p class="text-[11px] text-gray-600">
-            Crée une entrée dans le journal Forge et, si possible, pousse la consigne vers OpenClaw tout de suite.
+            Crée une entrée dans le journal Forge et, si possible, pousse la consigne vers ZimaOS tout de suite.
           </p>
           <label class="block">
             <span class="text-[10px] font-bold uppercase text-gray-400">Titre</span>
@@ -297,7 +297,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
               onChange={(e) => setSendNow((e.target as HTMLInputElement).checked)}
               disabled={busy}
             />
-            Envoyer tout de suite à OpenClaw (via relance mission)
+            Envoyer tout de suite à ZimaOS (via relance mission)
           </label>
           {banner ? (
             <div

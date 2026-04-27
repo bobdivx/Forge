@@ -3,15 +3,17 @@ import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { readForgeSetupState } from '../../lib/forge-setup';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
-import { inferOpenClawBackedPathDefaults } from '../../lib/openclaw-path-defaults';
+import { inferZimaOSBackedPathDefaults } from '../../lib/zimaos-path-defaults';
 import { randomBytes } from 'node:crypto';
-import { performOpenClawAgentsSync } from './openclaw-sync-agents';
+import { probeZimaOSContainerPath } from '../../lib/zimaos-docker-mounts';
+import fs from 'node:fs';
 
 const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubWebhookSecret',
   'githubToken',
   'vercelToken',
-  'openclawToken',
+  'zimaosToken',
+  'zimaosToken',
   'forgeApiToken',
 ];
 
@@ -19,9 +21,12 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
   const payload: Partial<ForgeConfig> = {};
   const allowed: (keyof ForgeConfig)[] = [
     'forgePublicUrl',
-    'openclawContainerName',
-    'openclawGatewayUrl',
-    'openclawToken',
+    'zimaosContainerName',
+    'zimaosRuntimeUrl',
+    'zimaosToken',
+    'zimaosContainerName',
+    'zimaosGatewayUrl',
+    'zimaosToken',
     'forgeApiToken',
     'ollamaUrl',
     'githubToken',
@@ -41,15 +46,91 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
   return payload;
 }
 
-export const GET: APIRoute = async ({ locals }) => {
+async function validateSetup(data: Record<string, unknown>) {
+  const checks: Record<string, { ok: boolean; detail: string }> = {};
+  const reposRoot = String(data.forgeReposRoot ?? '').trim();
+  const yamlDir = String(data.dockerYamlDir ?? '').trim();
+  const appDataDir = String(data.dockerAppDataDir ?? '').trim();
+  const zimaosRuntimeUrl = String(data.zimaosRuntimeUrl ?? data.zimaosGatewayUrl ?? '').trim();
+  const ollamaUrl = String(data.ollamaUrl ?? '').trim();
+  const githubToken = String(data.githubToken ?? '').trim();
+
+  const repoCheck = reposRoot ? validateForgeReposRootForSave(reposRoot) : { ok: false, error: 'Chemin apps vide.' };
+  checks.appsRoot = {
+    ok: repoCheck.ok,
+    detail: repoCheck.ok ? `Racine apps valide: ${reposRoot}` : repoCheck.error || 'Racine apps invalide',
+  };
+  checks.mountPaths = {
+    ok: Boolean(reposRoot && yamlDir && appDataDir),
+    detail: reposRoot && yamlDir && appDataDir ? 'Chemins de montage renseignés.' : 'Chemins de montage incomplets.',
+  };
+
+  try {
+    const probe = await probeZimaOSContainerPath({ pathToTest: reposRoot || '/' });
+    checks.dockerZimaos = {
+      ok: Boolean(probe.attempted && !probe.dockerError),
+      detail: probe.dockerError || `Docker accessible, conteneur: ${probe.containerName || 'auto'}`,
+    };
+    checks.mountVisibility = {
+      ok: probe.pathExistsInContainer || probe.likelyMountMatch,
+      detail:
+        probe.pathExistsInContainer || probe.likelyMountMatch
+          ? 'Le dossier apps semble visible depuis le conteneur.'
+          : 'Le dossier apps ne semble pas monté dans le conteneur.',
+    };
+  } catch (e: unknown) {
+    checks.dockerZimaos = { ok: false, detail: e instanceof Error ? e.message : 'Probe Docker impossible' };
+  }
+
+  if (zimaosRuntimeUrl) {
+    try {
+      const r = await fetch(`${zimaosRuntimeUrl.replace(/\/$/, '')}/health`, { signal: AbortSignal.timeout(2000) });
+      checks.zimaosRuntime = {
+        ok: r.ok,
+        detail: r.ok ? `Runtime ZimaOS joignable (${r.status})` : `Runtime ZimaOS non valide (${r.status})`,
+      };
+    } catch (e: unknown) {
+      checks.zimaosRuntime = { ok: false, detail: e instanceof Error ? e.message : 'Runtime ZimaOS injoignable' };
+    }
+  } else {
+    checks.zimaosRuntime = { ok: false, detail: 'URL runtime ZimaOS non renseignée.' };
+  }
+
+  if (ollamaUrl) {
+    try {
+      const r = await fetch(`${ollamaUrl.replace(/\/$/, '')}/api/tags`, { signal: AbortSignal.timeout(2500) });
+      checks.ollama = { ok: r.ok, detail: r.ok ? `Ollama joignable (${r.status})` : `Ollama erreur HTTP ${r.status}` };
+    } catch (e: unknown) {
+      checks.ollama = { ok: false, detail: e instanceof Error ? e.message : 'Ollama injoignable' };
+    }
+  } else {
+    checks.ollama = { ok: false, detail: 'URL Ollama non renseignée.' };
+  }
+
+  checks.githubToken = {
+    ok: githubToken.length > 0,
+    detail: githubToken.length > 0 ? 'Jeton GitHub présent.' : 'Jeton GitHub absent (optionnel).',
+  };
+
+  return { ok: Object.values(checks).every((c) => c.ok || c.detail.includes('optionnel')), checks };
+}
+
+export const GET: APIRoute = async ({ locals, request }) => {
   if (!locals.user?.email) {
     return new Response(JSON.stringify({ error: 'Non authentifié' }), { status: 401 });
   }
   const state = await readForgeSetupState();
   const config = await getAllConfig();
-  const inferred = await inferOpenClawBackedPathDefaults();
+  const inferred = await inferZimaOSBackedPathDefaults();
+  const zimaosDefault =
+    process.env.FORGE_ZIMAOS_RUNTIME_URL?.trim() ||
+    process.env.ZIMAOS_GATEWAY_URL?.trim() ||
+    (fs.existsSync('/.dockerenv') ? 'http://host.docker.internal:24190' : '');
+  const requestHost = new URL(request.url).host;
   const hydrated = {
     ...config,
+    zimaosRuntimeUrl: (config as Record<string, string>).zimaosRuntimeUrl || config.zimaosGatewayUrl || zimaosDefault || `http://${requestHost}`,
+    zimaosToken: (config as Record<string, string>).zimaosToken || config.zimaosToken || '',
     forgeReposRoot: config.forgeReposRoot || inferred.forgeReposRoot || config.forgeReposRoot,
     dockerYamlDir: config.dockerYamlDir || inferred.dockerYamlDir || config.dockerYamlDir,
     dockerAppDataDir: config.dockerAppDataDir || inferred.dockerAppDataDir || config.dockerAppDataDir,
@@ -67,6 +148,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const action = String(body?.action ?? '').trim().toLowerCase();
+
+  if (action === 'validate') {
+    const result = await validateSetup(body);
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   if (action === 'skip') {
     await setConfig({ forgeSetupState: 'skipped' });
@@ -109,24 +198,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
+    if (payload.zimaosRuntimeUrl && !payload.zimaosGatewayUrl) {
+      payload.zimaosGatewayUrl = payload.zimaosRuntimeUrl;
+    }
+    if (payload.zimaosToken && !payload.zimaosToken) {
+      payload.zimaosToken = payload.zimaosToken;
+    }
     await setConfig(payload);
     await setConfig({ forgeSetupState: 'done' });
 
-    let openclawSync: { ok: boolean; error?: string; synchronized?: number; mode?: string } = { ok: false };
-    try {
-      const syncResult = await performOpenClawAgentsSync(
-        typeof body.containerName === 'string' ? body.containerName : undefined,
-      );
-      openclawSync = {
-        ok: true,
-        synchronized: syncResult.synchronized,
-        mode: syncResult.mode,
-      };
-    } catch (e: unknown) {
-      openclawSync = { ok: false, error: e instanceof Error ? e.message : 'sync impossible' };
-    }
-
-    return new Response(JSON.stringify({ ok: true, state: 'done', openclawSync }), {
+    return new Response(JSON.stringify({ ok: true, state: 'done' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

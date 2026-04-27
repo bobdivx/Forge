@@ -1,7 +1,7 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import SettingsForm from '../components/settings/SettingsForm';
-import OpenClawLayoutBadge from '../components/layout/OpenClawLayoutBadge';
+import ZimaOSLayoutBadge from '../components/layout/ZimaOSLayoutBadge';
 ---
 <DashboardLayout title="Paramètres" currentPath="/settings">
   <div class="max-w-4xl mx-auto space-y-6">
@@ -25,8 +25,8 @@ import OpenClawLayoutBadge from '../components/layout/OpenClawLayoutBadge';
     <SettingsForm client:load />
 
     <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-      <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">État de liaison OpenClaw</span>
-      <OpenClawLayoutBadge client:load />
+      <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">État de liaison ZimaOS</span>
+      <ZimaOSLayoutBadge client:load />
     </div>
 
   </div>

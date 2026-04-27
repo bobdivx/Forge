@@ -12,7 +12,7 @@ type WorkStatus = {
 type WorkCyclePayload = {
   ok?: boolean;
   budgetBlocked?: string;
-  openClawErrors?: string[];
+  zimaosErrors?: string[];
   wakeReport?: {
     targeted: number;
     awakened: string[];
@@ -86,8 +86,8 @@ export default function DashWorkSystem() {
             } else {
               setMsg(`Sessions actives: ${ok.length}/${wc.wakeReport.targeted}`);
             }
-          } else if (wc?.openClawErrors?.length) {
-            setMsg(`OpenClaw : ${wc.openClawErrors.join(' · ')}`);
+          } else if (wc?.zimaosErrors?.length) {
+            setMsg(`ZimaOS : ${wc.zimaosErrors.join(' · ')}`);
           } else {
             setMsg('Directives envoyées.');
           }
@@ -178,7 +178,7 @@ export default function DashWorkSystem() {
 
       {msg && (
         <p
-          class={`text-xs sm:w-full ${msg.toLowerCase().includes('openclaw') || msg.toLowerCase().includes('budget') || msg.toLowerCase().includes('erreur') ? 'text-amber-700' : 'text-emerald-700'}`}
+          class={`text-xs sm:w-full ${msg.toLowerCase().includes('zimaos') || msg.toLowerCase().includes('budget') || msg.toLowerCase().includes('erreur') ? 'text-amber-700' : 'text-emerald-700'}`}
         >
           {msg}
         </p>

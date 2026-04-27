@@ -2,10 +2,10 @@
 import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
   mapSessionToAgentRow,
-} from '../../lib/openclaw-gateway';
+} from '../../lib/zimaos-gateway';
 import { findRawSessionForSwarmAgentKey } from '../../lib/swarm-agent-resolve';
 
 function json(data: unknown, status = 200) {
@@ -39,7 +39,7 @@ function contentPreview(msg: Record<string, unknown>): string {
   return '';
 }
 
-function normalizeOpenClawMessages(raw: Record<string, unknown> | null, limit: number) {
+function normalizeZimaOSMessages(raw: Record<string, unknown> | null, limit: number) {
   if (!raw) return [];
   const msgs = raw.messages;
   if (!Array.isArray(msgs)) return [];
@@ -59,7 +59,7 @@ function normalizeOpenClawMessages(raw: Record<string, unknown> | null, limit: n
   }).filter(Boolean);
 }
 
-/** GET ?agentId=CHEF_TECHNIQUE — agrège session OpenClaw (messages) + tâches Astro DB pour la fiche swarm. */
+/** GET ?agentId=CHEF_TECHNIQUE — agrège session ZimaOS (messages) + tâches Astro DB pour la fiche swarm. */
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user?.email) {
     return json({ error: 'Non authentifié' }, 401);
@@ -73,19 +73,19 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
   let gatewayError: string | null = null;
   let rawSessions: Record<string, unknown>[] = [];
-  const gw = await fetchOpenClawSessionsPayload(email, {
+  const gw = await fetchZimaOSSessionsPayload(email, {
     invokeOnly: true,
     sessionsListArgs: { limit: 120, messageLimit: 48 },
   });
   if (gw.ok) {
-    rawSessions = normalizeOpenClawSessions(gw.data) as Record<string, unknown>[];
+    rawSessions = normalizeZimaOSSessions(gw.data) as Record<string, unknown>[];
   } else {
     gatewayError = gw.error || 'Gateway indisponible';
   }
 
   const matchedRaw = findRawSessionForSwarmAgentKey(rawSessions, agentId);
   const mapped = matchedRaw ? mapSessionToAgentRow(matchedRaw) : null;
-  const openClaw = mapped
+  const zimaos = mapped
     ? {
         matched: true,
         sessionKey: mapped.id,
@@ -93,7 +93,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         model: mapped.model,
         lastSeen: mapped.lastSeen,
         lastSeenMs: mapped.lastSeenMs,
-        messages: normalizeOpenClawMessages(matchedRaw, 48),
+        messages: normalizeZimaOSMessages(matchedRaw, 48),
       }
     : { matched: false, sessionKey: null as string | null, status: null, model: null, lastSeen: null, lastSeenMs: 0, messages: [] };
 
@@ -131,7 +131,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
     ok: true,
     agentId,
     gatewayError,
-    openClaw,
+    zimaos,
     dbTasks: missionTasks,
     buckets: { running, pending, recentDone: recentDone.slice(0, 12) },
   });

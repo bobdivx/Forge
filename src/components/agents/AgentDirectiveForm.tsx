@@ -18,7 +18,7 @@ export default function AgentDirectiveForm({ sessionKey }: { sessionKey: string 
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch('/api/openclaw-directive', {
+      const res = await fetch('/api/zimaos-directive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionKey, message }),
@@ -63,7 +63,7 @@ export default function AgentDirectiveForm({ sessionKey }: { sessionKey: string 
       </div>
       <div class="px-6 py-5 space-y-4">
         <p class="text-[11px] text-gray-500 leading-relaxed">
-          Envoie un message dans la session OpenClaw{' '}
+          Envoie un message dans la session ZimaOS{' '}
           <span class="font-mono text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 break-all">
             {sessionKey}
           </span>

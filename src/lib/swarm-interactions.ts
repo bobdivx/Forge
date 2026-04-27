@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { mapSessionToAgentRow } from './openclaw-gateway';
+import { mapSessionToAgentRow } from './zimaos-gateway';
 
 /**
- * Déduit la session parente pour une clé sub-agent OpenClaw.
+ * Déduit la session parente pour une clé sub-agent ZimaOS.
  * Ex. agent:main:subagent:abc → agent:main:main
  */
 export function inferParentSessionKey(sessionKey: string): string | null {

@@ -4,9 +4,9 @@ import AgentActivityChart from './AgentActivityChart';
 import TabBar from '../ui/TabBar';
 import {
   buildAgentTeamProfile,
-  mergeOpenClawTeamProfile,
+  mergeZimaOSTeamProfile,
   type AgentTeamProfile,
-  type OpenClawAgentProfileRow,
+  type ZimaOSAgentProfileRow,
 } from '../../lib/agent-profile';
 import { buildSwarmWorkDirective, type SwarmWorkCommand } from '../../lib/forge-agent-protocol';
 
@@ -105,7 +105,7 @@ function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>, t
 
 export default function AgentsGrid() {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [ocProfiles, setOcProfiles] = useState<Record<string, OpenClawAgentProfileRow>>({});
+  const [ocProfiles, setOcProfiles] = useState<Record<string, ZimaOSAgentProfileRow>>({});
   const [taskStats, setTaskStats] = useState<Record<string, TaskStats>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +160,7 @@ export default function AgentsGrid() {
 
   useEffect(() => {
     const load = () => {
-      Promise.all([fetch('/api/agents'), fetch('/api/openclaw-agent-profiles')])
+      Promise.all([fetch('/api/agents'), fetch('/api/zimaos-agent-profiles')])
         .then(([r1, r2]) => Promise.all([r1.json(), r2.json().catch(() => ({}))]))
         .then(([data, pr]) => {
           setAgents(Array.isArray(data.agents) ? data.agents : Array.isArray(data) ? data : []);
@@ -169,14 +169,14 @@ export default function AgentsGrid() {
           const gwErr = typeof data.gatewayError === 'string' && data.gatewayError ? data.gatewayError : null;
           setError(gwErr);
           if (pr?.profiles && typeof pr.profiles === 'object') {
-            const next: Record<string, OpenClawAgentProfileRow> = {};
+            const next: Record<string, ZimaOSAgentProfileRow> = {};
             for (const [k, v] of Object.entries(pr.profiles as Record<string, unknown>)) {
-              if (v && typeof v === 'object') next[k] = v as OpenClawAgentProfileRow;
+              if (v && typeof v === 'object') next[k] = v as ZimaOSAgentProfileRow;
             }
             setOcProfiles(next);
           }
         })
-        .catch(() => setError('Impossible de contacter le gateway OpenClaw.'))
+        .catch(() => setError('Impossible de contacter le gateway ZimaOS.'))
         .finally(() => setLoading(false));
     };
     const loadAppVersion = () => {
@@ -197,7 +197,7 @@ export default function AgentsGrid() {
         .then((rows) => {
           const values = Array.isArray(rows)
             ? rows
-                .map((m: { id?: string; name?: string }) => String(m.id || m.name || '').replace(/^openclaw\//i, '').trim())
+                .map((m: { id?: string; name?: string }) => String(m.id || m.name || '').replace(/^zimaos\//i, '').trim())
                 .filter(Boolean)
             : [];
           const merged = [...new Set(values)].sort((a, b) => a.localeCompare(b));
@@ -236,8 +236,8 @@ export default function AgentsGrid() {
       }
       setCreateMsg(
         data?.provision?.ok
-          ? `Agent ${agentId} ajouté et provisionné OpenClaw.`
-          : `Agent ${agentId} ajouté (provision OpenClaw à vérifier).`,
+          ? `Agent ${agentId} ajouté et provisionné ZimaOS.`
+          : `Agent ${agentId} ajouté (provision ZimaOS à vérifier).`,
       );
       setNewAgentId('');
       // rafraîchit immédiatement la liste réelle affichée
@@ -260,7 +260,7 @@ export default function AgentsGrid() {
     if (target?.raw?.offline) {
       setCommandMsgByAgent((prev) => ({
         ...prev,
-        [agentId]: 'Session hors ligne (aucune session active côté OpenClaw)',
+        [agentId]: 'Session hors ligne (aucune session active côté ZimaOS)',
       }));
       return;
     }
@@ -269,7 +269,7 @@ export default function AgentsGrid() {
     try {
       const versionHint = command === 'start_work' ? await buildVersionUpdateDirective() : '';
       const directive = `${buildSwarmWorkDirective(command, 'direct')}${versionHint}`;
-      const r = await fetch('/api/openclaw-directive', {
+      const r = await fetch('/api/zimaos-directive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -286,7 +286,7 @@ export default function AgentsGrid() {
       if (!r.ok || data.ok === false) {
         const preRepairHint = preRepair?.attempted
           ? preRepair.ok
-            ? ' (auto-reparation OpenClaw appliquee)'
+            ? ' (auto-reparation ZimaOS appliquee)'
             : ` (auto-reparation echouee: ${preRepair.error || 'inconnue'})`
           : '';
         setCommandMsgByAgent((prev) => ({
@@ -343,11 +343,11 @@ export default function AgentsGrid() {
     }
   };
 
-  const wakeOpenClawAgents = async () => {
+  const wakeZimaOSAgents = async () => {
     setWakeBusy(true);
     setWakeMsg('Reveil des agents en cours...');
     try {
-      const r = await fetch('/api/openclaw-wake-agents', { method: 'POST' });
+      const r = await fetch('/api/zimaos-wake-agents', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       const sentCount = Array.isArray(data?.sent) ? data.sent.length : 0;
       const failedCount = Array.isArray(data?.failed) ? data.failed.length : 0;
@@ -360,7 +360,7 @@ export default function AgentsGrid() {
       }
       const repairSuffix = preRepair?.attempted
         ? preRepair.ok
-          ? ' · auto-reparation OpenClaw appliquee'
+          ? ' · auto-reparation ZimaOS appliquee'
           : ` · auto-reparation echouee (${preRepair.error || 'inconnue'})`
         : '';
       if (failedCount > 0) {
@@ -392,14 +392,14 @@ export default function AgentsGrid() {
     if (agent.status === 'actif') return 'Reveil: session active';
     if (agent.raw?.disabledInDb) return 'Reveil: desactive dans Forge';
     if (agent.raw?.offline) return 'Reveil: aucune session active';
-    if (agent.raw?.registryOnly) return 'Reveil: present dans OpenClaw, non reveille';
+    if (agent.raw?.registryOnly) return 'Reveil: present dans ZimaOS, non reveille';
     return 'Reveil: en veille';
   };
 
   const teamProfiles = useMemo(() => {
     const map: Record<string, AgentTeamProfile> = {};
     for (const a of agents) {
-      map[a.id] = mergeOpenClawTeamProfile(a, ocProfiles[a.id] ?? null);
+      map[a.id] = mergeZimaOSTeamProfile(a, ocProfiles[a.id] ?? null);
     }
     return map;
   }, [agents, ocProfiles]);
@@ -471,7 +471,7 @@ export default function AgentsGrid() {
 
       <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <span class="text-sm text-gray-500">
-          <span class="font-semibold text-gray-900">{agents.length}</span> session(s) OpenClaw —{' '}
+          <span class="font-semibold text-gray-900">{agents.length}</span> session(s) ZimaOS —{' '}
           <span class="font-semibold" style={{ color: '#3BAE61' }}>
             {activeCount}
           </span>{' '}
@@ -480,7 +480,7 @@ export default function AgentsGrid() {
         <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           <button
             type="button"
-            onClick={() => void wakeOpenClawAgents()}
+            onClick={() => void wakeZimaOSAgents()}
             disabled={wakeBusy}
             class="rounded-full border border-[#175B37]/20 bg-[#175B37] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -563,7 +563,7 @@ export default function AgentsGrid() {
 
       {error && (
         <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {error} — vérifiez le token OpenClaw dans les{' '}
+          {error} — vérifiez le token ZimaOS dans les{' '}
           <a href="/settings" class="font-medium underline" style={{ color: '#175B37' }}>
             paramètres
           </a>
@@ -597,7 +597,7 @@ export default function AgentsGrid() {
           <p class="text-sm text-gray-500">
             {filter !== 'all' || query.trim()
               ? 'Aucun agent ne correspond à ce filtre ou à cette recherche.'
-              : 'Aucune session OpenClaw. Vérifiez que le gateway est démarré et le token configuré.'}
+              : 'Aucune session ZimaOS. Vérifiez que le gateway est démarré et le token configuré.'}
           </p>
         </div>
       )}

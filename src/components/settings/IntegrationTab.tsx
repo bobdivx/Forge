@@ -4,9 +4,9 @@ import { useState } from 'preact/hooks';
 
 type Config = {
   forgePublicUrl: string;
-  openclawContainerName: string;
-  openclawGatewayUrl: string;
-  openclawToken: string;
+  zimaosContainerName: string;
+  zimaosGatewayUrl: string;
+  zimaosToken: string;
   ollamaUrl: string;
   forgeReposRoot: string;
   forgeReposRootAgent: string;
@@ -15,14 +15,14 @@ type Config = {
   [k: string]: string;
 };
 
-type OpenClawMount = { source: string; destination: string; type: string; mode: string };
+type ZimaOSMount = { source: string; destination: string; type: string; mode: string };
 
-type OpenClawProbe = {
+type ZimaOSProbe = {
   attempted?: boolean;
   skipReason?: string;
   dockerError?: string;
   containerName?: string | null;
-  mounts?: OpenClawMount[];
+  mounts?: ZimaOSMount[];
   pathTested?: string;
   pathExistsInContainer?: boolean;
   likelyMountMatch?: boolean;
@@ -37,7 +37,7 @@ type NetworkMatrixPayload = {
     envValue?: string | null;
     dbValue?: string | null;
   };
-  openclaw?: {
+  zimaosRuntime?: {
     resolvedBaseUrl?: string;
     source?: ValueSource | string;
     envValue?: string | null;
@@ -56,7 +56,7 @@ type NetworkMatrixPayload = {
   };
   probes?: {
     forgeLogin?: { ok?: boolean; status?: number; error?: string };
-    openclawHealth?: { ok?: boolean; status?: number; error?: string };
+    zimaosHealth?: { ok?: boolean; status?: number; error?: string };
     ollamaTags?: { ok?: boolean; status?: number; error?: string };
   };
   timestamp?: string;
@@ -67,9 +67,9 @@ type ReposHealth = {
   summary?: string;
   path?: string;
   gitReposFound?: number;
-  openclawNote?: string;
-  openclawProbe?: OpenClawProbe;
-  openclawBindSuggestions?: BindSuggestion[];
+  zimaosNote?: string;
+  zimaosProbe?: ZimaOSProbe;
+  zimaosBindSuggestions?: BindSuggestion[];
 };
 
 type Props = {
@@ -154,26 +154,26 @@ export default function IntegrationTab({
 
   const st = reposHealth?.status ?? '';
   const healthyRepos = st === 'ok';
-  const probe = reposHealth?.openclawProbe;
+  const probe = reposHealth?.zimaosProbe;
   const bindMounts = (probe?.mounts ?? []).filter((m) => m.type === 'bind' && m.destination);
   const dockerUnavailable = Boolean(probe?.dockerError && /docker.*(enoent|inaccessible)/i.test(probe.dockerError));
-  const suggestions: BindSuggestion[] = Array.isArray(reposHealth?.openclawBindSuggestions)
-    ? (reposHealth.openclawBindSuggestions as BindSuggestion[])
+  const suggestions: BindSuggestion[] = Array.isArray(reposHealth?.zimaosBindSuggestions)
+    ? (reposHealth.zimaosBindSuggestions as BindSuggestion[])
     : [];
   const datalistId = 'forge-repos-root-suggestions';
 
   return (
     <div class="p-6 space-y-10">
       <p class="text-xs text-gray-500 -mt-1">
-        Tout ce qui lie <strong>Forge</strong> (ce serveur) à <strong>OpenClaw</strong> (agents) et au <strong>disque</strong>{' '}
+        Tout ce qui lie <strong>Forge</strong> (ce serveur) à <strong>ZimaOS</strong> (agents) et au <strong>disque</strong>{' '}
         des dépôts Git. Une seule sauvegarde en bas de page.
       </p>
 
-      {/* ── OpenClaw / réseau ───────────────────────────────────────────── */}
+      {/* ── ZimaOS / réseau ───────────────────────────────────────────── */}
       <section>
         <SectionTitle
           n="Étape 1"
-          title="OpenClaw — gateway & conteneur"
+          title="ZimaOS — gateway & conteneur"
           subtitle="Les URLs sont résolues par le serveur Forge, pas par votre navigateur. En production NAS/Docker, renseignez l’URL réellement joignable depuis le process Forge (interne conteneur ou port publié hôte selon votre architecture)."
         />
         <div class="space-y-4 max-w-3xl">
@@ -195,7 +195,7 @@ export default function IntegrationTab({
             {networkMatrix && (
               <div class="mt-3 space-y-2 text-[11px]">
                 {(networkMatrix.forge?.source === 'env' && networkMatrix.forge?.dbValue) ||
-                (networkMatrix.openclaw?.source === 'env' && networkMatrix.openclaw?.dbValue) ? (
+                (networkMatrix.zimaosRuntime?.source === 'env' && networkMatrix.zimaosRuntime?.dbValue) ? (
                   <p class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-2 py-1.5">
                     Une variable d’environnement écrase une valeur enregistrée en base. C’est normal, mais la valeur UI peut sembler ignorée tant que l’env est définie.
                   </p>
@@ -209,10 +209,10 @@ export default function IntegrationTab({
                     </span>
                   </div>
                   <div class="rounded-lg border border-gray-200 bg-white p-2">
-                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">OpenClaw</p>
-                    <p class="font-mono break-all text-gray-800">{networkMatrix.openclaw?.resolvedBaseUrl || '—'}</p>
-                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.openclaw?.source)}`}>
-                      source: {networkMatrix.openclaw?.source || '—'}
+                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">ZimaOS</p>
+                    <p class="font-mono break-all text-gray-800">{networkMatrix.zimaosRuntime?.resolvedBaseUrl || '—'}</p>
+                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.zimaosRuntime?.source)}`}>
+                      source: {networkMatrix.zimaosRuntime?.source || '—'}
                     </span>
                   </div>
                   <div class="rounded-lg border border-gray-200 bg-white p-2">
@@ -229,8 +229,8 @@ export default function IntegrationTab({
                     <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.forgeLogin?.ok)}`}>
                       Forge /login: {networkMatrix.probes?.forgeLogin?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.forgeLogin?.status ?? 0})
                     </span>
-                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.openclawHealth?.ok)}`}>
-                      OpenClaw /health: {networkMatrix.probes?.openclawHealth?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.openclawHealth?.status ?? 0})
+                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.zimaosHealth?.ok)}`}>
+                      Runtime ZimaOS /health: {networkMatrix.probes?.zimaosHealth?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.zimaosHealth?.status ?? 0})
                     </span>
                     <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.ollamaTags?.ok)}`}>
                       Ollama /api/tags: {networkMatrix.probes?.ollamaTags?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.ollamaTags?.status ?? 0})
@@ -260,22 +260,22 @@ export default function IntegrationTab({
           </div>
 
           <FormField
-            label="Nom du conteneur OpenClaw (Docker)"
-            hint="Vide = auto (docker ps, nom contenant « openclaw »). Sert à lister les volumes et à vérifier que le répertoire des apps existe dans le conteneur."
+            label="Nom du conteneur ZimaOS (Docker)"
+            hint="Vide = auto (docker ps, nom contenant « zimaos »). Sert à lister les volumes et à vérifier que le répertoire des apps existe dans le conteneur."
           >
             <input
               type="text"
-              placeholder="openclaw"
-              value={settings.openclawContainerName}
+              placeholder="zimaos"
+              value={settings.zimaosContainerName}
               onInput={(e) =>
-                setSettings({ ...settings, openclawContainerName: (e.target as HTMLInputElement).value })
+                setSettings({ ...settings, zimaosContainerName: (e.target as HTMLInputElement).value })
               }
               class={inputCls}
             />
           </FormField>
           <FormField
             label="URL Forge joignable par les agents (hooks)"
-            hint="Vue depuis OpenClaw/agents. Production Docker: http://forge-host:4331. Dev hôte: http://forge-host:4321. Exemple LAN: http://<ip-nas>:4331."
+            hint="Vue depuis ZimaOS/agents. Production Docker: http://forge-host:4331. Dev hôte: http://forge-host:4321. Exemple LAN: http://<ip-nas>:4331."
           >
             <input
               type="url"
@@ -287,13 +287,13 @@ export default function IntegrationTab({
               class={inputCls}
             />
           </FormField>
-          <FormField label="URL du gateway OpenClaw" hint="URL joignable depuis Forge. Production Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190. En interne OpenClaw: 18789.">
+          <FormField label="URL du gateway ZimaOS" hint="URL joignable depuis Forge. Production Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190. En interne ZimaOS: 18789.">
             <input
               type="url"
               placeholder="http://host.docker.internal:24190"
-              value={settings.openclawGatewayUrl}
+              value={settings.zimaosGatewayUrl}
               onInput={(e) =>
-                setSettings({ ...settings, openclawGatewayUrl: (e.target as HTMLInputElement).value })
+                setSettings({ ...settings, zimaosGatewayUrl: (e.target as HTMLInputElement).value })
               }
               class={inputCls}
             />
@@ -301,10 +301,10 @@ export default function IntegrationTab({
           <FormField label="Token d’accès (gateway token)">
             <input
               type="password"
-              placeholder="Token openclaw.json / gateway"
-              value={settings.openclawToken}
+              placeholder="Token zimaos.json / gateway"
+              value={settings.zimaosToken}
               onInput={(e) =>
-                setSettings({ ...settings, openclawToken: (e.target as HTMLInputElement).value })
+                setSettings({ ...settings, zimaosToken: (e.target as HTMLInputElement).value })
               }
               class={inputCls}
             />
@@ -332,16 +332,16 @@ export default function IntegrationTab({
         <SectionTitle
           n="Étape 2"
           title="Disque — applications & Docker"
-          subtitle="Le répertoire des applications doit être le même chemin absolu que les agents voient dans OpenClaw (bind mount identique hôte → conteneur, ex. /media/GitHub:/media/GitHub)."
+          subtitle="Le répertoire des applications doit être le même chemin absolu que les agents voient dans ZimaOS (bind mount identique hôte → conteneur, ex. /media/GitHub:/media/GitHub)."
         />
         <p class="text-[11px] text-gray-500 max-w-3xl mb-4 leading-relaxed">
-          Forge et OpenClaw sont bien <strong>deux conteneurs différents</strong>, mais ils tournent en général sous le{' '}
+          Forge et ZimaOS sont bien <strong>deux conteneurs différents</strong>, mais ils tournent en général sous le{' '}
           <strong>même moteur Docker</strong> sur le NAS : le démon sur l’hôte connaît <em>tous</em> les conteneurs. Quand
-          le conteneur Forge exécute <code class="font-mono text-gray-600">docker inspect openclaw</code>, c’est via le
+          le conteneur Forge exécute <code class="font-mono text-gray-600">docker inspect zimaos</code>, c’est via le
           socket <code class="font-mono text-gray-600">/var/run/docker.sock</code> (ou équivalent) vers cet hôte — ce
-          n’est pas Forge qui « entre » dans le conteneur OpenClaw par le réseau applicatif. Sur Vercel / sans accès au
+          n’est pas Forge qui « entre » dans le conteneur ZimaOS par le réseau applicatif. Sur Vercel / sans accès au
           démon Docker, la sonde échoue : saisie manuelle ou{' '}
-          <code class="font-mono text-gray-600">FORGE_DISABLE_OPENCLAW_PATH_PROBE=1</code>.
+          <code class="font-mono text-gray-600">FORGE_DISABLE_ZIMAOS_PATH_PROBE=1</code>.
         </p>
 
         {reposHealth && (
@@ -372,13 +372,13 @@ export default function IntegrationTab({
             {typeof reposHealth.gitReposFound === 'number' && (
               <p class="font-mono text-[11px] opacity-90">Dépôts Git (racine) : {reposHealth.gitReposFound}</p>
             )}
-            {reposHealth.openclawNote && (
-              <p class="text-[11px] opacity-90 border-t border-current/10 pt-2 mt-2">{reposHealth.openclawNote}</p>
+            {reposHealth.zimaosNote && (
+              <p class="text-[11px] opacity-90 border-t border-current/10 pt-2 mt-2">{reposHealth.zimaosNote}</p>
             )}
             {probe?.attempted && !dockerUnavailable && (
               <div class="border-t border-current/10 pt-3 mt-2 space-y-2">
                 <p class="font-semibold">
-                  OpenClaw (Docker){' '}
+                  ZimaOS (Docker){' '}
                   {probe.containerName ? <span class="font-mono font-normal">· {probe.containerName}</span> : null}
                 </p>
                 {probe.dockerError && (
@@ -417,7 +417,7 @@ export default function IntegrationTab({
                 )}
                 {!probe.pathExistsInContainer && probe.attempted && probe.containerName && (
                   <p class="text-[11px]">
-                    Ajustez le compose OpenClaw ou le « Répertoire des applications » pour qu’il corresponde à une{' '}
+                    Ajustez le compose ZimaOS ou le « Répertoire des applications » pour qu’il corresponde à une{' '}
                     <span class="font-mono">Destination</span> listée ci-dessus.
                   </p>
                 )}
@@ -444,7 +444,7 @@ export default function IntegrationTab({
               <datalist id={datalistId}>
                 {suggestions.map((s) => (
                   <option key={s.hostPath} value={s.hostPath}>
-                    {`OpenClaw : ${s.containerPath}`}
+                    {`ZimaOS : ${s.containerPath}`}
                   </option>
                 ))}
               </datalist>
@@ -453,7 +453,7 @@ export default function IntegrationTab({
           {suggestions.length > 0 && (
             <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3">
               <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
-                Dossiers montés (bind) — même chemin hôte que dans OpenClaw
+                Dossiers montés (bind) — même chemin hôte que dans ZimaOS
               </p>
               <ul class="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
                 {suggestions.map((s) => (
@@ -470,7 +470,7 @@ export default function IntegrationTab({
                       <span class="block text-[11px] text-gray-500 mb-0.5">Hôte (Forge) — à enregistrer</span>
                       <span class="text-emerald-900">{s.hostPath}</span>
                       <span class="block text-[10px] text-gray-500 mt-1">
-                        dans OpenClaw : <span class="text-gray-700">{s.containerPath}</span>
+                        dans ZimaOS : <span class="text-gray-700">{s.containerPath}</span>
                       </span>
                     </button>
                   </li>

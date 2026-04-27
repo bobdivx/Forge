@@ -98,7 +98,7 @@ Toute action structurée des agents (anomalie page, dépendance, changement de s
 - Après résolution, **toujours** passer le statut à `resolved` / `installed` (ou `rejected` avec raison dans `content`).
 - Notifier l’agent demandeur via `message` ou en s’appuyant sur le journal `AgentMessage` (le hook enregistre déjà une copie vers `CHEF_TECHNIQUE`).
 
-URL de base des hooks : définir **`FORGE_HOOK_BASE_URL`** si tu n’es pas sur la même machine que Forge (`http://forge-host:4331` depuis OpenClaw quand Forge tourne via `forge.yml`; `http://forge-host:4321` seulement si Forge tourne directement sur l’hôte). Sinon `http://127.0.0.1:4321/api/forge-hook`.
+URL de base des hooks : définir **`FORGE_HOOK_BASE_URL`** si tu n’es pas sur la même machine que Forge (`http://forge-host:4331` depuis ZimaOS quand Forge tourne via `forge.yml`; `http://forge-host:4321` seulement si Forge tourne directement sur l’hôte). Sinon `http://127.0.0.1:4321/api/forge-hook`.
 
 ### Reporting fiable (obligatoire pour chaque délégation)
 

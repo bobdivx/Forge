@@ -4,7 +4,7 @@ import { loadAstroDb } from '../../lib/load-astro-db';
 import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
 import { getPrimaryDevServerStatus } from '../../lib/dev-server-status';
 import { getWorkSystemStatus } from '../../lib/forge-work-scheduler';
-import { fetchOpenClawSessionsPayload, normalizeOpenClawSessions } from '../../lib/openclaw-gateway';
+import { fetchZimaOSSessionsPayload, normalizeZimaOSSessions } from '../../lib/zimaos-gateway';
 
 type ProjectRow = {
   id: number;
@@ -48,20 +48,20 @@ export const GET: APIRoute = async ({ locals }) => {
       tasks: { pendingOrRunning: number; running: number };
     }>;
     swarm: {
-      openclawOk: boolean;
-      openclawSessions: number;
+      zimaosOk: boolean;
+      zimaosSessions: number;
       agentsBusy: number;
-      openclawError: string | null;
+      zimaosError: string | null;
       workScheduler: Awaited<ReturnType<typeof getWorkSystemStatus>> | null;
     };
     dbError: string | null;
   } = {
     projects: [],
     swarm: {
-      openclawOk: false,
-      openclawSessions: 0,
+      zimaosOk: false,
+      zimaosSessions: 0,
       agentsBusy: 0,
-      openclawError: null,
+      zimaosError: null,
       workScheduler: null,
     },
     dbError: null,
@@ -142,20 +142,20 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   try {
-    const oc = await fetchOpenClawSessionsPayload(email);
-    payload.swarm.openclawOk = oc.ok;
+    const oc = await fetchZimaOSSessionsPayload(email);
+    payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
-      ? (normalizeOpenClawSessions(oc.data) as Record<string, unknown>[])
+      ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])
       : [];
-    payload.swarm.openclawSessions = sessions.length;
+    payload.swarm.zimaosSessions = sessions.length;
     let busy = 0;
     for (const s of sessions) {
       if (mapSessionToRunState(s as Record<string, unknown>).running) busy++;
     }
     payload.swarm.agentsBusy = busy;
-    payload.swarm.openclawError = oc.ok ? null : oc.error ?? null;
+    payload.swarm.zimaosError = oc.ok ? null : oc.error ?? null;
   } catch (e) {
-    payload.swarm.openclawError = e instanceof Error ? e.message : String(e);
+    payload.swarm.zimaosError = e instanceof Error ? e.message : String(e);
   }
 
   return new Response(JSON.stringify(payload), {

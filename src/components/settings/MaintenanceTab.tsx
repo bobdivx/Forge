@@ -4,10 +4,10 @@ type Props = {
   onSync: () => void;
   syncing: boolean;
   message: string;
-  onOpenClawRepaired?: () => void | Promise<void>;
+  onZimaOSRepaired?: () => void | Promise<void>;
 };
 
-type OpenClawSyncStatus = {
+type ZimaOSSyncStatus = {
   ok?: boolean;
   mode?: string;
   upToDate?: boolean;
@@ -23,7 +23,7 @@ type OpenClawSyncStatus = {
   };
 };
 
-type OpenClawSyncPost = {
+type ZimaOSSyncPost = {
   ok?: boolean;
   synchronized?: number;
   mode?: string;
@@ -34,13 +34,13 @@ type OpenClawSyncPost = {
   adoptedFromGateway?: boolean;
 };
 
-type OpenClawDirectiveResponse = {
+type ZimaOSDirectiveResponse = {
   ok?: boolean;
   error?: string;
   via?: string;
 };
 
-type OpenClawRepairPayload = {
+type ZimaOSRepairPayload = {
   alreadyOk?: boolean;
   repaired?: boolean;
   error?: string;
@@ -52,42 +52,42 @@ type OpenClawRepairPayload = {
   dockerRestart?: { ok?: boolean; container?: string; error?: string };
 };
 
-export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRepaired }: Props) {
+export default function MaintenanceTab({ onSync, syncing, message, onZimaOSRepaired }: Props) {
   const [setupLoading, setSetupLoading] = useState(false);
   const [setupMsg, setSetupMsg] = useState('');
-  const [openclawRepairing, setOpenclawRepairing] = useState(false);
+  const [zimaosRepairing, setZimaOSRepairing] = useState(false);
   const [restartDockerAfterFail, setRestartDockerAfterFail] = useState(false);
-  const [openclawRepairResult, setOpenclawRepairResult] = useState<OpenClawRepairPayload | null>(null);
+  const [zimaosRepairResult, setZimaOSRepairResult] = useState<ZimaOSRepairPayload | null>(null);
   const [syncAgentsLoading, setSyncAgentsLoading] = useState(false);
-  const [syncAgentsStatus, setSyncAgentsStatus] = useState<OpenClawSyncStatus | null>(null);
-  const [syncAgentsResult, setSyncAgentsResult] = useState<OpenClawSyncPost | null>(null);
+  const [syncAgentsStatus, setSyncAgentsStatus] = useState<ZimaOSSyncStatus | null>(null);
+  const [syncAgentsResult, setSyncAgentsResult] = useState<ZimaOSSyncPost | null>(null);
   const [sendingFixPrompt, setSendingFixPrompt] = useState(false);
   const [sendFixPromptMsg, setSendFixPromptMsg] = useState('');
 
-  const loadOpenClawSyncStatus = async () => {
+  const loadZimaOSSyncStatus = async () => {
     try {
-      const res = await fetch('/api/openclaw-sync-agents');
-      const data = (await res.json().catch(() => ({}))) as OpenClawSyncStatus;
+      const res = await fetch('/api/zimaos-sync-agents');
+      const data = (await res.json().catch(() => ({}))) as ZimaOSSyncStatus;
       setSyncAgentsStatus(data);
     } catch {
-      setSyncAgentsStatus({ ok: false, error: 'Impossible de lire l’état OpenClaw.' });
+      setSyncAgentsStatus({ ok: false, error: 'Impossible de lire l’état ZimaOS.' });
     }
   };
 
-  const syncOpenClawAgents = async () => {
+  const syncZimaOSAgents = async () => {
     setSyncAgentsLoading(true);
     setSyncAgentsResult(null);
     try {
-      const res = await fetch('/api/openclaw-sync-agents', {
+      const res = await fetch('/api/zimaos-sync-agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
-      const data = (await res.json().catch(() => ({}))) as OpenClawSyncPost;
+      const data = (await res.json().catch(() => ({}))) as ZimaOSSyncPost;
       setSyncAgentsResult(data);
-      await loadOpenClawSyncStatus();
+      await loadZimaOSSyncStatus();
     } catch {
-      setSyncAgentsResult({ ok: false, error: 'Erreur réseau pendant la synchronisation OpenClaw.' });
+      setSyncAgentsResult({ ok: false, error: 'Erreur réseau pendant la synchronisation ZimaOS.' });
     } finally {
       setSyncAgentsLoading(false);
     }
@@ -98,20 +98,20 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
       ? syncAgentsStatus.current[0]
       : 'chef_technique';
     return [
-      'Action demandee: passer le gateway OpenClaw en mode ecriture pour la gestion des agents Forge.',
+      'Action demandee: passer le gateway ZimaOS en mode ecriture pour la gestion des agents Forge.',
       '',
       'Contexte:',
       '- Forge est en mode "api-virtual" (gateway read-only).',
       '- Lecture agents_list OK, mais ecriture agents impossible.',
       '',
-      'A faire sur OpenClaw:',
-      '1) Ouvrir le fichier openclaw.json de la gateway.',
+      'A faire sur ZimaOS:',
+      '1) Ouvrir le fichier zimaos.json de la gateway.',
       '2) Autoriser les tools HTTP d ecriture des agents via /tools/invoke:',
       '   - agents_upsert',
       '   - agents_set',
       '   - agents_sync',
       '   (conserver aussi agents_list).',
-      '3) Redemarrer le service/container OpenClaw gateway.',
+      '3) Redemarrer le service/container ZimaOS gateway.',
       '4) Verifier qu un POST /tools/invoke avec tool=agents_upsert ne retourne plus "Tool not available".',
       '5) Repondre "OK ecriture agents activee".',
       '',
@@ -137,7 +137,7 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
     setSendingFixPrompt(true);
     setSendFixPromptMsg('');
     try {
-      const res = await fetch('/api/openclaw-directive', {
+      const res = await fetch('/api/zimaos-directive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,7 +146,7 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
           timeoutSeconds: 90,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as OpenClawDirectiveResponse;
+      const data = (await res.json().catch(() => ({}))) as ZimaOSDirectiveResponse;
       if (!res.ok || data.ok === false) {
         setSendFixPromptMsg(data.error || 'Envoi refuse par le gateway.');
         return;
@@ -181,33 +181,33 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
     }
   };
 
-  const handleOpenClawAutoRepair = async () => {
-    setOpenclawRepairing(true);
-    setOpenclawRepairResult(null);
+  const handleZimaOSAutoRepair = async () => {
+    setZimaOSRepairing(true);
+    setZimaOSRepairResult(null);
     try {
-      const res = await fetch('/api/openclaw-auto-repair', {
+      const res = await fetch('/api/zimaos-auto-repair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ restartDocker: restartDockerAfterFail }),
       });
-      const data = (await res.json().catch(() => ({}))) as OpenClawRepairPayload & { error?: string };
+      const data = (await res.json().catch(() => ({}))) as ZimaOSRepairPayload & { error?: string };
       if (!res.ok && data.error) {
-        setOpenclawRepairResult({ error: data.error, actions: [] });
+        setZimaOSRepairResult({ error: data.error, actions: [] });
         return;
       }
-      setOpenclawRepairResult(data);
-      if ((data.repaired || data.alreadyOk) && onOpenClawRepaired) {
-        await onOpenClawRepaired();
+      setZimaOSRepairResult(data);
+      if ((data.repaired || data.alreadyOk) && onZimaOSRepaired) {
+        await onZimaOSRepaired();
       }
     } catch {
-      setOpenclawRepairResult({ error: 'Erreur réseau', actions: [] });
+      setZimaOSRepairResult({ error: 'Erreur réseau', actions: [] });
     } finally {
-      setOpenclawRepairing(false);
+      setZimaOSRepairing(false);
     }
   };
 
   useEffect(() => {
-    void loadOpenClawSyncStatus();
+    void loadZimaOSSyncStatus();
   }, []);
 
   return (
@@ -222,7 +222,7 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
             <div class="min-w-0">
               <h4 class="text-sm font-medium text-gray-900">Assistant de configuration</h4>
               <p class="text-[10px] text-gray-400 mt-1">
-                Rouvrir le guide (OpenClaw, dépôts, jetons). Utile après un changement de NAS ou de conteneurs.
+                Rouvrir le guide (ZimaOS, dépôts, jetons). Utile après un changement de NAS ou de conteneurs.
               </p>
             </div>
             <button
@@ -261,15 +261,15 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
           <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
             <div class="flex items-center justify-between gap-4">
               <div class="min-w-0">
-                <h4 class="text-sm font-medium text-gray-900">Synchronisation des agents OpenClaw</h4>
+                <h4 class="text-sm font-medium text-gray-900">Synchronisation des agents ZimaOS</h4>
                 <p class="text-[10px] text-gray-400 mt-1">
-                  Pousse la liste des agents Forge vers OpenClaw. Si le gateway est en lecture seule, Forge bascule en
+                  Pousse la liste des agents Forge vers ZimaOS. Si le gateway est en lecture seule, Forge bascule en
                   mode virtuel.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => void syncOpenClawAgents()}
+                onClick={() => void syncZimaOSAgents()}
                 disabled={syncAgentsLoading}
                 class="shrink-0 px-4 py-2 rounded-full text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style="background:#175B37"
@@ -348,7 +348,7 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
             {syncAgentsStatus?.mode === 'api-virtual' && (
               <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 space-y-2">
                 <p class="text-[11px] text-amber-950 font-medium">
-                  Gateway en lecture seule : envoyez une consigne de correction a OpenClaw.
+                  Gateway en lecture seule : envoyez une consigne de correction a ZimaOS.
                 </p>
                 <pre class="text-[10px] text-amber-900 whitespace-pre-wrap font-mono bg-white/70 border border-amber-100 rounded p-2">
                   {buildGatewayWritePrompt()}
@@ -367,7 +367,7 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
                     onClick={() => void sendGatewayWritePrompt()}
                     class="inline-flex items-center justify-center rounded-lg bg-amber-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:opacity-95 disabled:opacity-50"
                   >
-                    {sendingFixPrompt ? 'Envoi…' : 'Envoyer a un agent OpenClaw'}
+                    {sendingFixPrompt ? 'Envoi…' : 'Envoyer a un agent ZimaOS'}
                   </button>
                 </div>
                 {sendFixPromptMsg && <p class="text-[11px] text-amber-900">{sendFixPromptMsg}</p>}
@@ -376,10 +376,10 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
           </div>
 
           <div class="rounded-xl border border-[#175B37]/25 bg-[#E9F3EB]/40 p-4 space-y-3">
-            <p class="text-xs font-semibold text-gray-900">Diagnostic & réparation automatiques (OpenClaw)</p>
+            <p class="text-xs font-semibold text-gray-900">Diagnostic & réparation automatiques (ZimaOS)</p>
             <p class="text-[11px] text-gray-600 leading-relaxed">
               Forge teste plusieurs URL (127.0.0.1, LAN depuis <span class="font-mono">trustedProxies</span>, etc.) et
-              des jetons (fichier <span class="font-mono">openclaw.json</span>, base Config, variable d’environnement).
+              des jetons (fichier <span class="font-mono">zimaos.json</span>, base Config, variable d’environnement).
               En cas de succès, l’URL et le jeton sont enregistrés dans la table Config (sauf si des variables
               d’environnement les remplacent).
             </p>
@@ -391,66 +391,66 @@ export default function MaintenanceTab({ onSync, syncing, message, onOpenClawRep
                 class="rounded border-gray-300"
               />
               Si aucune combinaison ne répond, tenter <span class="font-mono">docker restart</span> sur le conteneur
-              OpenClaw puis resonder.
+              ZimaOS puis resonder.
             </label>
             <div class="flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={openclawRepairing}
-                onClick={() => void handleOpenClawAutoRepair()}
+                disabled={zimaosRepairing}
+                onClick={() => void handleZimaOSAutoRepair()}
                 class="inline-flex items-center justify-center rounded-lg bg-[#175B37] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
               >
-                {openclawRepairing ? 'Diagnostic en cours…' : 'Diagnostiquer et réparer OpenClaw'}
+                {zimaosRepairing ? 'Diagnostic en cours…' : 'Diagnostiquer et réparer ZimaOS'}
               </button>
             </div>
-            {openclawRepairResult && (
+            {zimaosRepairResult && (
               <div
                 class={`text-[11px] rounded-lg px-3 py-2 space-y-1 border ${
-                  openclawRepairResult.error && !openclawRepairResult.alreadyOk
+                  zimaosRepairResult.error && !zimaosRepairResult.alreadyOk
                     ? 'bg-red-50 border-red-100 text-red-900'
-                    : openclawRepairResult.alreadyOk
+                    : zimaosRepairResult.alreadyOk
                       ? 'bg-emerald-50 border-emerald-100 text-emerald-900'
-                      : openclawRepairResult.repaired
+                      : zimaosRepairResult.repaired
                         ? 'bg-emerald-50 border-emerald-100 text-emerald-900'
                         : 'bg-amber-50 border-amber-100 text-amber-950'
                 }`}
                 role="status"
               >
-                {openclawRepairResult.error && <p class="font-medium">{openclawRepairResult.error}</p>}
-                {openclawRepairResult.winner?.baseUrl && (
+                {zimaosRepairResult.error && <p class="font-medium">{zimaosRepairResult.error}</p>}
+                {zimaosRepairResult.winner?.baseUrl && (
                   <p class="font-mono break-all">
-                    Passerelle : {openclawRepairResult.winner.baseUrl}{' '}
-                    <span class="text-gray-600">(jeton : {openclawRepairResult.winner.tokenSource || '—'})</span>
+                    Passerelle : {zimaosRepairResult.winner.baseUrl}{' '}
+                    <span class="text-gray-600">(jeton : {zimaosRepairResult.winner.tokenSource || '—'})</span>
                   </p>
                 )}
-                {openclawRepairResult.saved && (
+                {zimaosRepairResult.saved && (
                   <p class="opacity-90">
-                    Enregistré — URL : {openclawRepairResult.saved.gatewayUrl ? 'oui' : 'non'}, jeton :{' '}
-                    {openclawRepairResult.saved.token ? 'oui' : 'non'}, AppData :{' '}
-                    {openclawRepairResult.saved.dockerAppDataDir ? 'oui' : 'non'}
+                    Enregistré — URL : {zimaosRepairResult.saved.gatewayUrl ? 'oui' : 'non'}, jeton :{' '}
+                    {zimaosRepairResult.saved.token ? 'oui' : 'non'}, AppData :{' '}
+                    {zimaosRepairResult.saved.dockerAppDataDir ? 'oui' : 'non'}
                   </p>
                 )}
-                {typeof openclawRepairResult.probesTried === 'number' && (
-                  <p class="opacity-80">Sondes : {openclawRepairResult.probesTried}</p>
+                {typeof zimaosRepairResult.probesTried === 'number' && (
+                  <p class="opacity-80">Sondes : {zimaosRepairResult.probesTried}</p>
                 )}
-                {openclawRepairResult.dockerRestart && (
+                {zimaosRepairResult.dockerRestart && (
                   <p>
                     Docker :{' '}
-                    {openclawRepairResult.dockerRestart.ok
-                      ? `redémarrage OK (${openclawRepairResult.dockerRestart.container || '?'})`
-                      : `échec — ${openclawRepairResult.dockerRestart.error || 'inconnu'}`}
+                    {zimaosRepairResult.dockerRestart.ok
+                      ? `redémarrage OK (${zimaosRepairResult.dockerRestart.container || '?'})`
+                      : `échec — ${zimaosRepairResult.dockerRestart.error || 'inconnu'}`}
                   </p>
                 )}
-                {(openclawRepairResult.warnings?.length ?? 0) > 0 && (
+                {(zimaosRepairResult.warnings?.length ?? 0) > 0 && (
                   <ul class="list-disc pl-4 text-amber-900">
-                    {openclawRepairResult.warnings!.map((w) => (
+                    {zimaosRepairResult.warnings!.map((w) => (
                       <li key={w}>{w}</li>
                     ))}
                   </ul>
                 )}
-                {(openclawRepairResult.actions?.length ?? 0) > 0 && (
+                {(zimaosRepairResult.actions?.length ?? 0) > 0 && (
                   <ul class="list-disc pl-4 mt-1">
-                    {openclawRepairResult.actions!.map((a) => (
+                    {zimaosRepairResult.actions!.map((a) => (
                       <li key={a}>{a}</li>
                     ))}
                   </ul>

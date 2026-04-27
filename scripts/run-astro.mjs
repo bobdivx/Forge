@@ -41,6 +41,10 @@ if (!process.env.ASTRO_DATABASE_FILE) {
   );
 }
 
+// Stabilise les exécutions CI/agents : évite les invites interactives bloquantes.
+if (!process.env.CI) process.env.CI = "1";
+if (!process.env.ASTRO_TELEMETRY_DISABLED) process.env.ASTRO_TELEMETRY_DISABLED = "1";
+
 const astro = path.join(root, "node_modules", "astro", "bin", "astro.mjs");
 const r = spawnSync(process.execPath, [astro, ...args], {
   cwd: root,

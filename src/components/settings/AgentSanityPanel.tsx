@@ -7,8 +7,8 @@ type AgentCheck = {
   hasInstructionFile: boolean;
   instructionFileMissingOnHost?: boolean;
   instructionFilePath: string;
-  inOpenClawAgentsListApi: boolean;
-  inOpenClawLocalConfig: boolean;
+  inZimaOSAgentsListApi: boolean;
+  inZimaOSLocalConfig: boolean;
   ready: boolean;
 };
 
@@ -34,7 +34,7 @@ export default function AgentSanityPanel() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/openclaw-agent-sanity');
+      const res = await fetch('/api/zimaos-agent-sanity');
       const payload = (await res.json().catch(() => ({}))) as SanityPayload & { error?: string };
       if (!res.ok) {
         setError(payload.error || `HTTP ${res.status}`);
@@ -60,7 +60,7 @@ export default function AgentSanityPanel() {
         <div>
           <h3 class="text-sm font-semibold text-gray-900">Santé des agents</h3>
           <p class="text-[11px] text-gray-500">
-            Vérifie l’activation Forge, le prompt DB et l’enregistrement OpenClaw (liste API ou openclaw.json). Le fichier
+            Vérifie l’activation Forge, le prompt DB et l’enregistrement ZimaOS (liste API ou zimaos.json). Le fichier
             .md sur l’hôte est informatif si le prompt est déjà en base.
           </p>
         </div>
@@ -118,8 +118,8 @@ export default function AgentSanityPanel() {
                         ? [
                             !c.enabledInForge ? 'désactivé' : '',
                             !c.hasDbPrompt ? 'prompt DB manquant' : '',
-                            !c.inOpenClawAgentsListApi && !c.inOpenClawLocalConfig
-                              ? 'absent liste OpenClaw / pas dans openclaw.json local'
+                            !c.inZimaOSAgentsListApi && !c.inZimaOSLocalConfig
+                              ? 'absent liste ZimaOS / pas dans zimaos.json local'
                               : '',
                           ]
                             .filter(Boolean)

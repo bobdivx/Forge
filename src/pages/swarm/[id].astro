@@ -8,10 +8,10 @@ import AgentMissionJournal from '../../components/agents/AgentMissionJournal';
 import AgentSwarmCommandCenter from '../../components/agents/AgentSwarmCommandCenter';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
   mapSessionToAgentRow,
-} from '../../lib/openclaw-gateway';
+} from '../../lib/zimaos-gateway';
 import { findRawSessionForSwarmAgentKey } from '../../lib/swarm-agent-resolve';
 
 const { id } = Astro.params;
@@ -20,16 +20,16 @@ const agentKey = id || '';
 
 let agentInfo = null;
 try {
-  const result = await fetchOpenClawSessionsPayload(email);
+  const result = await fetchZimaOSSessionsPayload(email);
   if (result.ok) {
-    const sessions = normalizeOpenClawSessions(result.data) as Record<string, unknown>[];
+    const sessions = normalizeZimaOSSessions(result.data) as Record<string, unknown>[];
     const sessionObj = findRawSessionForSwarmAgentKey(sessions, agentKey);
     if (sessionObj) agentInfo = mapSessionToAgentRow(sessionObj);
   }
 } catch { /* session info indisponible */ }
 
 /** Clé `sessions_send` (ex. telegram:…) — pas seulement le segment d’URL. */
-const openClawSessionKey = agentInfo?.id || agentKey;
+const zimaosSessionKey = agentInfo?.id || agentKey;
 
 let tasks = [];
 let appIssues = [];
@@ -96,7 +96,7 @@ function statusBadge(status: string) {
       </div>
     </div>
 
-    <AgentSwarmCommandCenter client:load agentId={agentKey} sessionKey={openClawSessionKey} />
+    <AgentSwarmCommandCenter client:load agentId={agentKey} sessionKey={zimaosSessionKey} />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-5">
@@ -131,7 +131,7 @@ function statusBadge(status: string) {
             </svg>
             <h3 class="font-semibold text-gray-900 text-sm">Journal de Mission (Astro DB)</h3>
           </div>
-          <AgentMissionJournal client:load initialTasks={missionTasksJson} sessionKey={openClawSessionKey} syncAgentId={agentKey} />
+          <AgentMissionJournal client:load initialTasks={missionTasksJson} sessionKey={zimaosSessionKey} syncAgentId={agentKey} />
         </div>
 
         <!-- Anomalies -->
@@ -211,10 +211,10 @@ function statusBadge(status: string) {
       <!-- Colonne pilotage -->
       <div class="space-y-5">
         {agentInfo && agentInfo.raw?.model != null && (
-          <AgentSteerForm client:load sessionKey={openClawSessionKey} currentModel={agentInfo.raw.model} />
+          <AgentSteerForm client:load sessionKey={zimaosSessionKey} currentModel={agentInfo.raw.model} />
         )}
         {agentInfo && (
-          <AgentDirectiveForm client:load sessionKey={openClawSessionKey} />
+          <AgentDirectiveForm client:load sessionKey={zimaosSessionKey} />
         )}
       </div>
     </div>

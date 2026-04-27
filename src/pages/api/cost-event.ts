@@ -3,7 +3,7 @@ export const prerender = false;
 
 /**
  * POST /api/cost-event
- * Ingère un événement de coût généré par un agent OpenClaw.
+ * Ingère un événement de coût généré par un agent ZimaOS.
  * Inspiré de Paperclip /cost-events endpoint.
  *
  * Body JSON:

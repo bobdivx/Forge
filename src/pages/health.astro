@@ -3,28 +3,28 @@
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import { loadAstroDb } from '../lib/load-astro-db';
 import {
-  getOpenClawGatewayBaseUrl,
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
-  fetchOpenClawAgentsList,
-  fetchOpenClawModelCatalog,
-  fetchOpenClawJson,
-  getOpenClawClientDebugMeta,
-} from '../lib/openclaw-gateway';
+  getZimaOSGatewayBaseUrl,
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
+  fetchZimaOSAgentsList,
+  fetchZimaOSModelCatalog,
+  fetchZimaOSJson,
+  getZimaOSClientDebugMeta,
+} from '../lib/zimaos-gateway';
 import { getAllConfig, getConfig } from '../lib/config-db';
 
 const config = await getAllConfig();
 const { db, AgentInstruction, ActivityLog, AgentBudget, Heartbeat, sql, desc } = await loadAstroDb();
-const ocDebug = await getOpenClawClientDebugMeta();
+const ocDebug = await getZimaOSClientDebugMeta();
 
 // 1. Gateway Health & Auth
-const gatewayUrl = await getOpenClawGatewayBaseUrl();
-const gatewayToken = (await getConfig('openclawToken')) || 'casaos';
+const gatewayUrl = await getZimaOSGatewayBaseUrl();
+const gatewayToken = (await getConfig('zimaosToken')) || 'casaos';
 
 // 2. Sessions & Agents
 const userEmail = Astro.locals.user?.email;
-const gatewayRes = await fetchOpenClawSessionsPayload(userEmail);
-const sessions = gatewayRes.ok ? normalizeOpenClawSessions(gatewayRes.data) : [];
+const gatewayRes = await fetchZimaOSSessionsPayload(userEmail);
+const sessions = gatewayRes.ok ? normalizeZimaOSSessions(gatewayRes.data) : [];
 const gatewayError = !gatewayRes.ok ? gatewayRes.error : null;
 const gatewayAttempts = gatewayRes.attempts ?? [];
 
@@ -41,19 +41,19 @@ let agentRegistryOk = false;
 let catalogOk = false;
 try {
     // a. Discovery par les agents (traditionnel)
-    const agentsRes = await fetchOpenClawAgentsList(userEmail);
+    const agentsRes = await fetchZimaOSAgentsList(userEmail);
     if (agentsRes.ok) {
         agentRegistryOk = true;
-        agentsRes.agents.forEach(a => availableModels.push(`openclaw/${a.id}`));
+        agentsRes.agents.forEach(a => availableModels.push(`zimaos/${a.id}`));
     }
     
     // b. Discovery par le catalogue global (Ollama NAS / Windows)
-    const { fetchOpenClawModelCatalog } = await import('../lib/openclaw-gateway');
-    const catalogRes = await fetchOpenClawModelCatalog(userEmail);
+    const { fetchZimaOSModelCatalog } = await import('../lib/zimaos-gateway');
+    const catalogRes = await fetchZimaOSModelCatalog(userEmail);
     if (catalogRes.ok) {
         catalogOk = true;
         catalogRes.models.forEach(m => {
-            const id = `openclaw/${m.id}`;
+            const id = `zimaos/${m.id}`;
             if (!availableModels.includes(id)) availableModels.push(id);
         });
     }
@@ -74,7 +74,7 @@ const toolsProbePayloads = [
 
 const toolChecks = await Promise.all(
   toolsProbePayloads.map(async (probe) => {
-    const res = await fetchOpenClawJson(userEmail, '/tools/invoke', {
+    const res = await fetchZimaOSJson(userEmail, '/tools/invoke', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(probe.body),
@@ -96,41 +96,41 @@ const toolChecks = await Promise.all(
   }),
 );
 
-const v1ModelsCheck = await fetchOpenClawJson(userEmail, '/v1/models');
-const healthCheck = await fetchOpenClawJson(userEmail, '/health');
+const v1ModelsCheck = await fetchZimaOSJson(userEmail, '/v1/models');
+const healthCheck = await fetchZimaOSJson(userEmail, '/health');
 const resolvedSessionAttempt = gatewayAttempts.find((a) => a.ok && a.parsedCount > 0) ?? null;
 const noisySessionAttempts = gatewayAttempts.filter(
   (a) => !resolvedSessionAttempt || a.via !== resolvedSessionAttempt.via,
 );
 
-const openclawBlockers: string[] = [];
-const openclawWarnings: string[] = [];
+const zimaosBlockers: string[] = [];
+const zimaosWarnings: string[] = [];
 if (!gatewayRes.ok) {
-  openclawBlockers.push(`Gateway sessions indisponible: ${gatewayError || 'erreur inconnue'}`);
+  zimaosBlockers.push(`Gateway sessions indisponible: ${gatewayError || 'erreur inconnue'}`);
 }
 if (sessions.length === 0) {
-  openclawBlockers.push('Aucune session active détectée (Discussion sera vide).');
+  zimaosBlockers.push('Aucune session active détectée (Discussion sera vide).');
 }
 for (const tc of toolChecks) {
   if (!tc.ok) {
     if (tc.tool === 'models_list') {
-      openclawWarnings.push(`Tool ${tc.tool} indisponible: ${tc.message} (non bloquant si modèles détectés via /v1/models ou fallback).`);
+      zimaosWarnings.push(`Tool ${tc.tool} indisponible: ${tc.message} (non bloquant si modèles détectés via /v1/models ou fallback).`);
     } else {
-      openclawBlockers.push(`Tool ${tc.tool} indisponible: ${tc.message}`);
+      zimaosBlockers.push(`Tool ${tc.tool} indisponible: ${tc.message}`);
     }
   }
 }
 if (!v1ModelsCheck.ok && availableModels.length === 0) {
-  openclawBlockers.push(`Catalogue modèles indisponible: ${v1ModelsCheck.error || `HTTP ${v1ModelsCheck.status}`}`);
+  zimaosBlockers.push(`Catalogue modèles indisponible: ${v1ModelsCheck.error || `HTTP ${v1ModelsCheck.status}`}`);
 }
 if (!agentRegistryOk) {
-  openclawBlockers.push('agents_list non fonctionnel: Forge ne peut pas confirmer le registre d’agents OpenClaw.');
+  zimaosBlockers.push('agents_list non fonctionnel: Forge ne peut pas confirmer le registre d’agents ZimaOS.');
 }
 if (!catalogOk && availableModels.length === 0) {
-  openclawBlockers.push('Aucun modèle détecté via OpenClaw/Ollama.');
+  zimaosBlockers.push('Aucun modèle détecté via ZimaOS/Ollama.');
 }
 if (v1ModelsCheck.ok && availableModels.length > 0) {
-  openclawWarnings.push('/v1/models répond 200 mais format/liste non exploitable par Forge ; fallback catalogue actif.');
+  zimaosWarnings.push('/v1/models répond 200 mais format/liste non exploitable par Forge ; fallback catalogue actif.');
 }
 
 // 4. Budget Status & Auto-Seeding (Robust approach)
@@ -171,7 +171,7 @@ const recentHeartbeats = (recentPulse.length > 0)
         <header class="flex justify-between items-center">
             <div>
                 <h1 class="text-3xl font-bold text-zinc-900 mb-2">Santé du Pipeline</h1>
-                <p class="text-zinc-500 font-medium small-caps tracking-wide">Monitoring Infrastructure Forge &times; OpenClaw</p>
+                <p class="text-zinc-500 font-medium small-caps tracking-wide">Monitoring Infrastructure Forge &times; ZimaOS</p>
             </div>
             <div class="flex gap-2">
                 <button 
@@ -188,7 +188,7 @@ const recentHeartbeats = (recentPulse.length > 0)
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <!-- Gateway Status -->
             <div class={gatewayRes.ok ? "p-6 bg-white border-l-4 border-l-emerald-500 border border-zinc-100 rounded-3xl shadow-sm" : "p-6 bg-rose-50 border-l-4 border-l-rose-500 border border-rose-100 rounded-3xl shadow-sm"}>
-                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">{gatewayRes.ok ? "OpenClaw Gateway" : "Gateway Hors-Ligne"}</p>
+                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">{gatewayRes.ok ? "ZimaOS Gateway" : "Gateway Hors-Ligne"}</p>
                 <div class="flex items-center gap-2">
                     <span class={gatewayRes.ok ? "text-2xl font-black text-zinc-900" : "text-2xl font-black text-rose-600"}>
                         {gatewayRes.ok ? "Actif" : "Erreur"}
@@ -238,10 +238,10 @@ const recentHeartbeats = (recentPulse.length > 0)
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- OpenClaw Deep Diagnostics -->
+            <!-- ZimaOS Deep Diagnostics -->
             <div class="bg-white border border-zinc-100 rounded-[2rem] p-8 shadow-sm h-full flex flex-col">
                 <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-xl font-bold text-zinc-900 px-2 border-l-4 border-emerald-500">Diagnostic OpenClaw complet</h2>
+                    <h2 class="text-xl font-bold text-zinc-900 px-2 border-l-4 border-emerald-500">Diagnostic ZimaOS complet</h2>
                     <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">gateway + tools + sessions</span>
                 </div>
 
@@ -308,21 +308,21 @@ const recentHeartbeats = (recentPulse.length > 0)
                         </ul>
                     </div>
 
-                    <div class={`rounded-2xl border p-4 ${openclawBlockers.length ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                        <p class="font-bold mb-2">{openclawBlockers.length ? 'Blocages détectés' : 'Aucun blocage OpenClaw détecté'}</p>
-                        {openclawBlockers.length > 0 ? (
+                    <div class={`rounded-2xl border p-4 ${zimaosBlockers.length ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                        <p class="font-bold mb-2">{zimaosBlockers.length ? 'Blocages détectés' : 'Aucun blocage ZimaOS détecté'}</p>
+                        {zimaosBlockers.length > 0 ? (
                           <ul class="list-disc pl-5 space-y-1 text-[11px]">
-                            {openclawBlockers.map((b) => <li>{b}</li>)}
+                            {zimaosBlockers.map((b) => <li>{b}</li>)}
                           </ul>
                         ) : (
-                          <p class="text-[11px]">Le pipeline OpenClaw semble cohérent côté Forge.</p>
+                          <p class="text-[11px]">Le pipeline ZimaOS semble cohérent côté Forge.</p>
                         )}
                     </div>
-                    {openclawWarnings.length > 0 && (
+                    {zimaosWarnings.length > 0 && (
                       <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                         <p class="font-bold mb-2">Avertissements (non bloquants)</p>
                         <ul class="list-disc pl-5 space-y-1 text-[11px]">
-                          {openclawWarnings.map((w) => <li>{w}</li>)}
+                          {zimaosWarnings.map((w) => <li>{w}</li>)}
                         </ul>
                       </div>
                     )}

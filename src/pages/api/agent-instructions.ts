@@ -6,7 +6,7 @@ import {
   readInstructionMdFromRepo,
 } from '../../lib/agent-instruction-defaults';
 import { SWARM_WORK_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
-import { provisionAgentInOpenClaw } from '../../lib/openclaw-agent-provision';
+import { provisionAgentInZimaOS } from '../../lib/zimaos-agent-provision';
 
 /** GET  /api/agent-instructions         → liste tous les agents
  *  GET  /api/agent-instructions?id=X    → un agent spécifique
@@ -107,7 +107,7 @@ export const POST: APIRoute = async ({ request }) => {
     updatedAt: new Date(),
   });
 
-  const provision = await provisionAgentInOpenClaw({
+  const provision = await provisionAgentInZimaOS({
     agentId,
     model,
     filePath,

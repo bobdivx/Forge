@@ -94,7 +94,7 @@ export default function AgentCard({
                   {teamProfile.displayName}
                 </h3>
                 <span class="shrink-0 rounded-full bg-[#E9F3EB] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#175B37]">
-                  OpenClaw
+                  ZimaOS
                 </span>
               </div>
               <p class="mt-0.5 truncate text-[10px] text-gray-500">{teamProfile.role}</p>

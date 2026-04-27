@@ -7,12 +7,12 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     <header class="space-y-2">
       <h1 class="text-3xl font-bold text-zinc-900">Aide Forge</h1>
       <p class="text-zinc-500">
-        Guide rapide pour diagnostiquer Forge × OpenClaw et remettre la Discussion en service.
+        Guide rapide pour diagnostiquer Forge × ZimaOS et remettre la Discussion en service.
       </p>
     </header>
 
     <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
-      <h2 class="text-lg font-semibold text-zinc-900">1) Vérifier la connectivité OpenClaw</h2>
+      <h2 class="text-lg font-semibold text-zinc-900">1) Vérifier la connectivité ZimaOS</h2>
       <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
         <li>Ouvrir <a class="underline" href="/health">/health</a> et vérifier <strong>sessions_list</strong> et <strong>agents_list</strong>.</li>
         <li>Les 404 sur des endpoints alternatifs peuvent être normaux si un endpoint fonctionne.</li>
@@ -23,7 +23,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
       <h2 class="text-lg font-semibold text-zinc-900">2) Discussion : réponse asynchrone</h2>
       <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
-        <li>Le message “transmis” signifie que l’envoi est accepté par OpenClaw.</li>
+        <li>Le message “transmis” signifie que l’envoi est accepté par ZimaOS.</li>
         <li>La réponse arrive ensuite par polling asynchrone (bulle “réponse en cours”).</li>
         <li>Une session existante peut être réutilisée (pas forcément une nouvelle session à chaque message).</li>
       </ul>
@@ -41,14 +41,14 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
       <h2 class="text-lg font-semibold text-zinc-900">4) /agents n'affiche qu'un agent</h2>
       <p class="text-sm text-zinc-700">
-        Si OpenClaw UI affiche plusieurs agents mais Forge n'en voit qu'un (souvent <code class="font-mono">chef_technique</code>),
+        Si ZimaOS UI affiche plusieurs agents mais Forge n'en voit qu'un (souvent <code class="font-mono">chef_technique</code>),
         la gateway est generalement en mode liste restreinte (<code class="font-mono">allowAny=false</code>).
       </p>
       <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
         <li>Verifier dans Forge: <a class="underline" href="/agents">/agents</a> puis regarder le message d'activation.</li>
-        <li>Verifier dans la reponse API que <code class="font-mono">openclawAgentsRegistry.allowAny</code> est bien <code class="font-mono">true</code>.</li>
-        <li>Dans la config OpenClaw gateway, autoriser la visibilite globale de <code class="font-mono">agents_list</code>.</li>
-        <li>Redemarrer le service gateway OpenClaw puis cliquer sur “Reveiller les agents” dans <a class="underline" href="/agents">/agents</a>.</li>
+        <li>Verifier dans la reponse API que <code class="font-mono">zimaosAgentsRegistry.allowAny</code> est bien <code class="font-mono">true</code>.</li>
+        <li>Dans la config ZimaOS gateway, autoriser la visibilite globale de <code class="font-mono">agents_list</code>.</li>
+        <li>Redemarrer le service gateway ZimaOS puis cliquer sur “Reveiller les agents” dans <a class="underline" href="/agents">/agents</a>.</li>
         <li>Si besoin, verifier avec un POST sur <code class="font-mono">/tools/invoke</code> (tool <code class="font-mono">agents_list</code>) que la liste complete remonte.</li>
       </ul>
     </section>

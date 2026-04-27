@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import {
-  fetchOpenClawSessionsForDiscussion,
-  resolveBestOpenClawSessionForKey,
-  buildOpenClawDiscussionHistory,
-} from '../../lib/discussion-openclaw-session';
+  fetchZimaOSSessionsForDiscussion,
+  resolveBestZimaOSSessionForKey,
+  buildZimaOSDiscussionHistory,
+} from '../../lib/discussion-zimaos-session';
 
 /**
- * POST : historique user + assistant pour une session OpenClaw (réhydrate Discussion après F5).
+ * POST : historique user + assistant pour une session ZimaOS (réhydrate Discussion après F5).
  * Corps : `{ "sessionKey": "…", "maxMessages"?: number }` (maxMessages défaut 100, plafond 200).
  */
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  const list = await fetchOpenClawSessionsForDiscussion(locals.user.email as string, 120);
+  const list = await fetchZimaOSSessionsForDiscussion(locals.user.email as string, 120);
   if (!list.ok) {
     return new Response(
       JSON.stringify({ ok: false, error: list.error || 'sessions_list indisponible', messages: [] }),
@@ -37,7 +37,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const raw = resolveBestOpenClawSessionForKey(list.sessions, sessionKey);
+  const raw = resolveBestZimaOSSessionForKey(list.sessions, sessionKey);
   const selectedSessionKey = raw
     ? String(raw.key ?? raw.sessionKey ?? raw.session_key ?? '')
     : '';
@@ -54,7 +54,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const messages = buildOpenClawDiscussionHistory(raw, { max: maxMessages });
+  const messages = buildZimaOSDiscussionHistory(raw, { max: maxMessages });
 
   return new Response(
     JSON.stringify({

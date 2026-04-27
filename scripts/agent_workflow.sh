@@ -1,7 +1,7 @@
 #!/bin/bash
 # agent_workflow.sh — Workflow d'autonomie complet avec reporting Forge DB
 # Usage: ./agent_workflow.sh "<NOM_PROJET>" "<DESCRIPTION_TICKET>"
-# Exécuté par CHEF_TECHNIQUE via OpenClaw.
+# Exécuté par CHEF_TECHNIQUE via ZimaOS.
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ repl() {
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  DevForge Workflow — Autonomie Complète              ║"
+echo "║  ZimaDev Workflow — Autonomie Complète               ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo "  Projet : $PROJECT"
 echo "  Ticket : $TICKET"

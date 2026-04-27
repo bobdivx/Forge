@@ -1,5 +1,5 @@
 /**
- * Routage des demandes carnet de bord (table Request) vers les agents OpenClaw.
+ * Routage des demandes carnet de bord (table Request) vers les agents ZimaOS.
  */
 
 export function resolveAssigneeForForgeRequest(r: {
@@ -34,7 +34,7 @@ export function extractForgeRequestIdFromTaskBlob(blob: string): number | null {
 }
 
 /**
- * Ligne « machine » à la fin de la réponse agent ; Forge la détecte dans OpenClaw (scan automatique).
+ * Ligne « machine » à la fin de la réponse agent ; Forge la détecte dans ZimaOS (scan automatique).
  */
 export function buildForgeTaskDispatchFooter(taskId: number): string {
   return [

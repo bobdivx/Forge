@@ -378,7 +378,7 @@ export default function WorkScheduleTab() {
           | {
               ok?: boolean;
               budgetBlocked?: string;
-              openClawErrors?: string[];
+              zimaosErrors?: string[];
               wakeReport?: {
                 targeted: number;
                 awakened: string[];
@@ -401,12 +401,12 @@ export default function WorkScheduleTab() {
                 ? `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}, manquantes: ${ko.join(', ')}.`
                 : `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}.`,
             );
-          } else if (wc?.openClawErrors?.length) {
+          } else if (wc?.zimaosErrors?.length) {
             setMsg(
-              `Attention : OpenClaw n'a pas reçu les directives (${wc.openClawErrors.join(' · ')}). Vérifiez le token, l'URL de la gateway et que sessions_send est autorisé.`,
+              `Attention : ZimaOS n'a pas reçu les directives (${wc.zimaosErrors.join(' · ')}). Vérifiez le token, l'URL de la gateway et que sessions_send est autorisé.`,
             );
           } else {
-            setMsg('Travail démarré : directives envoyées vers OpenClaw.');
+            setMsg('Travail démarré : directives envoyées vers ZimaOS.');
           }
         } else {
           setMsg(action === 'stop' ? 'Système arrêté.' : 'Mode planifié activé.');

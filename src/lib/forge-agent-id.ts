@@ -1,5 +1,5 @@
 /**
- * Identifiants agents Forge ↔ OpenClaw : casse et séparateurs diffèrent
+ * Identifiants agents Forge ↔ ZimaOS : casse et séparateurs diffèrent
  * (ex. chef_technique vs CHEF_TECHNIQUE). On normalise par clé alphanumérique.
  */
 import { FORGE_AGENT_INSTRUCTION_ROWS } from './agent-instruction-defaults';

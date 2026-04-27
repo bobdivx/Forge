@@ -16,7 +16,7 @@ export default function ForgeEconomics() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/openclaw-economics-stats');
+      const res = await fetch('/api/zimaos-economics-stats');
       const data = await res.json();
       setStats(data);
     } finally {
@@ -28,7 +28,7 @@ export default function ForgeEconomics() {
     if (!confirm('Voulez-vous vraiment fermer les sessions en erreur ou trop anciennes ?')) return;
     setCleaning(true);
     try {
-      const res = await fetch('/api/openclaw-clean-sessions', { method: 'POST' });
+      const res = await fetch('/api/zimaos-clean-sessions', { method: 'POST' });
       const data = await res.json();
       alert(data.message || 'Sessions nettoyées avec succès.');
       await fetchStats();

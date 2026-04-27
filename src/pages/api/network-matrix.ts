@@ -2,11 +2,11 @@ import type { APIRoute } from 'astro';
 import { getConfig, getOllamaOriginResolved } from '../../lib/config-db';
 import { getForgeHookBaseUrl } from '../../lib/forge-hook-base-url';
 import {
-  getOpenClawGatewayBaseUrl,
-  getOpenClawGatewayCandidateBases,
-  getOpenClawClientDebugMeta,
-  fetchOpenClawJson,
-} from '../../lib/openclaw-gateway';
+  getZimaOSGatewayBaseUrl,
+  getZimaOSGatewayCandidateBases,
+  getZimaOSClientDebugMeta,
+  fetchZimaOSJson,
+} from '../../lib/zimaos-gateway';
 
 type ValueSource = 'env' | 'database' | 'fallback';
 
@@ -38,11 +38,11 @@ export const GET: APIRoute = async () => {
     const forgeDb = trim(await getConfig('forgePublicUrl'));
     const forgeResolved = normalizeUrl(await getForgeHookBaseUrl());
 
-    const openclawMeta = await getOpenClawClientDebugMeta();
-    const openclawResolved = normalizeUrl(await getOpenClawGatewayBaseUrl());
-    const openclawCandidates = await getOpenClawGatewayCandidateBases();
-    const openclawDb = trim(await getConfig('openclawGatewayUrl'));
-    const openclawEnv = trim(process.env.OPENCLAW_GATEWAY_URL);
+    const zimaosMeta = await getZimaOSClientDebugMeta();
+    const zimaosResolved = normalizeUrl(await getZimaOSGatewayBaseUrl());
+    const zimaosCandidates = await getZimaOSGatewayCandidateBases();
+    const zimaosDb = trim((await getConfig('zimaosRuntimeUrl')) || (await getConfig('zimaosGatewayUrl')));
+    const zimaosEnv = trim(process.env.FORGE_ZIMAOS_RUNTIME_URL) || trim(process.env.ZIMAOS_GATEWAY_URL);
 
     const ollamaDb = trim(await getConfig('ollamaUrl'));
     const ollamaEnvHost = trim(process.env.OLLAMA_HOST);
@@ -54,11 +54,11 @@ export const GET: APIRoute = async () => {
     })
       .then((r) => ({ ok: r.ok, status: r.status }))
       .catch((e: unknown) => ({ ok: false, status: 0, error: e instanceof Error ? e.message : 'Erreur réseau' }));
-    const probeOpenClawRaw = await fetchOpenClawJson(undefined, '/health');
-    const probeOpenClaw = {
-      ok: probeOpenClawRaw.ok,
-      status: probeOpenClawRaw.status,
-      error: probeOpenClawRaw.ok ? undefined : probeOpenClawRaw.error,
+    const probeZimaosRaw = await fetchZimaOSJson(undefined, '/health');
+    const probeZimaos = {
+      ok: probeZimaosRaw.ok,
+      status: probeZimaosRaw.status,
+      error: probeZimaosRaw.ok ? undefined : probeZimaosRaw.error,
     };
     const probeOllama = ollamaResolved
       ? await fetch(`${ollamaResolved}/api/tags`, {
@@ -84,14 +84,14 @@ export const GET: APIRoute = async () => {
           api: `${forgeResolved}/api`,
         },
       },
-      openclaw: {
-        resolvedBaseUrl: openclawResolved,
-        source: openclawMeta.urlSource,
-        envValue: openclawEnv || null,
-        dbValue: openclawDb || null,
-        candidates: openclawCandidates,
-        tokenConfigured: openclawMeta.tokenConfigured,
-        tokenSource: openclawMeta.tokenSource,
+      zimaosRuntime: {
+        resolvedBaseUrl: zimaosResolved,
+        source: zimaosMeta.urlSource,
+        envValue: zimaosEnv || null,
+        dbValue: zimaosDb || null,
+        candidates: zimaosCandidates,
+        tokenConfigured: zimaosMeta.tokenConfigured,
+        tokenSource: zimaosMeta.tokenSource,
       },
       ollama: {
         resolvedBaseUrl: ollamaResolved || null,
@@ -106,7 +106,7 @@ export const GET: APIRoute = async () => {
           internalPort: 4321,
           nasPublishedPortTypical: 4331,
         },
-        openclaw: {
+        zimaosRuntime: {
           internalPort: 18789,
           nasPublishedPortTypical: 24190,
         },
@@ -114,7 +114,7 @@ export const GET: APIRoute = async () => {
       },
       probes: {
         forgeLogin: probeForge,
-        openclawHealth: probeOpenClaw,
+        zimaosHealth: probeZimaos,
         ollamaTags: probeOllama,
       },
       timestamp: new Date().toISOString(),

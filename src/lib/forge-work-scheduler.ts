@@ -5,7 +5,7 @@
  * - Lit les WorkSchedule actifs en DB pour décider si la plage horaire est valide.
  * - Peut être démarré / arrêté manuellement (override = ignore les plages).
  * - Au début d’une session (manuel ou entrée dans une plage) : directive à tous les agents
- *   concernés via OpenClaw, puis création de tâches depuis les bugs ouverts et envoi des
+ *   concernés via ZimaOS, puis création de tâches depuis les bugs ouverts et envoi des
  *   AgentTask `pending` / `bug`.
  * - Pendant la session : redispatch périodique des tâches sans renvoyer la directive complète.
  * - Les demandes carnet (`Request` en pending) sont converties en `AgentTask` liées par `[ForgeRequest #id]`.
@@ -16,11 +16,11 @@ import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
 import {
-  invokeOpenClawSessionsSend,
+  invokeZimaOSSessionsSend,
   resolveSessionsSendKey,
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
-} from './openclaw-gateway';
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
+} from './zimaos-gateway';
 import {
   resolveAssigneeForForgeRequest,
   forgeRequestTaskTitle,
@@ -29,11 +29,11 @@ import {
   buildForgeTaskDispatchFooter,
   stripForgeDoneFooterFromBody,
 } from './forge-request-routing';
-import { scanOpenClawForForgeDoneSignals } from './forge-openclaw-done-scan';
+import { scanZimaOSForForgeDoneSignals } from './forge-zimaos-done-scan';
 import { insertForgeActivityLog } from './forge-activity-log';
-import { ensureProjectScopedSubagent } from './openclaw-app-subagents';
+import { ensureProjectScopedSubagent } from './zimaos-app-subagents';
 import { checkGithubActionsForProjects } from './forge-github-actions';
-import { cleanupIdleProjectScopedSubagents } from './openclaw-app-subagents';
+import { cleanupIdleProjectScopedSubagents } from './zimaos-app-subagents';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,11 +53,11 @@ export type WorkSystemStatus = {
   nextWindowAt: string | null;
 };
 
-/** Retour de `runWorkCycle` / `manualStart` pour affichage API (OpenClaw, budget). */
+/** Retour de `runWorkCycle` / `manualStart` pour affichage API (ZimaOS, budget). */
 export type WorkCycleResult = {
   ok: boolean;
   budgetBlocked?: string;
-  openClawErrors?: string[];
+  zimaosErrors?: string[];
   wakeReport?: {
     targeted: number;
     awakened: string[];
@@ -174,7 +174,7 @@ function orderDirectiveTargets(ids: string[]): string[] {
 }
 
 function normalizeAgentTarget(id: string): string {
-  return String(id || '').trim().replace(/^openclaw\//i, '').toUpperCase();
+  return String(id || '').trim().replace(/^zimaos\//i, '').toUpperCase();
 }
 
 function isAgentTargeted(agentId: string, targetIds: string[]): boolean {
@@ -192,15 +192,15 @@ async function sessionsSendWithFallback(
   message: string,
   extraHints: string[] = [],
 ): Promise<{ ok: boolean; error?: string }> {
-  let res = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
+  let res = await invokeZimaOSSessionsSend({ sessionKey, message, asyncDelivery: true });
   if (!res.ok) {
     const fallback = await resolveSessionsSendKey(undefined, [
       sessionKey,
-      sessionKey.replace(/^openclaw\//i, ''),
+      sessionKey.replace(/^zimaos\//i, ''),
       ...extraHints,
     ]);
     if (fallback && fallback !== sessionKey) {
-      res = await invokeOpenClawSessionsSend({ sessionKey: fallback, message, asyncDelivery: true });
+      res = await invokeZimaOSSessionsSend({ sessionKey: fallback, message, asyncDelivery: true });
     }
   }
   return res.ok ? { ok: true } : { ok: false, error: res.error };
@@ -468,7 +468,7 @@ async function dispatchPendingTasks(agentIds: string[]) {
 
         const res = await sessionsSendWithFallback(sessionKey, message, [
           task.agentId,
-          String(task.agentId || '').replace(/^openclaw\//i, ''),
+          String(task.agentId || '').replace(/^zimaos\//i, ''),
         ]);
         if (res.ok) {
           const { db: db2, AgentTask: AT2, eq: eq2 } = await loadAstroDb();
@@ -476,7 +476,7 @@ async function dispatchPendingTasks(agentIds: string[]) {
           await insertForgeActivityLog({
             actorType: 'system',
             actorId: 'work_scheduler',
-            action: 'swarm.task.sent_openclaw',
+            action: 'swarm.task.sent_zimaos',
             entityType: 'agent_task',
             entityId: String(task.id),
             details: {
@@ -543,7 +543,7 @@ async function runDispatchOnly(agentIds: string[]): Promise<void> {
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
-    await scanOpenClawForForgeDoneSignals();
+    await scanZimaOSForForgeDoneSignals();
     await maybeCleanupIdleSubagents();
   } finally {
     _dispatchInProgress = false;
@@ -572,14 +572,14 @@ async function verifyAgentSessions(agentIds: string[]): Promise<{ active: string
   const targeted = [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))];
   if (targeted.length === 0) return { active: [], missing: [] };
   try {
-    const payload = await fetchOpenClawSessionsPayload(undefined, {
+    const payload = await fetchZimaOSSessionsPayload(undefined, {
       invokeOnly: true,
       sessionsListArgs: { limit: 120, messageLimit: 0 },
     });
     if (!payload.ok) {
       return { active: [], missing: targeted };
     }
-    const sessions = normalizeOpenClawSessions(payload.data) as Record<string, unknown>[];
+    const sessions = normalizeZimaOSSessions(payload.data) as Record<string, unknown>[];
     const isActive = (agentId: string) => {
       const want = agentId.trim().toUpperCase();
       return sessions.some((s) => {
@@ -760,12 +760,12 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
-    await scanOpenClawForForgeDoneSignals();
+    await scanZimaOSForForgeDoneSignals();
     await maybeCleanupIdleSubagents();
     const sessionCheck = await verifyAgentSessions(agentIds);
     return {
       ok: true,
-      openClawErrors: wake.errors,
+      zimaosErrors: wake.errors,
       wakeReport: {
         targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
         awakened: wake.awakened,

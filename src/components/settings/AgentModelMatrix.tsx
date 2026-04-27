@@ -65,7 +65,7 @@ function PingBadge({ result, loading }: { result: PingResult | null; loading: bo
   const titleOk =
     (result.preview ?? '') +
     (result.viaDefaultFallback
-      ? ' — Ping via openclaw/default + x-openclaw-model (l’agent openclaw/<rôle> n’est pas enregistré sur le gateway).'
+      ? ' — Ping via zimaos/default + x-zimaos-model (l’agent zimaos/<rôle> n’est pas enregistré sur le gateway).'
       : '');
   const titleKo = result.error ?? '';
   return (
@@ -121,7 +121,7 @@ export default function AgentModelMatrix() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/openclaw-models');
+      const res = await fetch('/api/zimaos-models');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
@@ -137,7 +137,7 @@ export default function AgentModelMatrix() {
   async function pingAgent(row: ModelRow) {
     setPinging((p) => ({ ...p, [row.agentId]: true }));
     try {
-      const res = await fetch('/api/openclaw-model-ping', {
+      const res = await fetch('/api/zimaos-model-ping', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ openAiModel: row.openAiTarget, backendModel: row.backendModel }),
@@ -155,7 +155,7 @@ export default function AgentModelMatrix() {
     setSyncLoading(true);
     setSyncMsg('');
     try {
-      const res = await fetch('/api/openclaw-sync-agents');
+      const res = await fetch('/api/zimaos-sync-agents');
       const d = await res.json();
       setSyncPreview(d);
     } catch (e: unknown) {
@@ -169,7 +169,7 @@ export default function AgentModelMatrix() {
     setSyncing(true);
     setSyncMsg('');
     try {
-      const res = await fetch('/api/openclaw-sync-agents', {
+      const res = await fetch('/api/zimaos-sync-agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ restart }),
@@ -177,7 +177,7 @@ export default function AgentModelMatrix() {
       const d = await res.json();
       if (d.ok) {
         setSyncMsg(
-          `✓ ${d.agentsPushed?.length ?? 0} agents poussés vers OpenClaw${d.restart?.ok ? ' · conteneur redémarré' : d.restart ? ' · redémarrage échoué' : ''}.`,
+          `✓ ${d.agentsPushed?.length ?? 0} agents poussés vers ZimaOS${d.restart?.ok ? ' · conteneur redémarré' : d.restart ? ' · redémarrage échoué' : ''}.`,
         );
         setSyncPreview(null);
         setTimeout(() => load(), 3000);
@@ -278,7 +278,7 @@ export default function AgentModelMatrix() {
         <div class="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700 space-y-1">
           <p>
             <strong>Ollama non configuré pour la liste des tags</strong> — Indiquez l’<strong>URL Ollama</strong> dans{' '}
-            <strong>Paramètres → Connexion OpenClaw</strong>, ou définissez{' '}
+            <strong>Paramètres → Connexion ZimaOS</strong>, ou définissez{' '}
             <code class="bg-blue-100 px-1 rounded">OLLAMA_HOST</code> sur le conteneur.
           </p>
         </div>
@@ -304,16 +304,16 @@ export default function AgentModelMatrix() {
           )}
           <div class="space-y-1 text-[11px] opacity-80">
             {data.agentsList.status === 401 && (
-              <p>→ Token refusé par le gateway. Vérifie que le token dans Paramètres → Connexion OpenClaw correspond exactement à celui dans la config OpenClaw.</p>
+              <p>→ Token refusé par le gateway. Vérifie que le token dans Paramètres → Connexion ZimaOS correspond exactement à celui dans la config ZimaOS.</p>
             )}
             {data.agentsList.status === 403 && (
-              <p>→ Tool <code class="bg-black/10 px-1 rounded">agents_list</code> non autorisé. Ajoute <code class="bg-black/10 px-1 rounded">agents_list</code> à <code class="bg-black/10 px-1 rounded">gateway.tools.allow</code> dans la config OpenClaw.</p>
+              <p>→ Tool <code class="bg-black/10 px-1 rounded">agents_list</code> non autorisé. Ajoute <code class="bg-black/10 px-1 rounded">agents_list</code> à <code class="bg-black/10 px-1 rounded">gateway.tools.allow</code> dans la config ZimaOS.</p>
             )}
             {data.agentsList.status === 404 && (
-              <p>→ Endpoint <code class="bg-black/10 px-1 rounded">/tools/invoke</code> absent. Active <code class="bg-black/10 px-1 rounded">gateway.http.endpoints.toolsInvoke.enabled: true</code> dans la config OpenClaw.</p>
+              <p>→ Endpoint <code class="bg-black/10 px-1 rounded">/tools/invoke</code> absent. Active <code class="bg-black/10 px-1 rounded">gateway.http.endpoints.toolsInvoke.enabled: true</code> dans la config ZimaOS.</p>
             )}
             {(!data.agentsList.status || data.agentsList.status === 0) && (
-              <p>→ Erreur réseau. Vérifie l'URL du gateway dans Paramètres → Connexion OpenClaw et que le conteneur tourne (<code class="bg-black/10 px-1 rounded">docker ps</code>).</p>
+              <p>→ Erreur réseau. Vérifie l'URL du gateway dans Paramètres → Connexion ZimaOS et que le conteneur tourne (<code class="bg-black/10 px-1 rounded">docker ps</code>).</p>
             )}
             {data.gatewayMeta && (
               <p class="mt-1">
@@ -331,13 +331,13 @@ export default function AgentModelMatrix() {
         </div>
       )}
 
-      {/* Sync agents → OpenClaw */}
+      {/* Sync agents → ZimaOS */}
       <div class="rounded-2xl border border-gray-200 overflow-hidden">
         <div class="flex items-center justify-between gap-3 px-4 py-3 bg-gray-50">
           <div>
-            <p class="text-xs font-semibold text-gray-800">Synchroniser les agents vers OpenClaw</p>
+            <p class="text-xs font-semibold text-gray-800">Synchroniser les agents vers ZimaOS</p>
             <p class="text-[10px] text-gray-400 mt-0.5">
-              Vérifie via API gateway (<span class="font-mono">agents_list</span>) puis, si nécessaire, met à jour <span class="font-mono">openclaw.json</span> et redémarre le conteneur.
+              Vérifie via API gateway (<span class="font-mono">agents_list</span>) puis, si nécessaire, met à jour <span class="font-mono">zimaos.json</span> et redémarre le conteneur.
             </p>
           </div>
           <button
@@ -405,7 +405,7 @@ export default function AgentModelMatrix() {
                 {(syncPreview.notInForge?.length ?? 0) > 0 && (
                   <div>
                     <p class="text-[10px] text-gray-400 font-semibold mb-1">
-                      {syncPreview.notInForge!.length} agent{syncPreview.notInForge!.length > 1 ? 's' : ''} déjà dans OpenClaw (conservés) :
+                      {syncPreview.notInForge!.length} agent{syncPreview.notInForge!.length > 1 ? 's' : ''} déjà dans ZimaOS (conservés) :
                     </p>
                     <div class="flex flex-wrap gap-1">
                       {syncPreview.notInForge!.map((id) => (
@@ -416,7 +416,7 @@ export default function AgentModelMatrix() {
                 )}
 
                 {syncPreview.upToDate ? (
-                  <p class="text-xs text-emerald-600 font-semibold">✓ Tous les agents Forge sont déjà dans OpenClaw.</p>
+                  <p class="text-xs text-emerald-600 font-semibold">✓ Tous les agents Forge sont déjà dans ZimaOS.</p>
                 ) : (
                   <div class="flex gap-2 pt-1">
                     <button
@@ -428,7 +428,7 @@ export default function AgentModelMatrix() {
                     >
                       {syncing
                         ? <><span class="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" /> Sync…</>
-                        : '↑ Synchroniser + redémarrer OpenClaw'}
+                        : '↑ Synchroniser + redémarrer ZimaOS'}
                     </button>
                     <button
                       type="button"

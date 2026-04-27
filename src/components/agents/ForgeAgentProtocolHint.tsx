@@ -11,7 +11,7 @@ export default function ForgeAgentProtocolHint() {
       <div class="mt-4 space-y-3 border-t border-gray-100 pt-3 text-xs leading-relaxed">
         <p class="text-gray-600">
           Forge envoie les missions avec une ligne <strong class="text-gray-900">FORGE_DONE</strong> à produire en fin de réponse.
-          Le serveur Forge interroge régulièrement OpenClaw, détecte cette ligne et met à jour la <strong class="text-gray-900">AgentTask</strong> + le carnet (demandes <code class="font-mono text-[#175B37]">[ForgeRequest #N]</code>) sans appel HTTP manuel.
+          Le serveur Forge interroge régulièrement ZimaOS, détecte cette ligne et met à jour la <strong class="text-gray-900">AgentTask</strong> + le carnet (demandes <code class="font-mono text-[#175B37]">[ForgeRequest #N]</code>) sans appel HTTP manuel.
           Les appels <code class="font-mono text-gray-500">PUT /api/agent-tasks</code> restent possibles mais ne sont plus obligatoires.
         </p>
 
@@ -36,7 +36,7 @@ Content-Type: application/json
   "output": "Résumé optionnel pour l’historique Forge"
 }`}</pre>
           <p class="mt-2 text-gray-500">
-            Utile si tu scripts hors OpenClaw. Sinon, priorité à la ligne <code class="font-mono text-[#175B37]">FORGE_DONE</code> détectée par Forge.
+            Utile si tu scripts hors ZimaOS. Sinon, priorité à la ligne <code class="font-mono text-[#175B37]">FORGE_DONE</code> détectée par Forge.
           </p>
         </div>
 

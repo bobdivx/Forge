@@ -68,6 +68,7 @@ x-casaos:
     - arm64
   author: Forge
   category: Development
+  main: forge
   hostname: ""
   icon: https://icon.casaos.io/main/all/forge.png
   index: /
@@ -75,6 +76,10 @@ x-casaos:
   port_map: "4331"
   scheme: http
   store_app_id: forge
+  tagline:
+    en_us: Forge dashboard on NAS
+    fr_fr: Tableau de bord Forge sur NAS
   title:
     custom: Forge (NAS)
     en_us: Forge (NAS)
+    fr_fr: Forge (NAS)

@@ -63,11 +63,11 @@ for repo in /mnt/GitHub/*/; do
 done
 ```
 
-### 3. Vérifier la santé du gateway OpenClaw
+### 3. Vérifier la santé du gateway ZimaOS
 ```bash
-# Optionnel : source scripts/forge_env.sh  → OPENCLAW_GATEWAY_URL (défaut http://127.0.0.1:18789)
-OPENCLAW_GATEWAY_URL="${OPENCLAW_GATEWAY_URL:-http://127.0.0.1:18789}"
-HEALTH=$(curl -s "${OPENCLAW_GATEWAY_URL}/health" 2>/dev/null | python3 -c "
+# Optionnel : source scripts/forge_env.sh  → ZIMAOS_GATEWAY_URL (défaut http://127.0.0.1:18789)
+ZIMAOS_GATEWAY_URL="${ZIMAOS_GATEWAY_URL:-http://127.0.0.1:18789}"
+HEALTH=$(curl -s "${ZIMAOS_GATEWAY_URL}/health" 2>/dev/null | python3 -c "
 import json,sys
 try:
     d = json.load(sys.stdin)
@@ -83,8 +83,8 @@ if echo "$HEALTH" | grep -q "injoignable"; then
     -d "{
       \"agentId\": \"MAINTENANCE_REPO\",
       \"type\": \"bug\",
-      \"title\": \"[INFRA] Gateway OpenClaw injoignable\",
-      \"content\": \"URL: ${OPENCLAW_GATEWAY_URL}. Vérifier le conteneur openclaw.\",
+      \"title\": \"[INFRA] Gateway ZimaOS injoignable\",
+      \"content\": \"URL: ${ZIMAOS_GATEWAY_URL}. Vérifier le conteneur zimaos.\",
       \"priority\": \"critical\",
       \"project\": \"Infrastructure\"
     }"
@@ -109,7 +109,7 @@ fi
 #!/bin/bash
 # Sauvegarde automatique de tous les repos
 
-# FORGE_HOOK_URL via forge_env.sh si OpenClaw / Docker
+# FORGE_HOOK_URL via forge_env.sh si ZimaOS / Docker
 FORGE_HOOK="${FORGE_HOOK_URL:-http://127.0.0.1:4321/api/forge-hook}"
 
 SUCCESS=0
@@ -173,7 +173,7 @@ curl -s -X POST "$FORGE_HOOK" \
 
 | Condition | Action |
 |-----------|--------|
-| Gateway OpenClaw down | Bug `critical` → forge-hook → CHEF_TECHNIQUE alerte |
+| Gateway ZimaOS down | Bug `critical` → forge-hook → CHEF_TECHNIQUE alerte |
 | Push GitHub échoué | Bug `high` → forge-hook → EXPERT_GITHUB résout |
 | > 10 tâches pending | Message → CHEF_TECHNIQUE pour priorisation |
 | Saturation disque > 90% | Bug `critical` → forge-hook → INGENIEUR_HARDWARE |

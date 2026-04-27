@@ -7,16 +7,20 @@
  * les agents et modèles des actions utilisateur ou imports explicites.
  */
 export default async function seed() {
-  const { db, Config, AgentModel } = await import('astro:db');
+  const { db, Config, AgentModel, AgentInstruction } = await import('astro:db');
   const { FORGE_DEFAULT_AGENT_MODELS } = await import('../src/lib/agent-model-defaults');
+  const {
+    FORGE_AGENT_INSTRUCTION_ROWS,
+    readInstructionMdFromRepo,
+  } = await import('../src/lib/agent-instruction-defaults');
 
   // ── 1. Config initiale (clés vides — pas de chemins imposés) ──
   try {
     const existingConfig = await db.select().from(Config);
     if (existingConfig.length === 0) {
       await db.insert(Config).values([
-        { key: 'openclawGatewayUrl', value: '', updatedAt: new Date() },
-        { key: 'openclawToken', value: '', updatedAt: new Date() },
+        { key: 'zimaosGatewayUrl', value: '', updatedAt: new Date() },
+        { key: 'zimaosToken', value: '', updatedAt: new Date() },
         { key: 'ollamaUrl', value: '', updatedAt: new Date() },
         { key: 'githubToken', value: '', updatedAt: new Date() },
         { key: 'vercelToken', value: '', updatedAt: new Date() },
@@ -55,5 +59,30 @@ export default async function seed() {
     }
   } catch {
     console.warn('AgentModel seed skipped: schema/table indisponible pour cette execution.');
+  }
+
+  // ── 3. Migration instructions Markdown -> DB (source de vérité) ──
+  try {
+    if (!AgentInstruction) {
+      console.warn('AgentInstruction seed skipped: table non resolue (schema Astro DB non regenere).');
+      return;
+    }
+    const existingInstructions = await db.select().from(AgentInstruction);
+    if (existingInstructions.length === 0) {
+      const now = new Date();
+      await db.insert(AgentInstruction).values(
+        FORGE_AGENT_INSTRUCTION_ROWS.map((row) => ({
+          agentId: row.agentId,
+          model: row.model,
+          filePath: row.filePath,
+          systemPrompt: readInstructionMdFromRepo(row.filePath),
+          enabled: 1,
+          updatedAt: now,
+        })),
+      );
+      console.log('AgentInstruction seeded from legacy markdown files.');
+    }
+  } catch (e) {
+    console.warn('AgentInstruction seed skipped:', e);
   }
 }

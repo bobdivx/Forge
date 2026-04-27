@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { getForgeReposRootHealth } from '../../lib/forge-repos-health';
 import { getConfig } from '../../lib/config-db';
-import { probeOpenClawContainerPath } from '../../lib/openclaw-docker-mounts';
+import { probeZimaOSContainerPath } from '../../lib/zimaos-docker-mounts';
 
 export type BindMountSuggestion = {
   /** Chemin sur l’hôte Docker (à utiliser pour forgeReposRoot si Forge tourne sur cet hôte) */
   hostPath: string;
-  /** Chemin dans le conteneur OpenClaw (même contenu) */
+  /** Chemin dans le conteneur ZimaOS (même contenu) */
   containerPath: string;
 };
 
@@ -30,30 +30,30 @@ function buildBindSuggestions(
 }
 
 /**
- * État du répertoire applications (forgeReposRoot) côté Forge + sonde Docker OpenClaw (volumes + test -d).
+ * État du répertoire applications (forgeReposRoot) côté Forge + sonde Docker ZimaOS (volumes + test -d).
  */
 export const GET: APIRoute = async () => {
   try {
     const health = await getForgeReposRootHealth();
-    const containerHint = (await getConfig('openclawContainerName')).trim();
-    const openclawProbe = await probeOpenClawContainerPath({
+    const containerHint = (await getConfig('zimaosContainerName')).trim();
+    const zimaosProbe = await probeZimaOSContainerPath({
       pathToTest: health.path,
       containerNameOverride: containerHint || undefined,
     });
-    const openclawBindSuggestions = buildBindSuggestions(openclawProbe.mounts ?? []);
-    const openclawNote = !openclawProbe.attempted
-      ? 'Sonde OpenClaw désactivée ou Docker indisponible depuis ce serveur. Vérifiez manuellement les volumes du conteneur OpenClaw.'
-      : openclawProbe.dockerError
-        ? `Sonde OpenClaw incomplète: ${openclawProbe.dockerError}`
-        : openclawProbe.pathExistsInContainer
-          ? 'Le chemin est visible dans le conteneur OpenClaw (docker exec test -d).'
+    const zimaosBindSuggestions = buildBindSuggestions(zimaosProbe.mounts ?? []);
+    const zimaosNote = !zimaosProbe.attempted
+      ? 'Sonde ZimaOS désactivée ou Docker indisponible depuis ce serveur. Vérifiez manuellement les volumes du conteneur ZimaOS.'
+      : zimaosProbe.dockerError
+        ? `Sonde ZimaOS incomplète: ${zimaosProbe.dockerError}`
+        : zimaosProbe.pathExistsInContainer
+          ? 'Le chemin est visible dans le conteneur ZimaOS (docker exec test -d).'
           : 'Forge a pu appeler Docker mais le chemin est absent dans le conteneur — vérifiez les volumes bind (inspect) et le nom du conteneur.';
     return new Response(
       JSON.stringify({
         ...health,
-        openclawProbe,
-        openclawBindSuggestions,
-        openclawNote,
+        zimaosProbe,
+        zimaosBindSuggestions,
+        zimaosNote,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );

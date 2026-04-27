@@ -19,7 +19,7 @@ import SwarmFlowTimeline from '../../components/swarm/SwarmFlowTimeline';
         <p class="text-gray-500 text-sm max-w-2xl mt-2">
           Vue chronologique de ce que Forge enregistre : <strong class="text-gray-700">sessions de travail</strong>,
           <strong class="text-gray-700">missions</strong> (tâches envoyées aux agents) et <strong class="text-gray-700">messages</strong> entre agents.
-          C’est la trace « côté Forge » — OpenClaw peut contenir plus de détail dans ses propres journaux.
+          C’est la trace « côté Forge » — ZimaOS peut contenir plus de détail dans ses propres journaux.
         </p>
       </div>
       <a
@@ -41,11 +41,11 @@ import SwarmFlowTimeline from '../../components/swarm/SwarmFlowTimeline';
         <li>
           <strong class="text-gray-800">Validation / tri (carnet)</strong> — quand quelqu’un modifie le statut ou l’agent cible d’une demande dans le dashboard,
           Forge enregistre un événement explicite (<span class="font-mono text-xs bg-white/70 px-1 rounded">Carnet — statut modifié</span>,
-          <span class="font-mono text-xs bg-white/70 px-1 rounded">agent cible modifié</span>). Une validation uniquement dans OpenClaw reste visible surtout via les messages.
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">agent cible modifié</span>). Une validation uniquement dans ZimaOS reste visible surtout via les messages.
         </li>
         <li>
           <strong class="text-gray-800">Mise au travail</strong> — les cartes
-          <span class="font-mono text-xs bg-white/70 px-1 rounded">▶️ Mission … en cours sur OpenClaw</span> indiquent qu’une tâche a été poussée au gateway.
+          <span class="font-mono text-xs bg-white/70 px-1 rounded">▶️ Mission … en cours sur ZimaOS</span> indiquent qu’une tâche a été poussée au gateway.
         </li>
         <li>
           <strong class="text-gray-800">Clôture</strong> — une mission
@@ -72,7 +72,7 @@ import SwarmFlowTimeline from '../../components/swarm/SwarmFlowTimeline';
         </li>
         <li class="flex gap-3">
           <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">4</span>
-          <span><strong class="text-gray-800">Exécution OpenClaw</strong> — envoi effectif au gateway (<span class="font-mono text-[11px] text-gray-500">Tâche poussée vers OpenClaw</span>), puis mission <span class="font-mono text-[11px]">en cours</span> dans la chronologie.</span>
+          <span><strong class="text-gray-800">Exécution ZimaOS</strong> — envoi effectif au gateway (<span class="font-mono text-[11px] text-gray-500">Tâche poussée vers ZimaOS</span>), puis mission <span class="font-mono text-[11px]">en cours</span> dans la chronologie.</span>
         </li>
         <li class="flex gap-3">
           <span class="shrink-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#E9F3EB] text-xs font-bold text-[#175B37]">5</span>

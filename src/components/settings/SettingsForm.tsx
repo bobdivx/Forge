@@ -9,7 +9,7 @@ import WorkScheduleTab from './WorkScheduleTab';
 
 type Config = {
   forgePublicUrl: string;
-  openclawContainerName: string;
+  zimaosContainerName: string;
   forgeReposRoot: string;
   forgeReposRootAgent: string;
   dockerYamlDir: string;
@@ -17,9 +17,9 @@ type Config = {
   githubToken: string;
   vercelToken: string;
   githubWebhookSecret: string;
-  openclawToken: string;
+  zimaosToken: string;
   forgeApiToken: string;
-  openclawGatewayUrl: string;
+  zimaosGatewayUrl: string;
   ollamaUrl: string;
 };
 
@@ -43,7 +43,7 @@ export default function SettingsForm() {
   const [activeTab, setActiveTab] = useState('account');
   const [settings, setSettings] = useState<Config>({
     forgePublicUrl: '',
-    openclawContainerName: '',
+    zimaosContainerName: '',
     forgeReposRoot: '',
     forgeReposRootAgent: '',
     dockerYamlDir: '',
@@ -51,9 +51,9 @@ export default function SettingsForm() {
     githubToken:       '',
     vercelToken:       '',
     githubWebhookSecret: '',
-    openclawToken:     '',
+    zimaosToken:     '',
     forgeApiToken: '',
-    openclawGatewayUrl: '',
+    zimaosGatewayUrl: '',
     ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({
@@ -102,8 +102,8 @@ export default function SettingsForm() {
           ...prev,
           forgePublicUrl:
             typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
-          openclawContainerName:
-            typeof s.openclawContainerName === 'string' ? s.openclawContainerName : prev.openclawContainerName,
+          zimaosContainerName:
+            typeof s.zimaosContainerName === 'string' ? s.zimaosContainerName : prev.zimaosContainerName,
           forgeReposRoot: s.forgeReposRoot || prev.forgeReposRoot,
           forgeReposRootAgent:
             typeof s.forgeReposRootAgent === 'string' ? s.forgeReposRootAgent : prev.forgeReposRootAgent,
@@ -112,10 +112,10 @@ export default function SettingsForm() {
           githubToken: s.githubToken || '',
           vercelToken: s.vercelToken || '',
           githubWebhookSecret: s.githubWebhookSecret || '',
-          openclawToken: s.openclawToken || '',
+          zimaosToken: s.zimaosToken || '',
           forgeApiToken: s.forgeApiToken || '',
-          openclawGatewayUrl:
-            String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+          zimaosGatewayUrl:
+            String(s.zimaosGatewayUrl || '').trim() || prev.zimaosGatewayUrl,
           ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
@@ -140,8 +140,8 @@ export default function SettingsForm() {
       ...prev,
       forgePublicUrl:
         typeof s.forgePublicUrl === 'string' ? s.forgePublicUrl : prev.forgePublicUrl,
-      openclawContainerName:
-        typeof s.openclawContainerName === 'string' ? s.openclawContainerName : prev.openclawContainerName,
+      zimaosContainerName:
+        typeof s.zimaosContainerName === 'string' ? s.zimaosContainerName : prev.zimaosContainerName,
       forgeReposRoot: String(s.forgeReposRoot || prev.forgeReposRoot),
       forgeReposRootAgent:
         typeof s.forgeReposRootAgent === 'string' ? s.forgeReposRootAgent : prev.forgeReposRootAgent,
@@ -151,10 +151,10 @@ export default function SettingsForm() {
       vercelToken: typeof s.vercelToken === 'string' ? s.vercelToken : prev.vercelToken,
       githubWebhookSecret:
         typeof s.githubWebhookSecret === 'string' ? s.githubWebhookSecret : prev.githubWebhookSecret,
-      openclawToken: typeof s.openclawToken === 'string' ? s.openclawToken : prev.openclawToken,
+      zimaosToken: typeof s.zimaosToken === 'string' ? s.zimaosToken : prev.zimaosToken,
       forgeApiToken: typeof s.forgeApiToken === 'string' ? s.forgeApiToken : prev.forgeApiToken,
-      openclawGatewayUrl:
-        String(s.openclawGatewayUrl || '').trim() || prev.openclawGatewayUrl,
+      zimaosGatewayUrl:
+        String(s.zimaosGatewayUrl || '').trim() || prev.zimaosGatewayUrl,
       ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
     }));
   };
@@ -326,7 +326,7 @@ export default function SettingsForm() {
             onSync={syncProjects}
             syncing={syncing}
             message={message}
-            onOpenClawRepaired={async () => {
+            onZimaOSRepaired={async () => {
               try {
                 const s = await fetch('/api/settings').then((r) => r.json());
                 mergeSettingsFromServer(s);

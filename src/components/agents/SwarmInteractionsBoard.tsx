@@ -70,7 +70,7 @@ export default function SwarmInteractionsBoard() {
     <div class="space-y-6">
       {data!.gatewayError && (
         <div class="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
-          OpenClaw : {data!.gatewayError} — vérifiez le jeton et l'URL du gateway dans les paramètres.
+          ZimaOS : {data!.gatewayError} — vérifiez le jeton et l'URL du gateway dans les paramètres.
         </div>
       )}
 

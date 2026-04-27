@@ -64,7 +64,7 @@ export default function AgentTaskTable() {
   );
   if (tasks.length === 0) return (
     <div class="p-8 text-center text-gray-400 italic text-sm">
-      Aucune session gateway ni tâche persistée. Vérifiez le token OpenClaw dans les paramètres.
+      Aucune session gateway ni tâche persistée. Vérifiez le token ZimaOS dans les paramètres.
     </div>
   );
 

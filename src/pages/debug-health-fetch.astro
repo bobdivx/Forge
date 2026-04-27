@@ -1,8 +1,8 @@
 ---
 // src/pages/debug-health-fetch.astro
-import { getOpenClawGatewayBaseUrl } from '../lib/openclaw-gateway';
+import { getZimaOSGatewayBaseUrl } from '../lib/zimaos-gateway';
 
-const gatewayUrl = await getOpenClawGatewayBaseUrl();
+const gatewayUrl = await getZimaOSGatewayBaseUrl();
 const gatewayToken = 'casaos';
 
 let fetchResult = 'Not started';

@@ -41,4 +41,4 @@ curl -s ${FORGE_AUTH_CURL_ARGS[@]} -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4
 
 ### Règle absolue
 
-**Ne jamais te contenter d’une réponse texte dans la session OpenClaw.** La vérité opérationnelle est la base Forge : voir `instructions/FORGE_API_CONTRACT.md`.
+**Ne jamais te contenter d’une réponse texte dans la session ZimaOS.** La vérité opérationnelle est la base Forge : voir `instructions/FORGE_API_CONTRACT.md`.

@@ -7,16 +7,18 @@ import { loadAstroDb } from './load-astro-db';
 
 export type ForgeConfig = {
   /**
-   * URL joignable **depuis les autres services** (OpenClaw Docker, cron, agents) pour appeler Forge.
+   * URL joignable **depuis les autres services** (ZimaOS Docker, cron, agents) pour appeler Forge.
    * Ex. `http://forge-host:4331` (Forge conteneur publié) ou `http://forge:4321` (même réseau Docker).
    * Laissé vide → fallback env / défaut localhost.
    */
   forgePublicUrl: string;
-  /** Nom du contèneur Docker OpenClaw pour docker inspect/exec (vide = auto-détection name=openclaw). */
-  openclawContainerName: string;
+  /** Nom du contèneur Docker ZimaOS pour docker inspect/exec (vide = auto-détection name=zimaos). */
+  zimaosContainerName: string;
   /** URL Gateway joignable depuis Forge (Docker: http://host.docker.internal:24190, ou 18789 en accès interne). */
-  openclawGatewayUrl: string;
-  openclawToken: string;
+  zimaosGatewayUrl: string;
+  zimaosToken: string;
+  /** Alias métier ZimaOS du runtime gateway (remplace zimaosGatewayUrl côté UI). */
+  zimaosRuntimeUrl: string;
   /** Jeton machine-to-machine pour les appels agents -> API Forge. */
   forgeApiToken: string;
   /** URL de l’API Ollama (GET /api/tags), ex. http://host.docker.internal:11434 — même rôle que OLLAMA_HOST. */
@@ -50,9 +52,10 @@ export type ForgeConfig = {
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
 export const CONFIG_DEFAULTS: ForgeConfig = {
   forgePublicUrl: '',
-  openclawContainerName: '',
-  openclawGatewayUrl: '',
-  openclawToken: '',
+  zimaosContainerName: '',
+  zimaosGatewayUrl: '',
+  zimaosToken: '',
+  zimaosRuntimeUrl: '',
   forgeApiToken: '',
   ollamaUrl: '',
   githubToken: '',

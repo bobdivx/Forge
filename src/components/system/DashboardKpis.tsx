@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { logForgeOpenClaw } from '../../lib/forge-openclaw-console';
+import { logForgeZimaOS } from '../../lib/forge-zimaos-console';
 
 type Kpi = { label: string; value: number | string; sub?: string; color: 'blue' | 'violet' | 'amber'; icon: string };
 
@@ -67,14 +67,14 @@ export default function DashboardKpis({ serverProjectTotal }: DashboardKpisProps
         const gwVia = typeof agentData.gatewayVia === 'string' ? agentData.gatewayVia : '';
         if (gwErr) {
           setGatewayHint(
-            `${gwErr}${gwVia ? ` (via ${gwVia})` : ''}. Vérifiez l’URL / token OpenClaw dans Paramètres — l’URL doit être joignable depuis le serveur qui exécute Forge (pas seulement depuis votre navigateur).`
+            `${gwErr}${gwVia ? ` (via ${gwVia})` : ''}. Vérifiez l’URL / token ZimaOS dans Paramètres — l’URL doit être joignable depuis le serveur qui exécute Forge (pas seulement depuis votre navigateur).`
           );
         } else {
           setGatewayHint(null);
         }
-        const dbg = agentData.openclawDebug;
+        const dbg = agentData.zimaosDebug;
         if (dbg && typeof dbg === 'object') {
-          logForgeOpenClaw('GET /api/agents (tableau KPIs)', {
+          logForgeZimaOS('GET /api/agents (tableau KPIs)', {
             ...dbg,
             agentsCount: agents.length,
             gatewayError: gwErr || null,
@@ -140,7 +140,7 @@ export default function DashboardKpis({ serverProjectTotal }: DashboardKpisProps
           class="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-3 sm:px-4 text-xs sm:text-sm text-amber-100/95 leading-relaxed"
           role="status"
         >
-          <span class="font-semibold text-amber-200">OpenClaw : </span>
+          <span class="font-semibold text-amber-200">ZimaOS : </span>
           {gatewayHint}
         </div>
       )}

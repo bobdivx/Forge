@@ -1,5 +1,5 @@
 /**
- * Profils « membres d'équipe » dérivés des agents OpenClaw / Forge.
+ * Profils « membres d'équipe » dérivés des agents ZimaOS / Forge.
  * Réutilisable par la page Discussion, les cartes Swarm, etc.
  */
 
@@ -13,8 +13,8 @@ export type AgentLike = {
 
 export type AgentTeamProfile = {
   id: string;
-  /** Clé de session OpenClaw (identique à `id`, rappel explicite pour l’UI). */
-  openClawSessionKey: string;
+  /** Clé de session ZimaOS (identique à `id`, rappel explicite pour l’UI). */
+  zimaosSessionKey: string;
   displayName: string;
   role: string;
   initials: string;
@@ -132,7 +132,7 @@ export function buildAgentTeamProfile(agent: AgentLike): AgentTeamProfile {
   const { presence, presenceLabel } = mapPresence(agent);
   return {
     id: agent.id,
-    openClawSessionKey: agent.id,
+    zimaosSessionKey: agent.id,
     displayName,
     role,
     initials,
@@ -146,7 +146,7 @@ export function buildAgentTeamProfile(agent: AgentLike): AgentTeamProfile {
   };
 }
 
-export type OpenClawAgentProfileRow = {
+export type ZimaOSAgentProfileRow = {
   sessionKey: string;
   displayName?: string | null;
   roleTitle?: string | null;
@@ -161,7 +161,7 @@ function cleanOpt(s: unknown): string | null {
   return t ? t : null;
 }
 
-export function mergeOpenClawTeamProfile(agent: AgentLike, row?: OpenClawAgentProfileRow | null): AgentTeamProfile {
+export function mergeZimaOSTeamProfile(agent: AgentLike, row?: ZimaOSAgentProfileRow | null): AgentTeamProfile {
   const base = buildAgentTeamProfile(agent);
   if (!row) return base;
   const displayName = cleanOpt(row.displayName) ?? base.displayName;

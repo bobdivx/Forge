@@ -2,10 +2,10 @@
 import type { APIRoute } from 'astro';
 import { db, AgentMessage, AgentTask, desc } from 'astro:db';
 import {
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
   mapSessionToAgentRow,
-} from '../../lib/openclaw-gateway';
+} from '../../lib/zimaos-gateway';
 import { buildEdgesFromSessions, shortSwarmLabel } from '../../lib/swarm-interactions';
 
 function ts(d: Date | number | null | undefined): number {
@@ -26,9 +26,9 @@ export const GET: APIRoute = async ({ locals }) => {
 
   let sessions: unknown[] = [];
   let gatewayError: string | null = null;
-  const gw = await fetchOpenClawSessionsPayload(email);
+  const gw = await fetchZimaOSSessionsPayload(email);
   if (gw.ok) {
-    sessions = normalizeOpenClawSessions(gw.data);
+    sessions = normalizeZimaOSSessions(gw.data);
   } else {
     gatewayError = gw.error || 'Gateway indisponible';
   }
@@ -61,7 +61,7 @@ export const GET: APIRoute = async ({ locals }) => {
       to: e.to,
       fromLabel: e.fromLabel,
       toLabel: e.toLabel,
-      summary: 'Lien principal → sub-agent (session OpenClaw)',
+      summary: 'Lien principal → sub-agent (session ZimaOS)',
       at: e.at,
       atLabel: e.atLabel,
     });

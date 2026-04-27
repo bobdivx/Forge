@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# forge_env.sh — Base URL Forge pour hooks et API agents (sources pour shell / OpenClaw).
+# forge_env.sh — Base URL Forge pour hooks et API agents (sources pour shell / ZimaOS).
 #
 # Définissez avant d'inclure ce fichier (optionnel) :
 #   export FORGE_HOOK_BASE_URL=http://forge-host:4331  # Forge en conteneur NAS (`4331 -> 4321`)
 #   export FORGE_API_TOKEN=forge_xxx   # ou FORGE_AGENT_TOKEN
 #
-# Si vide : lecture de **forgePublicUrl** renseigné dans Paramètres → Connexion OpenClaw
+# Si vide : lecture de **forgePublicUrl** renseigné dans Paramètres → Connexion ZimaOS
 # (GET /api/agent-api-secrets, joignable depuis cette machine — souvent http://127.0.0.1:4321 sur l’hôte).
 # Surcharge : FORGE_AGENT_SECRETS_ENDPOINT=https://…/api/agent-api-secrets
 #
@@ -18,7 +18,7 @@
 
 _FORGE_AUTH_TOKEN="${FORGE_API_TOKEN:-${FORGE_AGENT_TOKEN:-}}"
 
-# 1. Tenter de lire directement depuis la base SQLite si accessible (cas DevForge complet)
+# 1. Tenter de lire directement depuis la base SQLite si accessible (cas ZimaDev complet)
 _DB_PATH="$(dirname "${BASH_SOURCE[0]}")/../.astro/content.db"
 if [ -z "${FORGE_HOOK_BASE_URL:-}" ] && [ -f "$_DB_PATH" ] && command -v python3 >/dev/null 2>&1; then
   _FP="$(python3 -c "import sqlite3; db=sqlite3.connect('$_DB_PATH'); row=db.execute('SELECT value FROM Config WHERE key=\"forgePublicUrl\"').fetchone(); print(row[0] if row else '')" 2>/dev/null || true)"
@@ -70,7 +70,7 @@ elif [ -f /.dockerenv ] && getent hosts forge-host >/dev/null 2>&1; then
     export FORGE_BASE_URL="http://forge-host:4331"
   fi
 elif [ -f /.dockerenv ]; then
-  # Dans un conteneur CasaOS typique (OpenClaw), l'hôte (où tourne Forge Prod sur le port 4331) est 172.17.0.1
+  # Dans un conteneur CasaOS typique (ZimaOS), l'hôte (où tourne Forge Prod sur le port 4331) est 172.17.0.1
   export FORGE_BASE_URL="http://172.17.0.1:4331"
 else
   export FORGE_BASE_URL="http://127.0.0.1:4321"

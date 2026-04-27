@@ -4,7 +4,7 @@
  * - Tourne en arrière-plan (setInterval 30 s).
  * - Scanne les fichiers .forge/dev-pids/*.log de tous les projets actifs.
  * - Détecte les erreurs (stack traces, Error, FATAL…) et crée des AgentAppIssue.
- * - Notifie un agent OpenClaw si un nouveau bug est détecté.
+ * - Notifie un agent ZimaOS si un nouveau bug est détecté.
  */
 
 import fs from 'fs';
@@ -12,7 +12,7 @@ import path from 'path';
 import { loadAstroDb } from './load-astro-db';
 import { listRepoProjectPaths } from './forge-repos';
 import { devPidsDir, readAppDashboardConfig } from './project-app-config';
-import { invokeOpenClawSessionsSend } from './openclaw-gateway';
+import { invokeZimaOSSessionsSend } from './zimaos-gateway';
 
 // ── Patterns d'erreur ────────────────────────────────────────────────────────
 
@@ -147,7 +147,7 @@ async function reportBug(
     console.warn('[bug-detector] DB insert failed:', e);
   }
 
-  // Notification OpenClaw (async, non bloquant)
+  // Notification ZimaOS (async, non bloquant)
   const projectName = path.basename(projectPath);
   const msg =
     `[Forge — Bug détecté automatiquement]\n\n` +
@@ -157,7 +157,7 @@ async function reportBug(
     `Extrait :\n\`\`\`\n${snippet.slice(0, 1200)}\n\`\`\`\n\n` +
     `Analyse et propose un correctif.`;
 
-  invokeOpenClawSessionsSend({
+  invokeZimaOSSessionsSend({
     sessionKey: 'DEV_BACKEND',
     message: msg,
     asyncDelivery: true,

@@ -9,7 +9,7 @@ export default function AgentModelsTab() {
           <h2 class="text-lg font-bold text-gray-900 mb-1">Modèles agents</h2>
           <p class="text-xs text-gray-500 max-w-2xl">
             Attribution des modèles Ollama par rôle agent. Vérifiez que chaque agent a son modèle enregistré dans le
-            gateway OpenClaw.
+            gateway ZimaOS.
           </p>
         </div>
         <a

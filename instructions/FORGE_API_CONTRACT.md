@@ -13,17 +13,17 @@ Méthode : POST
 Auth    : locale auto (IP locale) OU token Bearer
 ```
 
-> `forge-host` résout vers le host Docker via `extra_hosts` dans OpenClaw.yaml.
+> `forge-host` résout vers le host Docker via `extra_hosts` dans ZimaOS.yaml.
 > En production `forge.yml`, Forge publie `4331 -> 4321`; utilisez donc `forge-host:4331`.
-> Si tu utilises la CLI openclaw directement sur le host, utilise `127.0.0.1`.
+> Si tu utilises la CLI zimaos directement sur le host, utilise `127.0.0.1`.
 > Hors réseau local, ajoute `Authorization: Bearer <FORGE_API_TOKEN>` (jeton généré dans Paramètres → Jetons API).
 
 ### Fiabilité : une seule URL, pas d’erreur réseau
 
-Les agents dans **Docker OpenClaw** ne doivent **pas** utiliser `127.0.0.1` pour joindre Forge : ça pointe vers le conteneur lui‑même. À la place :
+Les agents dans **Docker ZimaOS** ne doivent **pas** utiliser `127.0.0.1` pour joindre Forge : ça pointe vers le conteneur lui‑même. À la place :
 
-1. **Paramètres → Connexion OpenClaw → « URL Forge joignable par les agents »** (`forgePublicUrl` en base, aussi retournée par `GET /api/agent-api-secrets`). C’est la source recommandée : pas besoin de redéployer Docker pour changer l’URL.
-2. Secours : **`FORGE_HOOK_BASE_URL`** dans l’environnement du service OpenClaw ou `.env` (prioritaire sur la valeur Paramètres pour CI / overrides).
+1. **Paramètres → Connexion ZimaOS → « URL Forge joignable par les agents »** (`forgePublicUrl` en base, aussi retournée par `GET /api/agent-api-secrets`). C’est la source recommandée : pas besoin de redéployer Docker pour changer l’URL.
+2. Secours : **`FORGE_HOOK_BASE_URL`** dans l’environnement du service ZimaOS ou `.env` (prioritaire sur la valeur Paramètres pour CI / overrides).
 3. **`source scripts/forge_env.sh`** : si aucune variable n’est posée, le script tente de lire `forgePublicUrl` via `curl` vers `/api/config/secrets` (ou `/api/agent-api-secrets`), avec le header Bearer si `FORGE_API_TOKEN` / `FORGE_AGENT_TOKEN` est défini.
 4. Préférer **`scripts/forge-hook.sh`** pour poster vers forge-hook : le JSON est construit par Python (échappement correct, pas de corps tronqué).
 
@@ -71,7 +71,7 @@ curl -s -X POST http://127.0.0.1:4321/api/forge-hook \
   -d '{
     "agentId": "TESTEUR_QA",
     "type": "bug",
-    "title": "Page /agents crashe avec 0 sessions OpenClaw",
+    "title": "Page /agents crashe avec 0 sessions ZimaOS",
     "content": "Erreur: Cannot read property map of undefined dans AgentsGrid.tsx ligne 42. Reproductible quand le gateway est hors ligne.",
     "priority": "high",
     "project": "Forge"
@@ -161,7 +161,7 @@ curl -X POST http://127.0.0.1:4321/api/agent-repl \
   -d '{"command": "/tools run git_status project=Forge", "agentId": "DEV_BACKEND"}'
 ```
 
-### Récupérer les jetons API (GitHub, Vercel, OpenClaw, jetons personnalisés)
+### Récupérer les jetons API (GitHub, Vercel, ZimaOS, jetons personnalisés)
 
 Même règle réseau : **requête depuis une IP locale** (127.0.0.1, LAN, Docker bridge 172.x typique) ou avec **jeton Bearer** (`FORGE_API_TOKEN`) — pas de cookie de session.
 
@@ -182,7 +182,7 @@ Réponse JSON :
 |-------|----------------|---------------|
 | `githubToken` | Champ GitHub | `GH_TOKEN` / `GITHUB_TOKEN` pour **GitHub CLI** |
 | `vercelToken` | Champ Vercel | `VERCEL_TOKEN` pour la **CLI Vercel** |
-| `openclawToken` | Connexion OpenClaw | Intégrations gateway OpenClaw |
+| `zimaosToken` | Connexion ZimaOS | Intégrations gateway ZimaOS |
 | `custom` | Lignes « jetons personnalisés » | Toute variable d’environnement métier (clé = nom normalisé) |
 
 **Résolution de secours** : si un outil attend `GITHUB_TOKEN` mais que seul le champ GitHub est rempli, utilise `.githubToken`. Si l’utilisateur a défini **aussi** `GITHUB_TOKEN` dans `custom`, les deux peuvent coexister : pour `gh`, privilégie `.githubToken` puis, si vide, `.custom.GITHUB_TOKEN`. Même logique pour Vercel : `.vercelToken` puis `.custom.VERCEL_TOKEN`.

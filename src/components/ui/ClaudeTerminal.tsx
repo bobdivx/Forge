@@ -16,7 +16,7 @@ export function ClaudeTerminal({ defaultCwd = '/' }: { defaultCwd?: string }) {
     }
   }, [output]);
 
-  // Charger les modèles Ollama/OpenClaw au démarrage
+  // Charger les modèles Ollama/ZimaOS au démarrage
   useEffect(() => {
     const fetchModels = async () => {
       try {
@@ -24,15 +24,15 @@ export function ClaudeTerminal({ defaultCwd = '/' }: { defaultCwd?: string }) {
         if (res.ok) {
           const data = await res.json();
           // On filtre potentiellement pour ne garder que ceux pertinents (ex: Ollama)
-          // ou on affiche tout le catalogue récupéré via OpenClaw
+          // ou on affiche tout le catalogue récupéré via ZimaOS
           setModels(data);
           
           // Essayer de pré-sélectionner un modèle GLM ou Qwen s'il existe
           const defaultModel = data.find((m: any) => m.name.toLowerCase().includes('glm') || m.name.toLowerCase().includes('coder'));
           if (defaultModel) {
-            setSelectedModel(defaultModel.name.replace('openclaw/', ''));
+            setSelectedModel(defaultModel.name.replace('zimaos/', ''));
           } else if (data.length > 0) {
-            setSelectedModel(data[0].name.replace('openclaw/', ''));
+            setSelectedModel(data[0].name.replace('zimaos/', ''));
           }
         }
       } catch (err) {
@@ -47,8 +47,8 @@ export function ClaudeTerminal({ defaultCwd = '/' }: { defaultCwd?: string }) {
     if (!prompt.trim()) return;
 
     setIsLoading(true);
-    // Nettoyer l'ID si ça vient de l'API avec le préfixe openclaw/
-    const cleanModelName = selectedModel.replace('openclaw/', '');
+    // Nettoyer l'ID si ça vient de l'API avec le préfixe zimaos/
+    const cleanModelName = selectedModel.replace('zimaos/', '');
     setOutput(prev => prev + `\n$ claude-code -p "${prompt}" [Modèle: ${cleanModelName}]\n`);
     
     try {

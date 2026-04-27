@@ -168,7 +168,7 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
     if (!key) {
       setBanner({
         type: 'err',
-        text: 'Indiquez la clé de session OpenClaw (ex. copie depuis la liste des sessions / agents).',
+        text: 'Indiquez la clé de session ZimaOS (ex. copie depuis la liste des sessions / agents).',
       });
       return;
     }
@@ -200,7 +200,10 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
         setTasks((prev) => prev.map((x) => (x.id === row.id ? (row as MissionTask) : x)));
         setEditStatus(row.status || 'running');
       }
-      setBanner({ type: 'ok', text: data.message || 'Relance envoyée à OpenClaw.' });
+      setBanner({
+        type: 'ok',
+        text: typeof data.message === 'string' ? data.message : 'Relance envoyée à ZimaOS.',
+      });
     } catch {
       setBanner({ type: 'err', text: 'Erreur réseau' });
     } finally {
@@ -354,7 +357,7 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
 
               <div>
                 <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">
-                  Clé session OpenClaw (sessions_send)
+                  Clé session ZimaOS (sessions_send)
                 </label>
                 <input
                   type="text"

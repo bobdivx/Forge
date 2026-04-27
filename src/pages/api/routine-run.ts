@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
 import { getAllConfig } from '../../lib/config-db';
-import { invokeOpenClawAgentTask } from '../../lib/openclaw-gateway';
-import { attemptOpenClawPreRepair } from './_openclaw-pre-repair';
+import { invokeZimaOSAgentTask } from '../../lib/zimaos-gateway';
+import { attemptZimaOSPreRepair } from './_zimaos-pre-repair';
 
 export const POST: APIRoute = async () => {
-  const preRepair = await attemptOpenClawPreRepair('routine-run');
+  const preRepair = await attemptZimaOSPreRepair('routine-run');
   const cfg = await getAllConfig();
   const githubRoot = (cfg.routineGithubRoot || cfg.forgeReposRoot || '').trim();
   const watchAgent = (cfg.routineWatchAgentId || 'MAINTENANCE_REPO').trim().toUpperCase();
@@ -29,8 +29,8 @@ export const POST: APIRoute = async () => {
     `priorisées (fiabilité, sécurité, DX, performance). Rythme cible: toutes les ${Number.isFinite(interval) ? interval : 60} minutes.`;
 
   const [watchResult, improveResult] = await Promise.all([
-    invokeOpenClawAgentTask({ agentId: watchAgent, message: watchMessage }),
-    invokeOpenClawAgentTask({ agentId: improveAgent, message: improveMessage }),
+    invokeZimaOSAgentTask({ agentId: watchAgent, message: watchMessage }),
+    invokeZimaOSAgentTask({ agentId: improveAgent, message: improveMessage }),
   ]);
 
   return new Response(

@@ -8,8 +8,8 @@ const year = new Date().getFullYear();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DevForge - La Forge Logicielle Autonome</title>
-    <meta name="description" content="Pilotez OpenClaw, Ollama et Gemini pour vos déploiements sur infrastructure propre." />
+    <title>ZimaDev - La Forge Logicielle Autonome</title>
+    <meta name="description" content="Pilotez le runtime ZimaOS, Ollama et Gemini pour vos déploiements sur infrastructure propre." />
   </head>
   <body class="relative min-h-screen bg-slate-950 text-white selection:bg-cyan-500/30 font-sans antialiased">
     <div class="forge-backdrop" aria-hidden="true"></div>
@@ -22,7 +22,7 @@ const year = new Date().getFullYear();
           <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
             <div class="flex items-center gap-2">
               <div class="h-8 w-8 rounded-lg bg-cyan-500/15 border border-cyan-400/35 flex items-center justify-center font-bold text-sm text-cyan-200 shadow-neon-cyan">F</div>
-              <span class="text-xl font-bold tracking-tight text-white forge-text-glow">DevForge</span>
+              <span class="text-xl font-bold tracking-tight text-white forge-text-glow">ZimaDev</span>
             </div>
             <div class="hidden md:flex gap-8 text-sm font-medium text-slate-300">
               <a href="#features" class="hover:text-cyan-300 transition drop-shadow-[0_0_8px_rgba(34,211,238,0.25)]">Fonctionnalités</a>
@@ -54,7 +54,7 @@ const year = new Date().getFullYear();
         <div class="relative mx-auto max-w-7xl px-6 text-center">
           <div class="inline-flex items-center gap-2 rounded-full border border-cyan-400/35 bg-cyan-500/10 px-3 py-1 mb-8 shadow-[0_0_24px_rgba(34,211,238,0.15)] backdrop-blur-md">
             <span class="flex h-2 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_rgba(34,211,238,0.9)]"></span>
-            <span class="text-xs font-medium text-cyan-200/90">OpenClaw · Ollama · Gemini (selon votre config)</span>
+            <span class="text-xs font-medium text-cyan-200/90">ZimaOS Runtime · Ollama · Gemini (selon votre config)</span>
           </div>
           
           <h1 class="mx-auto max-w-4xl text-5xl font-extrabold tracking-tight text-white sm:text-7xl">
@@ -62,7 +62,7 @@ const year = new Date().getFullYear();
           </h1>
           
           <p class="mx-auto mt-6 max-w-2xl text-lg text-slate-300">
-            De l'idée au déploiement en production. Le tableau de bord affiche les sessions et l'état réels renvoyés par votre gateway OpenClaw une fois connecté.
+            De l'idée au déploiement en production. Le tableau de bord affiche les sessions et l'état réels renvoyés par votre runtime ZimaOS une fois connecté.
           </p>
           
           <div class="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -77,7 +77,7 @@ const year = new Date().getFullYear();
           <p id="demo" class="sr-only">Démo</p>
           <div id="stack" class="mt-20 mx-auto max-w-5xl rounded-2xl forge-glass-panel p-2 shadow-neon-card-lg">
             <p class="text-center text-[10px] uppercase tracking-widest text-cyan-500/50 px-2 pt-2">
-              Illustration — les vues connectées lisent les données OpenClaw (sessions, gateway), pas des scénarios fictifs
+              Illustration — les vues connectées lisent les données runtime ZimaOS (sessions, gateway), pas des scénarios fictifs
             </p>
             <div class="rounded-xl overflow-hidden bg-slate-950/80 border border-cyan-500/15 relative mt-2 shadow-[inset_0_0_40px_rgba(34,211,238,0.04)]">
                <div class="absolute top-0 w-full h-8 bg-white/[0.04] border-b border-cyan-500/15 flex items-center px-4 gap-2 backdrop-blur-sm">
@@ -86,9 +86,9 @@ const year = new Date().getFullYear();
                  <div class="w-3 h-3 rounded-full bg-emerald-400/90 shadow-[0_0_8px_rgba(52,211,153,0.5)]"></div>
                </div>
                <div class="pt-8 p-6 text-left font-mono text-sm text-slate-400">
-                 <p class="text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.45)]">GET /health → sessions réelles (jeton OpenClaw)</p>
+                 <p class="text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.45)]">GET /health → sessions réelles (jeton runtime ZimaOS)</p>
                  <p class="mt-2">The Wire → lignes dérivées des sessions actives / veille</p>
-                 <p class="mt-2 text-slate-500">Paramètres : token gateway + option <span class="text-slate-400">OPENCLAW_GATEWAY_URL</span></p>
+                 <p class="mt-2 text-slate-500">Paramètres : token gateway + option <span class="text-slate-400">FORGE_ZIMAOS_RUNTIME_URL</span></p>
                </div>
             </div>
           </div>
@@ -100,7 +100,7 @@ const year = new Date().getFullYear();
         <div class="mx-auto max-w-7xl px-6">
           <div class="text-center max-w-2xl mx-auto mb-16">
             <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl forge-text-glow">Conçu pour la productivité absolue</h2>
-            <p class="mt-4 text-slate-400">Vos agents OpenClaw orchestrent le cycle de vie des applications ; la Forge affiche ce que le gateway expose réellement.</p>
+            <p class="mt-4 text-slate-400">Vos agents ZimaOS orchestrent le cycle de vie des applications ; la Forge affiche ce que le gateway expose réellement.</p>
           </div>
           
           <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -111,7 +111,7 @@ const year = new Date().getFullYear();
                 </svg>
               </div>
               <h3 class="text-xl font-semibold text-white mb-3">Code Généré par l'IA</h3>
-              <p class="text-slate-400 leading-relaxed">Modèles locaux Ollama (ex. Qwen) et Gemini côté Google, selon votre openclaw.json — ce dashboard n'invente pas de charge GPU ni de modèle.</p>
+              <p class="text-slate-400 leading-relaxed">Modèles locaux Ollama (ex. Qwen) et Gemini côté Google, selon votre runtime ZimaOS — ce dashboard n'invente pas de charge GPU ni de modèle.</p>
             </div>
             
             <div class="forge-glass-panel rounded-2xl p-8 shadow-neon-card hover:border-fuchsia-400/35 hover:shadow-[0_0_32px_rgba(192,38,211,0.15)] transition duration-300">
@@ -152,7 +152,7 @@ const year = new Date().getFullYear();
               <p class="text-slate-400 text-sm mb-6">Pour les NAS personnels et ZimaBoard.</p>
               <div class="text-4xl font-bold text-white mb-6">0€ <span class="text-lg font-normal text-slate-500">/mois</span></div>
               <ul class="space-y-3 mb-8 flex-1 text-slate-300 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> OpenClaw + Ollama / Gemini (self-host)</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Runtime ZimaOS + Ollama / Gemini (self-host)</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Déploiements illimités</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Intégration GitHub</li>
               </ul>
@@ -166,7 +166,7 @@ const year = new Date().getFullYear();
               <p class="text-slate-400 text-sm mb-6">Pour les entreprises et freelances.</p>
               <div class="text-4xl font-bold text-white mb-6">49€ <span class="text-lg font-normal text-slate-500">/mois</span></div>
               <ul class="space-y-3 mb-8 flex-1 text-slate-300 text-sm">
-                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Extensions cloud optionnelles (selon plugins OpenClaw)</li>
+                <li class="flex items-center gap-2"><svg class="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Extensions cloud optionnelles (selon plugins runtime)</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Cluster GPU Dédié</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.5)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Auto-Scaling ZimaOS</li>
                 <li class="flex items-center gap-2"><svg class="w-4 h-4 text-fuchsia-400 drop-shadow-[0_0_6px_rgba(217,70,239,0.45)]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Support prioritaire Slack</li>
@@ -183,9 +183,9 @@ const year = new Date().getFullYear();
       <div class="mx-auto max-w-7xl px-6 flex flex-col md:flex-row items-center justify-between gap-4">
         <div class="flex items-center gap-2">
           <div class="h-6 w-6 rounded-md bg-cyan-500/20 border border-cyan-400/35 flex items-center justify-center font-bold text-[10px] text-cyan-200 shadow-neon-cyan">F</div>
-          <span class="text-sm font-semibold text-slate-200">DevForge Inc.</span>
+          <span class="text-sm font-semibold text-slate-200">ZimaDev Inc.</span>
         </div>
-        <p class="text-slate-500 text-sm">© {year} DevForge SaaS. Créé avec les Agents IA.</p>
+        <p class="text-slate-500 text-sm">© {year} ZimaDev SaaS. Créé avec les Agents IA.</p>
         <div class="flex gap-4 text-sm text-slate-400">
           <a href="#" class="hover:text-cyan-300 transition">Conditions</a>
           <a href="#" class="hover:text-cyan-300 transition">Confidentialité</a>
@@ -201,7 +201,7 @@ const year = new Date().getFullYear();
         <li class="mb-4">
            <div class="flex items-center gap-2">
              <div class="h-8 w-8 rounded-lg bg-cyan-500/15 border border-cyan-400/35 flex items-center justify-center font-bold text-sm text-cyan-200 shadow-neon-cyan">F</div>
-             <span class="text-xl font-bold tracking-tight text-white forge-text-glow">DevForge</span>
+             <span class="text-xl font-bold tracking-tight text-white forge-text-glow">ZimaDev</span>
            </div>
         </li>
         <li><a href="#features" class="text-lg rounded-lg hover:bg-cyan-500/10 hover:text-cyan-200">Fonctionnalités</a></li>

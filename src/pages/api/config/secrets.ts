@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { getAgentApiSecretsBundle } from '../../../lib/custom-api-tokens-db';
 
 /**
- * Alias compatibilité pour agents OpenClaw:
+ * Alias compatibilité pour agents ZimaOS:
  * GET /api/config/secrets?agentId=DEV_BACKEND
  */
 export const GET: APIRoute = async ({ url }) => {

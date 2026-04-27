@@ -6,12 +6,12 @@ import {
 } from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
-  fetchOpenClawSessionsPayload,
-  fetchOpenClawAgentsList,
-  normalizeOpenClawSessions,
+  fetchZimaOSSessionsPayload,
+  fetchZimaOSAgentsList,
+  normalizeZimaOSSessions,
   mapSessionToAgentRow,
-  getOpenClawClientDebugMeta,
-} from '../../lib/openclaw-gateway';
+  getZimaOSClientDebugMeta,
+} from '../../lib/zimaos-gateway';
 import {
   normForgeAgentKey,
   resolveCanonicalForgeAgentId,
@@ -93,7 +93,7 @@ function countUserMessagesInSession(raw: Record<string, unknown>): number {
 }
 
 /**
- * Tâches persistées + activité OpenClaw : messages utilisateur dans la session rattachée,
+ * Tâches persistées + activité ZimaOS : messages utilisateur dans la session rattachée,
  * ou +1 session si pas de transcriptions (invoke sans messageLimit).
  */
 function buildDisplayTaskStats(
@@ -134,7 +134,7 @@ function buildDisplayTaskStats(
   return out;
 }
 
-/** Score de correspondance session OpenClaw ↔ agentId (table AgentInstruction). */
+/** Score de correspondance session ZimaOS ↔ agentId (table AgentInstruction). */
 function sessionMatchScore(raw: Record<string, unknown>, agentId: string): number {
   const wantKey = normForgeAgentKey(agentId);
   if (!wantKey) return 0;
@@ -248,17 +248,17 @@ function buildSwarmFromDefaultsAndSessions(
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
 
-  const [result, configMeta, openclawRegistry] = await Promise.all([
-    fetchOpenClawSessionsPayload(email, {
+  const [result, configMeta, zimaosRegistry] = await Promise.all([
+    fetchZimaOSSessionsPayload(email, {
       invokeOnly: true,
       sessionsListArgs: { limit: 120, messageLimit: 24 },
     }),
-    getOpenClawClientDebugMeta(),
-    fetchOpenClawAgentsList(email),
+    getZimaOSClientDebugMeta(),
+    fetchZimaOSAgentsList(email),
   ]);
 
   const rawSessions: Record<string, unknown>[] =
-    result.ok ? (normalizeOpenClawSessions(result.data) as Record<string, unknown>[]) : [];
+    result.ok ? (normalizeZimaOSSessions(result.data) as Record<string, unknown>[]) : [];
 
   let agents: any[] = [];
   let mergedWithInstructions = false;
@@ -294,7 +294,7 @@ export const GET: APIRoute = async ({ locals }) => {
       allInstructions.map((r) => [normForgeAgentKey(String(r.agentId)), r]),
     );
 
-    // Liste "réelle" = sessions OpenClaw (actives/récentes) + registre gateway.
+    // Liste "réelle" = sessions ZimaOS (actives/récentes) + registre gateway.
     const byId = new Map<string, any>();
     const keyToId = new Map<string, string>();
     const normalizeIdKey = (v: unknown) =>
@@ -321,7 +321,7 @@ export const GET: APIRoute = async ({ locals }) => {
       });
     }
 
-    for (const reg of openclawRegistry.agents) {
+    for (const reg of zimaosRegistry.agents) {
       const id = String(reg.id || '').trim();
       if (!id) continue;
       const upper = normalizeIdKey(id);
@@ -354,7 +354,7 @@ export const GET: APIRoute = async ({ locals }) => {
       });
     }
 
-    // Complément: certains agents n'apparaissent plus dans OpenClaw
+    // Complément: certains agents n'apparaissent plus dans ZimaOS
     // (session expirée / registre restreint) mais existent dans le journal AgentTask.
     // On les expose quand même pour aligner la grille avec l'historique des missions.
     for (const taskAgentId of Object.keys(taskStatsDb)) {
@@ -378,7 +378,7 @@ export const GET: APIRoute = async ({ locals }) => {
         raw: {
           source: 'task_history',
           taskHistoryOnly: true,
-          reason: 'Agent visible via AgentTask (historique) mais absent des sessions/registry OpenClaw.',
+          reason: 'Agent visible via AgentTask (historique) mais absent des sessions/registry ZimaOS.',
           enabledInForge: enabledInstructionIds.has(upper),
         },
       });
@@ -405,7 +405,7 @@ export const GET: APIRoute = async ({ locals }) => {
       keyToId.set(upper, canonicalId);
       byId.set(canonicalId, { ...mapped, id: canonicalId, name: canonicalId, raw: { ...(mapped.raw || {}), source: 'session' } });
     }
-    for (const reg of openclawRegistry.agents) {
+    for (const reg of zimaosRegistry.agents) {
       const id = String(reg.id || '').trim();
       if (!id) continue;
       const upper = normalizeIdKey(id);
@@ -433,7 +433,7 @@ export const GET: APIRoute = async ({ locals }) => {
     agents = Array.from(byId.values()).sort((a, b) => String(a.id).localeCompare(String(b.id)));
   }
 
-  const registryIds = openclawRegistry.agents.map((a) => a.id);
+  const registryIds = zimaosRegistry.agents.map((a) => a.id);
   const registryIdsCanonical = registryIds.map((rid) =>
     resolveCanonicalForgeAgentId(String(rid ?? '')),
   );
@@ -444,7 +444,7 @@ export const GET: APIRoute = async ({ locals }) => {
     registryIds.map((rid) => normForgeAgentKey(resolveCanonicalForgeAgentId(String(rid ?? '')))),
   );
   const registryMatchForgeDefault =
-    openclawRegistry.ok &&
+    zimaosRegistry.ok &&
     forgeNormKeys.size === registryNormKeys.size &&
     [...forgeNormKeys].every((k) => registryNormKeys.has(k));
 
@@ -464,21 +464,21 @@ export const GET: APIRoute = async ({ locals }) => {
       dbInstructionRowCount,
       dbEnabledInstructionCount,
       swarmInstructionCount: dbEnabledInstructionCount,
-      openclawAgentsRegistry: {
-        ok: openclawRegistry.ok,
-        status: openclawRegistry.status,
-        count: openclawRegistry.agents.length,
+      zimaosAgentsRegistry: {
+        ok: zimaosRegistry.ok,
+        status: zimaosRegistry.status,
+        count: zimaosRegistry.agents.length,
         agentIds: registryIds,
         agentIdsCanonical: registryIdsCanonical,
-        agents: openclawRegistry.agents,
-        requester: openclawRegistry.requester,
-        allowAny: openclawRegistry.allowAny,
-        error: openclawRegistry.error,
+        agents: zimaosRegistry.agents,
+        requester: zimaosRegistry.requester,
+        allowAny: zimaosRegistry.allowAny,
+        error: zimaosRegistry.error,
         matchesForgeDefaultRowCount: registryMatchForgeDefault,
       },
       gatewayError: result.ok ? undefined : result.error,
       gatewayVia: result.via,
-      openclawDebug: {
+      zimaosDebug: {
         viewerEmail: email ?? null,
         ...configMeta,
         httpStatus: result.status,
@@ -490,28 +490,28 @@ export const GET: APIRoute = async ({ locals }) => {
         swarmDisplayedCount: FORGE_AGENT_INSTRUCTION_ROWS.length,
         dbInstructionRowCount,
         dbEnabledInstructionCount,
-        openclawAgentsListCount: openclawRegistry.agents.length,
-        openclawAgentsListMatchesDefault15: registryMatchForgeDefault,
+        zimaosAgentsListCount: zimaosRegistry.agents.length,
+        zimaosAgentsListMatchesDefault15: registryMatchForgeDefault,
         attempts: result.attempts,
         taskStatsMergedWithSessions: true,
         dbTaskAgentKeyCount: Object.keys(taskStatsDb).length,
         note:
-          'taskStats = AgentTask (agentId → id canonique Forge) + sessions OpenClaw via sessions_list (messageLimit) : comptage messages user par session rattachée ; sans messages, +1 total comme avant.',
+          'taskStats = AgentTask (agentId → id canonique Forge) + sessions ZimaOS via sessions_list (messageLimit) : comptage messages user par session rattachée ; sans messages, +1 total comme avant.',
       },
       activationAdvice: {
         gatewayReadOnly:
-          openclawRegistry.ok &&
-          openclawRegistry.agents.length > 0 &&
+          zimaosRegistry.ok &&
+          zimaosRegistry.agents.length > 0 &&
           rawSessions.length === 0,
         gatewayAgentListRestricted:
-          openclawRegistry.ok &&
-          openclawRegistry.allowAny === false &&
-          openclawRegistry.agents.length <= 1,
+          zimaosRegistry.ok &&
+          zimaosRegistry.allowAny === false &&
+          zimaosRegistry.agents.length <= 1,
         message:
-          openclawRegistry.ok && openclawRegistry.allowAny === false && openclawRegistry.agents.length <= 1
-            ? `Le gateway OpenClaw renvoie une liste d'agents restreinte (allowAny=false, requester=${openclawRegistry.requester || 'inconnu'}). Ouvrez /help pour activer la visibilite globale des agents dans la configuration gateway.`
-            : openclawRegistry.ok && openclawRegistry.agents.length > 0 && rawSessions.length === 0
-            ? "Des agents sont enregistrés dans le gateway mais aucune session n'est active. Démarrez les agents côté OpenClaw (ou planificateur) puis vérifiez /tools/invoke sessions_list."
+          zimaosRegistry.ok && zimaosRegistry.allowAny === false && zimaosRegistry.agents.length <= 1
+            ? `Le gateway ZimaOS renvoie une liste d'agents restreinte (allowAny=false, requester=${zimaosRegistry.requester || 'inconnu'}). Ouvrez /help pour activer la visibilite globale des agents dans la configuration gateway.`
+            : zimaosRegistry.ok && zimaosRegistry.agents.length > 0 && rawSessions.length === 0
+            ? "Des agents sont enregistrés dans le gateway mais aucune session n'est active. Démarrez les agents côté ZimaOS (ou planificateur) puis vérifiez /tools/invoke sessions_list."
             : undefined,
       },
     }),

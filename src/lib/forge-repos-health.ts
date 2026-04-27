@@ -1,6 +1,6 @@
 /**
  * Diagnostic du répertoire des applications (`forgeReposRoot`).
- * Forge lit ce chemin sur **son** hôte ; OpenClaw doit monter le même stockage pour les agents.
+ * Forge lit ce chemin sur **son** hôte ; ZimaOS doit monter le même stockage pour les agents.
  */
 import fs from 'node:fs';
 import path from 'node:path';

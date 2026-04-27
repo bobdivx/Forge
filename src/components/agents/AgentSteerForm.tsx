@@ -52,7 +52,7 @@ export default function AgentSteerForm({ sessionKey, currentModel }: Props) {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/openclaw-steer', {
+      const res = await fetch('/api/zimaos-steer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionKey, model: selectedModel }),

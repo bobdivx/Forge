@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
 import {
   buildAgentTeamProfile,
-  mergeOpenClawTeamProfile,
+  mergeZimaOSTeamProfile,
   type AgentTeamProfile,
-  type OpenClawAgentProfileRow,
+  type ZimaOSAgentProfileRow,
 } from '../../lib/agent-profile';
 import TeamAvatar from '../agents/TeamAvatar';
 import NotificationBellIcon from '../icons/NotificationBellIcon';
@@ -12,6 +12,7 @@ import {
   SWARM_WORK_COMMAND_LABELS,
   type SwarmWorkCommand,
 } from '../../lib/forge-agent-protocol';
+import { readUiLanguage, type UiLanguage } from '../../lib/ui-language';
 
 type Project = { id: number; name: string; path: string; status: string | null };
 type RequestItem = {
@@ -57,7 +58,7 @@ type GatewayRemediation = {
   curlTest?: string;
   powershellScript?: string;
   bashScript?: string;
-  openclawPrompt?: string;
+  zimaosPrompt?: string;
   docs?: string;
 };
 
@@ -74,8 +75,8 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
   const powershellScript =
     typeof remediation.powershellScript === 'string' ? remediation.powershellScript.trim() : '';
   const bashScript = typeof remediation.bashScript === 'string' ? remediation.bashScript.trim() : '';
-  const openclawPrompt =
-    typeof remediation.openclawPrompt === 'string' ? remediation.openclawPrompt.trim() : '';
+  const zimaosPrompt =
+    typeof remediation.zimaosPrompt === 'string' ? remediation.zimaosPrompt.trim() : '';
   const docs = typeof remediation.docs === 'string' ? remediation.docs.trim() : '';
   const instructionsRaw = Array.isArray(remediation.instructions) ? remediation.instructions : [];
   const instructions = instructionsRaw
@@ -83,7 +84,7 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
     .filter(Boolean);
 
   if (title) lines.push(`Action requise: ${title}`);
-  if (endpoint) lines.push(`Endpoint exact Forge -> OpenClaw: ${endpoint}`);
+  if (endpoint) lines.push(`Endpoint exact Forge -> ZimaOS: ${endpoint}`);
   if (endpointMethod) lines.push(`Methode attendue: ${endpointMethod}`);
   if (where) lines.push(`Ou le mettre: ${where}`);
   if (configPath) lines.push(`Chemin de fichier detecte: ${configPath}`);
@@ -107,9 +108,9 @@ function formatGatewayRemediation(remediation: GatewayRemediation | undefined): 
     lines.push('Script auto (bash/python) :');
     lines.push(bashScript);
   }
-  if (openclawPrompt) {
-    lines.push('Prompt a donner a OpenClaw :');
-    lines.push(openclawPrompt);
+  if (zimaosPrompt) {
+    lines.push('Prompt a donner a ZimaOS :');
+    lines.push(zimaosPrompt);
   }
   if (docs) lines.push(`Documentation: ${docs}`);
 
@@ -133,6 +134,7 @@ function isSessionUsable(a: AgentRow): boolean {
 }
 
 export default function DiscussionComposer() {
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>('fr');
   const [projects, setProjects] = useState<Project[]>([]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
@@ -153,7 +155,7 @@ export default function DiscussionComposer() {
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [unreadByAgent, setUnreadByAgent] = useState<Record<string, number>>({});
-  const [ocProfiles, setOcProfiles] = useState<Record<string, OpenClawAgentProfileRow>>({});
+  const [ocProfiles, setOcProfiles] = useState<Record<string, ZimaOSAgentProfileRow>>({});
   const [profileDraft, setProfileDraft] = useState({
     displayName: '',
     roleTitle: '',
@@ -305,6 +307,13 @@ export default function DiscussionComposer() {
   };
 
   useEffect(() => {
+    setUiLanguage(readUiLanguage());
+    const onLang = () => setUiLanguage(readUiLanguage());
+    window.addEventListener('forge-ui-language-changed', onLang as EventListener);
+    return () => window.removeEventListener('forge-ui-language-changed', onLang as EventListener);
+  }, []);
+
+  useEffect(() => {
     let cancel = false;
     (async () => {
       setLoading(true);
@@ -312,7 +321,7 @@ export default function DiscussionComposer() {
         const [ctxRes, agRes, prRes] = await Promise.all([
           fetch('/api/discussion-context'),
           fetch('/api/agents'),
-          fetch('/api/openclaw-agent-profiles'),
+          fetch('/api/zimaos-agent-profiles'),
         ]);
         const ctx = await ctxRes.json();
         const ag = await agRes.json();
@@ -321,9 +330,9 @@ export default function DiscussionComposer() {
         if (Array.isArray(ctx.projects)) setProjects(ctx.projects);
         if (Array.isArray(ctx.requests)) setRequests(ctx.requests);
         if (pr?.profiles && typeof pr.profiles === 'object') {
-          const next: Record<string, OpenClawAgentProfileRow> = {};
+          const next: Record<string, ZimaOSAgentProfileRow> = {};
           for (const [k, v] of Object.entries(pr.profiles as Record<string, unknown>)) {
-            if (v && typeof v === 'object') next[k] = v as OpenClawAgentProfileRow;
+            if (v && typeof v === 'object') next[k] = v as ZimaOSAgentProfileRow;
           }
           setOcProfiles(next);
         }
@@ -374,14 +383,14 @@ export default function DiscussionComposer() {
   const teamProfiles = useMemo(() => {
     const map: Record<string, AgentTeamProfile> = {};
     for (const a of agents) {
-      map[a.id] = mergeOpenClawTeamProfile(a, ocProfiles[a.id] ?? null);
+      map[a.id] = mergeZimaOSTeamProfile(a, ocProfiles[a.id] ?? null);
     }
     return map;
   }, [agents, ocProfiles]);
 
   const selectedTeamProfile = useMemo(() => {
     if (!selectedAgent) return undefined;
-    return teamProfiles[selectedAgent.id] ?? mergeOpenClawTeamProfile(selectedAgent, ocProfiles[selectedAgent.id] ?? null);
+    return teamProfiles[selectedAgent.id] ?? mergeZimaOSTeamProfile(selectedAgent, ocProfiles[selectedAgent.id] ?? null);
   }, [selectedAgent, teamProfiles, ocProfiles]);
 
   useEffect(() => {
@@ -400,13 +409,13 @@ export default function DiscussionComposer() {
     });
   }, [selectedAgent, ocProfiles]);
 
-  const saveOpenClawProfile = async () => {
+  const saveZimaOSProfile = async () => {
     if (!selectedAgent) return;
     setProfileSaving(true);
     setError(null);
     try {
       const inferred = buildAgentTeamProfile(selectedAgent);
-      const res = await fetch('/api/openclaw-agent-profiles', {
+      const res = await fetch('/api/zimaos-agent-profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -435,7 +444,7 @@ export default function DiscussionComposer() {
           },
         }));
       }
-      setCopyFeedback('Fiche OpenClaw enregistrée.');
+      setCopyFeedback('Fiche ZimaOS enregistrée.');
       setTimeout(() => setCopyFeedback(null), 2000);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erreur enregistrement');
@@ -444,7 +453,7 @@ export default function DiscussionComposer() {
     }
   };
 
-  /** Réhydrate le fil de discussion depuis OpenClaw (sessions_list) quand l’agent change ou après F5. */
+  /** Réhydrate le fil de discussion depuis ZimaOS (sessions_list) quand l’agent change ou après F5. */
   useEffect(() => {
     currentAgentRef.current = agentId;
     if (agentId) {
@@ -513,6 +522,7 @@ export default function DiscussionComposer() {
     };
   }, [agentId]);
 
+  const locale = uiLanguage === 'en' ? 'en-US' : 'fr-FR';
   const send = async () => {
     const msg = message.trim();
     if (!msg) {
@@ -520,7 +530,7 @@ export default function DiscussionComposer() {
       return;
     }
     if (!agentId) {
-      setError('Choisissez un agent (session OpenClaw disponible).');
+      setError('Choisissez un agent (session ZimaOS disponible).');
       return;
     }
     const picked = agents.find((x) => x.id === agentId);
@@ -531,7 +541,7 @@ export default function DiscussionComposer() {
     setSending(true);
     setError(null);
     const sentAtMs = Date.now();
-    const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const now = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const userBubble: ChatMessage = {
       id: `${Date.now()}-u`,
       role: 'user',
@@ -556,9 +566,13 @@ export default function DiscussionComposer() {
         }
       }
       blocks.push(msg);
-      const composed = blocks.join('\n\n---\n\n');
+      const languageLead =
+        uiLanguage === 'en'
+          ? '[Discussion language: please respond in English.]'
+          : '[Langue discussion: merci de répondre en français.]';
+      const composed = [languageLead, blocks.join('\n\n---\n\n')].join('\n\n');
 
-      const res = await fetch('/api/openclaw-directive', {
+      const res = await fetch('/api/zimaos-directive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionKey: agentId, message: composed, timeoutSeconds: 180 }),
@@ -796,17 +810,17 @@ export default function DiscussionComposer() {
           <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{m.remediation.bashScript || ''}</pre>
         </details>
         <details class="rounded-lg border border-gray-100 bg-white/90 p-2">
-          <summary class="cursor-pointer font-semibold">Prompt OpenClaw</summary>
+          <summary class="cursor-pointer font-semibold">Prompt ZimaOS</summary>
           <div class="mt-2">
             <button
               type="button"
               class="rounded border border-gray-200 bg-white px-2 py-1 text-[11px]"
-              onClick={() => void copyToClipboard(m.remediation?.openclawPrompt || '')}
+              onClick={() => void copyToClipboard(m.remediation?.zimaosPrompt || '')}
             >
               Copier
             </button>
           </div>
-          <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{m.remediation.openclawPrompt || ''}</pre>
+          <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{m.remediation.zimaosPrompt || ''}</pre>
         </details>
         <details class="rounded-lg border border-gray-100 bg-white/90 p-2">
           <summary class="cursor-pointer font-semibold">Test API (POST)</summary>
@@ -830,7 +844,7 @@ export default function DiscussionComposer() {
         <div>
           <h2 class="text-lg font-semibold tracking-tight text-gray-900">L’équipe</h2>
           <p class="text-[11px] text-gray-400">
-            Chaque entrée est une <span class="font-semibold text-gray-600">session OpenClaw</span> ; Forge enrichit
+            Chaque entrée est une <span class="font-semibold text-gray-600">session ZimaOS</span> ; Forge enrichit
             l’affichage (nom, rôle, avatar).
           </p>
         </div>
@@ -941,7 +955,7 @@ export default function DiscussionComposer() {
                         rowMuted ? 'text-gray-400' : 'text-[#175B37]/80'
                       }`}
                     >
-                      OpenClaw · {truncateText(a.id, 40)}
+                      ZimaOS · {truncateText(a.id, 40)}
                     </p>
                   </div>
                 </button>
@@ -1005,10 +1019,10 @@ export default function DiscussionComposer() {
 
       <details class="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
         <summary class="cursor-pointer text-xs font-semibold text-gray-800">
-          Fiche OpenClaw (persistante)
+          Fiche ZimaOS (persistante)
         </summary>
         <p class="mt-1 text-[11px] text-gray-500">
-          Ces champs sont stockés dans la base Forge et s’appliquent à la <strong>session OpenClaw</strong> sélectionnée.
+          Ces champs sont stockés dans la base Forge et s’appliquent à la <strong>session ZimaOS</strong> sélectionnée.
           Laissez vide pour revenir au nom / rôle déduits automatiquement.
         </p>
         {!selectedAgent ? (
@@ -1056,9 +1070,9 @@ export default function DiscussionComposer() {
               type="button"
               class="btn btn-success btn-sm mt-2 w-full rounded-xl"
               disabled={profileSaving || !selectedAgent}
-              onClick={() => void saveOpenClawProfile()}
+              onClick={() => void saveZimaOSProfile()}
             >
-              {profileSaving ? 'Enregistrement…' : 'Enregistrer la fiche OpenClaw'}
+              {profileSaving ? 'Enregistrement…' : 'Enregistrer la fiche ZimaOS'}
             </button>
           </div>
         )}
@@ -1166,7 +1180,7 @@ export default function DiscussionComposer() {
                 </p>
                 <p class="truncate text-xs text-gray-500">
                   {selectedTeamProfile
-                    ? `OpenClaw · ${selectedTeamProfile.role} · ${selectedTeamProfile.presenceLabel}`
+                    ? `ZimaOS · ${selectedTeamProfile.role} · ${selectedTeamProfile.presenceLabel}`
                     : 'Ouvrir la liste pour sélectionner'}
                 </p>
               </div>
@@ -1202,14 +1216,14 @@ export default function DiscussionComposer() {
                             clip-rule="evenodd"
                           />
                         </svg>
-                        OpenClaw
+                        ZimaOS
                       </span>
                     </>
                   ) : null}
                 </div>
                 <p class="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
                   {selectedTeamProfile
-                    ? `Agent OpenClaw · ${selectedTeamProfile.presenceLabel} · modèle ${selectedTeamProfile.modelShort}`
+                    ? `Agent ZimaOS · ${selectedTeamProfile.presenceLabel} · modèle ${selectedTeamProfile.modelShort}`
                     : 'Choisissez un membre dans la colonne de gauche (menu sur mobile).'}
                 </p>
                 {selectedTeamProfile?.bio ? (
@@ -1217,7 +1231,7 @@ export default function DiscussionComposer() {
                 ) : null}
                 {selectedAgent ? (
                   <p class="mt-1 truncate font-mono text-[10px] text-gray-400" title={selectedAgent.id}>
-                    Session OpenClaw : {truncateText(selectedAgent.id, 48)}
+                    Session ZimaOS : {truncateText(selectedAgent.id, 48)}
                   </p>
                 ) : null}
                 {(selectedProject || selectedRequest) && (
@@ -1291,7 +1305,7 @@ export default function DiscussionComposer() {
                       class="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       onClick={() => setHeaderMenuOpen(false)}
                     >
-                      Paramètres OpenClaw
+                      Paramètres ZimaOS
                     </a>
                   </div>
                 </>
@@ -1343,7 +1357,7 @@ export default function DiscussionComposer() {
                                 <div class="min-w-0">
                                   <p class="truncate text-sm font-medium text-gray-800">{p?.displayName ?? id}</p>
                                   <p class="truncate text-xs text-gray-500">
-                                    {p ? `OpenClaw · ${p.role}` : truncateText(id, 34)}
+                                    {p ? `ZimaOS · ${p.role}` : truncateText(id, 34)}
                                   </p>
                                 </div>
                               </div>
@@ -1457,8 +1471,8 @@ export default function DiscussionComposer() {
                           {m.role === 'system'
                             ? 'Système'
                             : m.isAck
-                              ? `${selectedTeamProfile?.displayName ?? 'Agent OpenClaw'} (statut)`
-                              : `${selectedTeamProfile?.displayName ?? 'Agent OpenClaw'} (OpenClaw)`}{' '}
+                              ? `${selectedTeamProfile?.displayName ?? 'Agent ZimaOS'} (statut)`
+                              : `${selectedTeamProfile?.displayName ?? 'Agent ZimaOS'} (ZimaOS)`}{' '}
                           · {m.at}
                         </p>
                       </div>
@@ -1528,7 +1542,7 @@ export default function DiscussionComposer() {
               </div>
               {sessionUnavailable ? (
                 <p class="mx-auto mb-2 max-w-3xl rounded-xl border border-amber-100 bg-amber-50/90 px-3 py-2 text-center text-[11px] text-amber-900 sm:text-left">
-                  Cette session OpenClaw est indisponible (hors ligne ou désactivée). Choisissez un membre disponible
+                  Cette session ZimaOS est indisponible (hors ligne ou désactivée). Choisissez un membre disponible
                   pour envoyer un message.
                 </p>
               ) : null}

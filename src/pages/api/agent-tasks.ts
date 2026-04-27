@@ -1,14 +1,14 @@
 import type { APIRoute } from 'astro';
 import {
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
   mapSessionToAgentRow,
-} from '../../lib/openclaw-gateway';
+} from '../../lib/zimaos-gateway';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import type { AgentTaskTerminalStatus } from '../../lib/forge-task-status-sync';
 import { finalizeAgentTaskStatus } from '../../lib/forge-task-status-sync';
 import { insertForgeActivityLog } from '../../lib/forge-activity-log';
-import { scanOpenClawForForgeDoneSignals } from '../../lib/forge-openclaw-done-scan';
+import { scanZimaOSForForgeDoneSignals } from '../../lib/forge-zimaos-done-scan';
 
 /** POST { agentId, task, status? } — crée une tâche en base. */
 export const POST: APIRoute = async ({ request }) => {
@@ -68,7 +68,7 @@ export const GET: APIRoute = async ({ locals }) => {
   // Garde-fou d'autonomie:
   // quand le scheduler est arrêté, on continue à synchroniser les FORGE_DONE
   // au rythme du journal (throttle interne dans le scanner).
-  await scanOpenClawForForgeDoneSignals().catch(() => {
+  await scanZimaOSForForgeDoneSignals().catch(() => {
     /* scan best-effort */
   });
 
@@ -93,16 +93,16 @@ export const GET: APIRoute = async ({ locals }) => {
 
   const gatewayTasks: TaskRow[] = [];
   if (email) {
-    const result = await fetchOpenClawSessionsPayload(email);
+    const result = await fetchZimaOSSessionsPayload(email);
     if (result.ok) {
-      const sessions = normalizeOpenClawSessions(result.data);
+      const sessions = normalizeZimaOSSessions(result.data);
       const rows = sessions.map(mapSessionToAgentRow);
       rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs);
       for (const r of rows.slice(0, 40)) {
         gatewayTasks.push({
           id: `gw-${r.id}`,
           agentId: r.name,
-          task: `Session OpenClaw · ${r.model !== '—' ? r.model : String(r.id).slice(0, 12)}`,
+          task: `Session ZimaOS · ${r.model !== '—' ? r.model : String(r.id).slice(0, 12)}`,
           status: r.status === 'actif' ? 'running' : 'success',
           createdAt: new Date(r.lastSeenMs).toISOString(),
           updatedAt: new Date(r.lastSeenMs).toISOString(),

@@ -10,15 +10,20 @@ import DiscussionComposer from '../components/discussion/DiscussionComposer';
   <div class="mx-auto max-w-6xl animate-fade-in px-1 pb-6 sm:px-0">
     <div class="flex items-end justify-between flex-wrap gap-4 mb-2">
       <div>
-        <h1 class="text-4xl font-bold mb-2 text-gray-900">Hub Swarm</h1>
-        <p class="text-gray-500 text-sm">
+        <h1 class="text-4xl font-bold mb-2 text-gray-900" data-i18n="discussion.title">Hub Swarm</h1>
+        <p class="text-gray-500 text-sm" data-i18n="discussion.subtitle">
           Communiquez en direct avec vos agents. Envoyez vos directives, partagez vos remarques ou demandez un point de situation.
         </p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-2 items-center">
+        <label class="text-xs text-gray-500" for="discussion-lang" data-i18n="discussion.languageLabel">Langue</label>
+        <select id="discussion-lang" class="rounded-full border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700">
+          <option value="fr">FR</option>
+          <option value="en">EN</option>
+        </select>
         <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
           <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
-          Gateway OpenClaw Connectée
+          <span data-i18n="discussion.gateway">Gateway ZimaOS Connectée</span>
         </span>
       </div>
     </div>
@@ -29,4 +34,42 @@ import DiscussionComposer from '../components/discussion/DiscussionComposer';
       <DiscussionComposer client:load />
     </section>
   </div>
+  <script is:inline>
+    const key = 'forge.ui.language';
+    const dict = {
+      fr: {
+        'discussion.title': 'Hub Swarm',
+        'discussion.subtitle': 'Communiquez en direct avec vos agents. Envoyez vos directives, partagez vos remarques ou demandez un point de situation.',
+        'discussion.languageLabel': 'Langue',
+        'discussion.gateway': 'Gateway ZimaOS Connectée',
+      },
+      en: {
+        'discussion.title': 'Swarm Hub',
+        'discussion.subtitle': 'Chat directly with your agents. Send directives, share feedback, or request a status update.',
+        'discussion.languageLabel': 'Language',
+        'discussion.gateway': 'ZimaOS Gateway Connected',
+      },
+    };
+    const normalize = (v) => (String(v || '').toLowerCase() === 'en' ? 'en' : 'fr');
+    const select = document.getElementById('discussion-lang');
+    const applyLang = (lang) => {
+      const safe = normalize(lang);
+      const map = dict[safe];
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const k = el.getAttribute('data-i18n');
+        if (k && map[k]) el.textContent = map[k];
+      });
+      if (select) select.value = safe;
+      try {
+        localStorage.setItem(key, safe);
+        window.dispatchEvent(new CustomEvent('forge-ui-language-changed', { detail: { lang: safe } }));
+      } catch {}
+    };
+    let initial = 'fr';
+    try { initial = normalize(localStorage.getItem(key)); } catch {}
+    applyLang(initial);
+    if (select) {
+      select.addEventListener('change', (e) => applyLang(e.target.value));
+    }
+  </script>
 </DashboardLayout>

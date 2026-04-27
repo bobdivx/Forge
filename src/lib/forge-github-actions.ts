@@ -66,7 +66,7 @@ export async function checkGithubActionsForProjects() {
         headers: {
           'Authorization': `token ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'DevForge'
+          'User-Agent': 'ZimaDev'
         }
       });
 
@@ -89,7 +89,7 @@ export async function checkGithubActionsForProjects() {
                   headers: {
                     'Authorization': `token ${githubToken}`,
                     'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'DevForge'
+                    'User-Agent': 'ZimaDev'
                   }
                 });
                 if (jobsRes.ok) {
@@ -102,7 +102,7 @@ export async function checkGithubActionsForProjects() {
                       headers: {
                         'Authorization': `token ${githubToken}`,
                         'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'DevForge'
+                        'User-Agent': 'ZimaDev'
                       }
                     });
                     

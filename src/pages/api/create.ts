@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { spawn } from 'child_process';
 import { isValidAppName } from '../../lib/auth';
-import { getOpenClawToken } from '../../lib/openclaw-gateway';
+import { getZimaOSToken } from '../../lib/zimaos-gateway';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const data = await request.json();
@@ -11,16 +11,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Nom invalide' }), { status: 400 });
   }
 
-  const openclawToken = await getOpenClawToken();
-  if (!openclawToken) {
-    return new Response(JSON.stringify({ error: 'Token OpenClaw manquant pour cet utilisateur' }), { status: 400 });
+  const zimaosToken = await getZimaOSToken();
+  if (!zimaosToken) {
+    return new Response(JSON.stringify({ error: 'Token ZimaOS manquant pour cet utilisateur' }), { status: 400 });
   }
 
   const result = await new Promise<{ error?: string }>((resolve) => {
-    const child = spawn('openclaw', ['task', `CREATE_NEW_APP ${name}`], {
+    const child = spawn('zimaos', ['task', `CREATE_NEW_APP ${name}`], {
       env: {
         ...process.env,
-        OPENCLAW_GATEWAY_TOKEN: openclawToken
+        ZIMAOS_GATEWAY_TOKEN: zimaosToken
       },
       shell: false
     });
@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
     child.on('close', (code) => {
       if (code !== 0) {
-        resolve({ error: stderr || `openclaw exited with code ${code}` });
+        resolve({ error: stderr || `zimaos exited with code ${code}` });
         return;
       }
       resolve({});

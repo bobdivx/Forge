@@ -5,16 +5,16 @@ import { promisify } from 'util';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { FORGE_AGENT_INSTRUCTION_ROWS } from '../../lib/agent-instruction-defaults';
 import {
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
   mapSessionToAgentRow,
-  getOpenClawGatewayBaseUrl,
-  getOpenClawToken,
+  getZimaOSGatewayBaseUrl,
+  getZimaOSToken,
   getGatewayAuthHeaders,
-} from '../../lib/openclaw-gateway';
+} from '../../lib/zimaos-gateway';
 import { getOllamaOriginResolved } from '../../lib/config-db';
 import { getForgeHookBaseUrl } from '../../lib/forge-hook-base-url';
-import { attemptOpenClawPreRepair } from './_openclaw-pre-repair';
+import { attemptZimaOSPreRepair } from './_zimaos-pre-repair';
 
 const execFileAsync = promisify(execFile);
 
@@ -166,7 +166,7 @@ function buildAuditRoles(forgeHookBaseUrl: string): Array<{
 /** Liste des rôles pour GET / métadonnées (prompts utilisent POST avec URL résolue Config/env). */
 const AUDIT_ROLES_FALLBACK = buildAuditRoles('http://127.0.0.1:4321');
 
-// ── Matching session OpenClaw ↔ agentId (simplifié vs agents.ts) ──────────────
+// ── Matching session ZimaOS ↔ agentId (simplifié vs agents.ts) ──────────────
 function normKey(s: string): string {
   return String(s).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -217,14 +217,14 @@ function getDefaultSessionKey(rawSessions: Record<string, unknown>[]): string | 
   return mapped.id || null;
 }
 
-// ── Envoi directive vers session OpenClaw (HTTP sessions_send) ────────────────
+// ── Envoi directive vers session ZimaOS (HTTP sessions_send) ────────────────
 async function sendDirectiveHttp(
   sessionKey: string,
   message: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const token = await getOpenClawToken();
-  if (!token) return { ok: false, error: 'Token OpenClaw manquant' };
-  const base = await getOpenClawGatewayBaseUrl();
+  const token = await getZimaOSToken();
+  if (!token) return { ok: false, error: 'Token ZimaOS manquant' };
+  const base = await getZimaOSGatewayBaseUrl();
   try {
     const res = await fetch(`${base}/tools/invoke`, {
       method: 'POST',
@@ -267,14 +267,14 @@ async function sendDirectiveHttp(
 }
 
 /**
- * Tente `openclaw task` directement si le CLI est installé sur l'hôte.
+ * Tente `zimaos task` directement si le CLI est installé sur l'hôte.
  */
 async function invokeViaHostCli(
   agentId: string,
   message: string,
 ): Promise<{ ok: boolean; method: string; error?: string }> {
   try {
-    await execFileAsync('openclaw', ['task', '--agent', agentId, '--input', message], {
+    await execFileAsync('zimaos', ['task', '--agent', agentId, '--input', message], {
       timeout: 15_000,
     });
     return { ok: true, method: 'host-cli' };
@@ -292,9 +292,9 @@ async function invokeViaGatewayAgentsInvoke(
   agentId: string,
   message: string,
 ): Promise<{ ok: boolean; method: string; error?: string }> {
-  const token = await getOpenClawToken();
+  const token = await getZimaOSToken();
   if (!token) return { ok: false, method: 'gateway-invoke', error: 'Token manquant' };
-  const base = await getOpenClawGatewayBaseUrl();
+  const base = await getZimaOSGatewayBaseUrl();
   try {
     const res = await fetch(`${base}/tools/invoke`, {
       method: 'POST',
@@ -339,7 +339,7 @@ async function postGatewayV1Chat(params: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
         ...getGatewayAuthHeaders(params.token),
-        ...(params.backendHeader?.trim() ? { 'x-openclaw-model': params.backendHeader.trim() } : {}),
+        ...(params.backendHeader?.trim() ? { 'x-zimaos-model': params.backendHeader.trim() } : {}),
       },
       body: JSON.stringify({
         model: params.openAiModel,
@@ -374,9 +374,9 @@ async function postGatewayV1Chat(params: {
 
 /**
  * Dispatch via POST /v1/chat/completions (surface OpenAI du gateway).
- * 1) `openclaw/<agentId>` + `x-openclaw-model` (routage agent).
- * 2) `openclaw/default` + `x-openclaw-model` (gateways sans entrée par rôle — aligné sur pingOpenClawChatCompletion).
- * 3) Modèle brut (ex. llama3.1:8b) sans préfixe openclaw (reverse-proxy / gateway générique).
+ * 1) `zimaos/<agentId>` + `x-zimaos-model` (routage agent).
+ * 2) `zimaos/default` + `x-zimaos-model` (gateways sans entrée par rôle — aligné sur pingZimaOSChatCompletion).
+ * 3) Modèle brut (ex. llama3.1:8b) sans préfixe zimaos (reverse-proxy / gateway générique).
  * maxTokens réduit : déclenchement rapide ; le travail complet repose sur la session agent ou le fallback Ollama.
  */
 async function invokeViaV1ChatCompletions(
@@ -385,16 +385,16 @@ async function invokeViaV1ChatCompletions(
   message: string,
 ): Promise<{ ok: boolean; method: string; error?: string; logLines: string[] }> {
   const logLines: string[] = [];
-  const token = (await getOpenClawToken()).trim();
+  const token = (await getZimaOSToken()).trim();
   if (!token) {
     logLines.push('token manquant');
     return { ok: false, method: 'v1-chat', error: 'Token manquant', logLines };
   }
-  const base = (await getOpenClawGatewayBaseUrl()).replace(/\/$/, '');
+  const base = (await getZimaOSGatewayBaseUrl()).replace(/\/$/, '');
   const backend = String(backendModel || '').trim();
   const maxTok = 1;
 
-  const openAiModel = /^openclaw\//i.test(agentId) ? agentId : `openclaw/${agentId}`;
+  const openAiModel = /^zimaos\//i.test(agentId) ? agentId : `zimaos/${agentId}`;
   const r1 = await postGatewayV1Chat({
     base,
     token,
@@ -409,26 +409,26 @@ async function invokeViaV1ChatCompletions(
   }
 
   const m = openAiModel.trim();
-  const afterPrefix = m.replace(/^openclaw\//i, '').toLowerCase();
+  const afterPrefix = m.replace(/^zimaos\//i, '').toLowerCase();
   const canTryDefault =
-    /^openclaw\//i.test(m) &&
+    /^zimaos\//i.test(m) &&
     afterPrefix !== '' &&
     afterPrefix !== 'default' &&
-    afterPrefix !== 'openclaw' &&
+    afterPrefix !== 'zimaos' &&
     Boolean(backend);
 
   if (canTryDefault) {
     const r2 = await postGatewayV1Chat({
       base,
       token,
-      openAiModel: 'openclaw/default',
+      openAiModel: 'zimaos/default',
       backendHeader: backend,
       message,
       maxTokens: maxTok,
     });
-    logLines.push(`openclaw/default+x-oc:${backend}: ${r2.ok ? 'OK' : r2.error || `HTTP ${r2.status}`}`);
+    logLines.push(`zimaos/default+x-oc:${backend}: ${r2.ok ? 'OK' : r2.error || `HTTP ${r2.status}`}`);
     if (r2.ok) {
-      return { ok: true, method: `v1-chat(openclaw/default→${backend})`, logLines };
+      return { ok: true, method: `v1-chat(zimaos/default→${backend})`, logLines };
     }
   }
 
@@ -524,17 +524,17 @@ async function invokeViaOllamaChat(
 }
 
 /**
- * Invoque un agent via `docker exec <container> openclaw task`.
+ * Invoque un agent via `docker exec <container> zimaos task`.
  * Essaie plusieurs noms de container courants.
  */
 async function invokeViaDockerExec(
   agentId: string,
   message: string,
 ): Promise<{ ok: boolean; method: string; error?: string }> {
-  // Trouver le vrai nom du container openclaw
-  let containerName = 'openclaw';
+  // Trouver le vrai nom du container zimaos
+  let containerName = 'zimaos';
   try {
-    const { stdout } = await execFileAsync('docker', ['ps', '--filter', 'name=openclaw', '--format', '{{.Names}}'], { timeout: 5_000 });
+    const { stdout } = await execFileAsync('docker', ['ps', '--filter', 'name=zimaos', '--format', '{{.Names}}'], { timeout: 5_000 });
     const found = stdout.trim().split('\n').find((n) => n.trim());
     if (found) containerName = found.trim();
   } catch { /* utiliser le nom par défaut */ }
@@ -542,7 +542,7 @@ async function invokeViaDockerExec(
   try {
     await execFileAsync(
       'docker',
-      ['exec', containerName, 'openclaw', 'task', '--agent', agentId, '--input', message],
+      ['exec', containerName, 'zimaos', 'task', '--agent', agentId, '--input', message],
       { timeout: 20_000 },
     );
     return { ok: true, method: `docker-exec(${containerName})` };
@@ -555,7 +555,7 @@ async function invokeViaDockerExec(
 // ── Endpoint principal ────────────────────────────────────────────────────────
 export const POST: APIRoute = async ({ request, locals }) => {
   const email = locals.user?.email as string | undefined;
-  const preRepair = await attemptOpenClawPreRepair('audit-launch');
+  const preRepair = await attemptZimaOSPreRepair('audit-launch');
 
   let body: { projectName?: string; projectId?: number; projectPath?: string; roles?: string[] };
   try {
@@ -578,13 +578,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const roles = AUDIT_ROLES.filter((r) => selectedRoles.includes(r.agentId));
   if (!roles.length) return json({ error: 'Aucun rôle valide sélectionné' }, 400);
 
-  // Récupérer sessions OpenClaw
-  const sessionsResult = await fetchOpenClawSessionsPayload(email, {
+  // Récupérer sessions ZimaOS
+  const sessionsResult = await fetchZimaOSSessionsPayload(email, {
     invokeOnly: true,
     sessionsListArgs: { limit: 50 },
   });
   const rawSessions = sessionsResult.ok
-    ? (normalizeOpenClawSessions(sessionsResult.data) as Record<string, unknown>[])
+    ? (normalizeZimaOSSessions(sessionsResult.data) as Record<string, unknown>[])
     : [];
 
   const now = new Date();
@@ -684,7 +684,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!dispatched && sessionKey) {
       const r = await sendDirectiveHttp(sessionKey, promptToSend);
       attempts.push(`sessions_send(${sessionKey}): ${r.ok ? 'OK' : r.error}`);
-      if (r.ok) { dispatched = true; dispatchMethod = usedFallback ? `openclaw-fallback(${sessionKey})` : 'openclaw-session'; }
+      if (r.ok) { dispatched = true; dispatchMethod = usedFallback ? `zimaos-fallback(${sessionKey})` : 'zimaos-session'; }
     }
 
     // ── 3. Gateway agents_invoke (nouvelle session) ────────────────────────
@@ -694,7 +694,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (r.ok) { dispatched = true; dispatchMethod = r.method; }
     }
 
-    // ── 4. Host CLI openclaw task ──────────────────────────────────────────
+    // ── 4. Host CLI zimaos task ──────────────────────────────────────────
     if (!dispatched) {
       const r = await invokeViaHostCli(role.agentId, promptToSend);
       attempts.push(`host-cli: ${r.ok ? 'OK' : r.error}`);
@@ -738,12 +738,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   let note = '';
   if (dispatchedCount > 0) {
     const parts: string[] = [];
-    if (gatewayCount > 0) parts.push(`${gatewayCount} via gateway OpenClaw / session / CLI`);
+    if (gatewayCount > 0) parts.push(`${gatewayCount} via gateway ZimaOS / session / CLI`);
     if (ollamaCount > 0) parts.push(`${ollamaCount} via Ollama direct (OLLAMA_HOST)`);
     note = `${dispatchedCount} agent(s) lancé(s) : ${parts.join(' ; ')}.`;
     if (queuedCount > 0) note += ` ${queuedCount} en file DB (non joignables sur d'autres canaux).`;
   } else {
-    note = `Aucun canal joignable (gateway OpenClaw, sessions, CLI hôte, Docker, Ollama). ${queuedCount} tâche(s) enregistrée(s) en DB — traitement à la prochaine connexion agent si applicable.`;
+    note = `Aucun canal joignable (gateway ZimaOS, sessions, CLI hôte, Docker, Ollama). ${queuedCount} tâche(s) enregistrée(s) en DB — traitement à la prochaine connexion agent si applicable.`;
   }
 
   return json({

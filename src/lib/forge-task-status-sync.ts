@@ -78,7 +78,7 @@ export async function finalizeAgentTaskStatus(
 }
 
 /**
- * Clôture automatique depuis OpenClaw : uniquement si la tâche est encore « running ».
+ * Clôture automatique depuis ZimaOS : uniquement si la tâche est encore « running ».
  */
 export async function tryAutoCompleteTaskFromSignal(
   taskId: number,
@@ -95,8 +95,8 @@ export async function tryAutoCompleteTaskFromSignal(
     if (r.ok) {
       await insertForgeActivityLog({
         actorType: 'system',
-        actorId: 'openclaw_scan',
-        action: 'swarm.task.completed_via_openclaw_scan',
+        actorId: 'zimaos_scan',
+        action: 'swarm.task.completed_via_zimaos_scan',
         entityType: 'agent_task',
         entityId: String(taskId),
         details: { signal, agentId: String(row.agentId || '') },

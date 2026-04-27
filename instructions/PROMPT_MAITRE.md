@@ -28,7 +28,7 @@ Si l'utilisateur demande : `Cree une nouvelle application [NOM]`
 ## Contrat tool-call obligatoire
 - Outil `message` : format strict et unique.
 - Exemple valide :
-  - `{"name":"message","parameters":{"to":"openclaw-control-ui","message":"..."} }`
+  - `{"name":"message","parameters":{"to":"zimaos-control-ui","message":"..."} }`
 - Champs interdits pour `message` : `action`, `channel`, `list`.
 
 ## Strategie de recuperation
@@ -41,7 +41,7 @@ Si l'utilisateur demande : `Cree une nouvelle application [NOM]`
 - Repertoire d'applications unique : `media/Github`.
 
 ## Persistance Forge (obligatoire pour que le tableau de bord reflète la réalité)
-- Les agents ne parlent pas à SQLite : ils appellent **forge-hook** (`instructions/FORGE_API_CONTRACT.md`). Depuis OpenClaw en Docker avec Forge conteneurisé (`forge.yml`) : exporter **`FORGE_HOOK_BASE_URL=http://forge-host:4331`** puis utiliser **`scripts/forge-hook.sh`** avec **`source scripts/forge_env.sh`** (pas `127.0.0.1` depuis le conteneur).
+- Les agents ne parlent pas à SQLite : ils appellent **forge-hook** (`instructions/FORGE_API_CONTRACT.md`). Depuis ZimaOS en Docker avec Forge conteneurisé (`forge.yml`) : exporter **`FORGE_HOOK_BASE_URL=http://forge-host:4331`** puis utiliser **`scripts/forge-hook.sh`** avec **`source scripts/forge_env.sh`** (pas `127.0.0.1` depuis le conteneur).
 - À chaque délégation (`sessions_spawn`, etc.), exiger une fin de mission avec hook **`completion`** (et **`taskId`** si une ligne AgentTask existe).
 
 ## Regle de budget contexte

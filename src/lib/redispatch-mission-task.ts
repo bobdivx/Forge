@@ -1,5 +1,5 @@
 import { loadAstroDb } from './load-astro-db';
-import { invokeOpenClawSessionsSend, resolveSessionsSendKey } from './openclaw-gateway';
+import { invokeZimaOSSessionsSend, resolveSessionsSendKey } from './zimaos-gateway';
 
 const MAX_SEND = 120_000;
 
@@ -14,15 +14,15 @@ function buildMessage(taskId: number, agentId: string, task: string, input: stri
 }
 
 async function sendWithFallbacks(sessionKey: string, message: string) {
-  let r = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: false });
+  let r = await invokeZimaOSSessionsSend({ sessionKey, message, asyncDelivery: false });
   if (!r.ok) {
-    r = await invokeOpenClawSessionsSend({ sessionKey, message, asyncDelivery: true });
+    r = await invokeZimaOSSessionsSend({ sessionKey, message, asyncDelivery: true });
   }
   return r;
 }
 
 /**
- * Relance une ligne AgentTask vers OpenClaw (sessions_send), avec résolution de clé et double mode sync/async.
+ * Relance une ligne AgentTask vers ZimaOS (sessions_send), avec résolution de clé et double mode sync/async.
  */
 export async function runMissionRedispatch(params: {
   taskId: number;
@@ -50,7 +50,7 @@ export async function runMissionRedispatch(params: {
       error: sent.error || 'Envoi impossible',
       detail: sent.detail,
       hint:
-        'Si « Envoyer directive » fonctionne sur cette page, la clé session ci-dessus doit être la même. Sinon : gateway.tools.allow, token, OPENCLAW_GATEWAY_URL depuis l’hôte Forge.',
+        'Si « Envoyer directive » fonctionne sur cette page, la clé session ci-dessus doit être la même. Sinon : gateway.tools.allow, token, ZIMAOS_GATEWAY_URL depuis l’hôte Forge.',
     };
   }
 

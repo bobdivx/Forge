@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
 import {
-  fetchOpenClawSessionsForDiscussion,
-  resolveBestOpenClawSessionForKey,
+  fetchZimaOSSessionsForDiscussion,
+  resolveBestZimaOSSessionForKey,
   pickLatestAssistantMessage,
-} from '../../lib/discussion-openclaw-session';
+} from '../../lib/discussion-zimaos-session';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const email = locals.user?.email as string | undefined;
-  const list = await fetchOpenClawSessionsForDiscussion(email, 80);
+  const list = await fetchZimaOSSessionsForDiscussion(email, 80);
   if (!list.ok) {
     return new Response(
       JSON.stringify({
@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  const raw = resolveBestOpenClawSessionForKey(list.sessions, sessionKey);
+  const raw = resolveBestZimaOSSessionForKey(list.sessions, sessionKey);
   if (!raw) {
     return new Response(JSON.stringify({ ok: true, pending: true, reason: 'session_non_trouvee' }), {
       status: 200,

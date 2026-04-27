@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { fetchOpenClawAgentsList, fetchOpenClawModelCatalog } from '../../lib/openclaw-gateway';
+import { fetchZimaOSAgentsList, fetchZimaOSModelCatalog } from '../../lib/zimaos-gateway';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { FORGE_DEFAULT_AGENT_MODELS } from '../../lib/agent-model-defaults';
 
@@ -42,7 +42,7 @@ export const GET: APIRoute = async ({ locals }) => {
         dbEnabled = dbCatalog
           .filter((m) => Number(m.enabled) === 1)
           .map((m) => ({
-            id: `openclaw/${String(m.id).trim()}`,
+            id: `zimaos/${String(m.id).trim()}`,
             name: String(m.label || m.id).trim() || String(m.id).trim(),
             ownedBy: 'forge-db',
           }));
@@ -50,7 +50,7 @@ export const GET: APIRoute = async ({ locals }) => {
     } catch {
       // Schéma/table potentiellement non migré: on continue sans bloquer l'endpoint.
       dbEnabled = FORGE_DEFAULT_AGENT_MODELS.map((m) => ({
-        id: `openclaw/${m.id}`,
+        id: `zimaos/${m.id}`,
         name: m.label,
         ownedBy: 'forge-default',
       }));
@@ -59,22 +59,22 @@ export const GET: APIRoute = async ({ locals }) => {
     const instructionModels = instructionModelsRaw
       .map((row) => String(row.model || '').trim())
       .filter(Boolean)
-      .map((id) => ({ id: `openclaw/${id}`, name: id, ownedBy: 'forge-instruction' }));
+      .map((id) => ({ id: `zimaos/${id}`, name: id, ownedBy: 'forge-instruction' }));
     
     // 1. Récupérer les agents (sessions/capabilities)
-    const agentsRes = await fetchOpenClawAgentsList(email);
+    const agentsRes = await fetchZimaOSAgentsList(email);
     const agentModels = agentsRes.ok ? agentsRes.agents.map(a => ({
-        id: `openclaw/${a.id}`,
+        id: `zimaos/${a.id}`,
         name: a.name || a.id,
-        ownedBy: 'openclaw-agent',
+        ownedBy: 'zimaos-agent',
     })) : [];
 
     // 2. Récupérer le catalogue global (Ollama, etc)
-    const catalogRes = await fetchOpenClawModelCatalog(email);
+    const catalogRes = await fetchZimaOSModelCatalog(email);
     const catalogModels = catalogRes.ok ? catalogRes.models.map(m => ({
-        id: `openclaw/${m.id}`,
+        id: `zimaos/${m.id}`,
         name: m.name || m.id,
-        ownedBy: m.ownedBy || 'openclaw',
+        ownedBy: m.ownedBy || 'zimaos',
     })) : [];
 
     // 3. Fusion unique (par ID)

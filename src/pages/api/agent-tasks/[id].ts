@@ -98,7 +98,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
   }
   const sessionKey = String(body.sessionKey || '').trim();
   if (!sessionKey) {
-    return json({ error: 'sessionKey requis (session OpenClaw cible)' }, 400);
+    return json({ error: 'sessionKey requis (session ZimaOS cible)' }, 400);
   }
 
   const result = await runMissionRedispatch({

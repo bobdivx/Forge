@@ -1,10 +1,10 @@
 /**
- * Webhook GitHub : PR ouvertes par Jules (Google Labs) → tâches Forge + notification OpenClaw.
+ * Webhook GitHub : PR ouvertes par Jules (Google Labs) → tâches Forge + notification ZimaOS.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { loadAstroDb } from './load-astro-db';
 import { getForgeHookBaseUrl } from './forge-hook-base-url';
-import { invokeOpenClawSessionsSend, resolveSessionsSendKey } from './openclaw-gateway';
+import { invokeZimaOSSessionsSend, resolveSessionsSendKey } from './zimaos-gateway';
 
 export function verifyGithubSignature256(
   secret: string,
@@ -116,7 +116,7 @@ function matchProject(repoName: string, rows: { name: string; path: string }[]) 
 }
 
 async function resolveNotifySession(agentId: string): Promise<string | null> {
-  const fixed = process.env.JULES_OPENCLAW_SESSION_KEY?.trim();
+  const fixed = process.env.JULES_ZIMAOS_SESSION_KEY?.trim();
   if (fixed) return fixed;
 
   const hints = [
@@ -187,7 +187,7 @@ export async function handleGithubJulesPullRequest(
 
   const hookBase = await getForgeHookBaseUrl();
   const now = new Date();
-  const results: Array<{ agentId: string; taskId?: number; openclaw: string }> = [];
+  const results: Array<{ agentId: string; taskId?: number; zimaos: string }> = [];
 
   for (const role of JULES_ROLES) {
     const basePrompt = role.buildPrompt(ctx);
@@ -227,20 +227,20 @@ export async function handleGithubJulesPullRequest(
       /* ignore */
     }
 
-    let openclawStatus = 'skipped';
+    let zimaosStatus = 'skipped';
     const sessionKey = await resolveNotifySession(role.agentId);
     if (sessionKey) {
-      const send = await invokeOpenClawSessionsSend({
+      const send = await invokeZimaOSSessionsSend({
         sessionKey,
         message: promptToSend,
         asyncDelivery: true,
       });
-      openclawStatus = send.ok ? 'sent' : (send.error || 'fail').slice(0, 200);
+      zimaosStatus = send.ok ? 'sent' : (send.error || 'fail').slice(0, 200);
     } else {
-      openclawStatus = 'no_session';
+      zimaosStatus = 'no_session';
     }
 
-    results.push({ agentId: role.agentId, taskId: taskDbId, openclaw: openclawStatus });
+    results.push({ agentId: role.agentId, taskId: taskDbId, zimaos: zimaosStatus });
   }
 
   return {

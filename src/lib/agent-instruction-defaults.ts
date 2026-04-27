@@ -1,5 +1,5 @@
 /**
- * Liste des agents OpenClaw — utilisée par le seed DB et le bootstrap lazy de /api/agent-instructions.
+ * Liste des agents ZimaOS — utilisée par le seed DB et le bootstrap lazy de /api/agent-instructions.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -23,7 +23,7 @@ export const FORGE_AGENT_INSTRUCTION_ROWS = [
   { agentId: 'VEILLE_TECH',         model: 'llama3.2:latest',  filePath: 'instructions/agents/VEILLE_TECH.md' },
 ] as const;
 
-/** Toujours égal au nombre de lignes ci-dessus (vérification / comparaison avec `agents_list` OpenClaw). */
+/** Toujours égal au nombre de lignes ci-dessus (vérification / comparaison avec `agents_list` ZimaOS). */
 export const FORGE_SWARM_AGENT_COUNT = FORGE_AGENT_INSTRUCTION_ROWS.length;
 
 export function readInstructionMdFromRepo(relativePath: string): string {

@@ -2,9 +2,9 @@ import type { APIRoute } from 'astro';
 import { FORGE_SWARM_AGENT_COUNT } from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
-  fetchOpenClawSessionsPayload,
-  normalizeOpenClawSessions,
-} from '../../lib/openclaw-gateway';
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
+} from '../../lib/zimaos-gateway';
 
 function countRunningSessions(sessions: unknown[]): number {
   return sessions.filter((s: Record<string, unknown>) => {
@@ -32,11 +32,11 @@ export const GET: APIRoute = async () => {
     openAppIssues: 0,
     openDependencyRequests: 0,
     forgeSwarmTargetCount: FORGE_SWARM_AGENT_COUNT,
-    openclawOk: false,
-    openclawSessionCount: 0,
-    openclawRunningCount: 0,
-    openclawVia: null as string | null,
-    openclawError: null as string | null,
+    zimaosOk: false,
+    zimaosSessionCount: 0,
+    zimaosRunningCount: 0,
+    zimaosVia: null as string | null,
+    zimaosError: null as string | null,
     dbError: null as string | null,
   };
 
@@ -75,20 +75,20 @@ export const GET: APIRoute = async () => {
   }
 
   try {
-    const openclawResult = await fetchOpenClawSessionsPayload(undefined);
-    const ocSessions = openclawResult.ok
-      ? (normalizeOpenClawSessions(openclawResult.data) as Record<string, unknown>[])
+    const zimaosResult = await fetchZimaOSSessionsPayload(undefined);
+    const ocSessions = zimaosResult.ok
+      ? (normalizeZimaOSSessions(zimaosResult.data) as Record<string, unknown>[])
       : [];
-    base.openclawOk = openclawResult.ok;
-    base.openclawSessionCount = ocSessions.length;
-    base.openclawRunningCount = openclawResult.ok ? countRunningSessions(ocSessions) : 0;
-    base.openclawVia = openclawResult.via ?? null;
-    base.openclawError = openclawResult.ok ? null : openclawResult.error ?? null;
+    base.zimaosOk = zimaosResult.ok;
+    base.zimaosSessionCount = ocSessions.length;
+    base.zimaosRunningCount = zimaosResult.ok ? countRunningSessions(ocSessions) : 0;
+    base.zimaosVia = zimaosResult.via ?? null;
+    base.zimaosError = zimaosResult.ok ? null : zimaosResult.error ?? null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    base.openclawError = msg || 'OpenClaw : erreur inattendue';
+    base.zimaosError = msg || 'ZimaOS : erreur inattendue';
     if (import.meta.env.DEV) {
-      console.error('[dashboard-kpis] OpenClaw:', e);
+      console.error('[dashboard-kpis] ZimaOS:', e);
     }
   }
 

@@ -151,7 +151,7 @@ export default function MobileMenu({
                   >
                     <div class="w-3 h-3 rounded-full" style="background:#175B37"></div>
                   </div>
-                  <span class="text-lg font-bold text-gray-900">DevForge</span>
+                  <span class="text-lg font-bold text-gray-900">ZimaDev</span>
                 </div>
                 <button
                   type="button"
@@ -218,7 +218,7 @@ export default function MobileMenu({
                 </div>
               </nav>
 
-              {/* OpenClaw banner at bottom */}
+              {/* ZimaOS runtime banner at bottom */}
               <div class="p-4">
                 <div
                   class="rounded-2xl p-4 text-white relative overflow-hidden"
@@ -229,8 +229,8 @@ export default function MobileMenu({
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                   </div>
-                  <p class="text-sm font-semibold mb-0.5">Accéder à OpenClaw</p>
-                  <p class="text-[11px] mb-3" style="color:rgba(255,255,255,0.7)">Interface de contrôle avancée</p>
+                  <p class="text-sm font-semibold mb-0.5">Accéder au runtime ZimaOS</p>
+                  <p class="text-[11px] mb-3" style="color:rgba(255,255,255,0.7)">Ollama + Docker en natif</p>
                   <a
                     href="/settings"
                     onClick={closeDrawer}

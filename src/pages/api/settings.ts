@@ -2,11 +2,11 @@ import type { APIRoute } from 'astro';
 import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
-import { inferOpenClawBackedPathDefaults } from '../../lib/openclaw-path-defaults';
+import { inferZimaOSBackedPathDefaults } from '../../lib/zimaos-path-defaults';
 
 export const GET: APIRoute = async () => {
   const config = await getAllConfig();
-  const inferred = await inferOpenClawBackedPathDefaults();
+  const inferred = await inferZimaOSBackedPathDefaults();
   const hydrated = {
     ...config,
     forgeReposRoot: config.forgeReposRoot || inferred.forgeReposRoot || config.forgeReposRoot,
@@ -19,13 +19,13 @@ export const GET: APIRoute = async () => {
   });
 };
 
-/** Ne pas écraser en base si le client envoie une chaîne vide (onglet Infra / OpenClaw envoie tout le state ; champs secrets souvent vides côté UI). */
+/** Ne pas écraser en base si le client envoie une chaîne vide (onglet Infra / ZimaOS envoie tout le state ; champs secrets souvent vides côté UI). */
 const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubWebhookSecret',
   'githubToken',
   'vercelToken',
   'cloudflareToken',
-  'openclawToken',
+  'zimaosToken',
   'forgeApiToken',
 ];
 
@@ -36,9 +36,9 @@ export const POST: APIRoute = async ({ request }) => {
     const payload: Partial<ForgeConfig> = {};
     const allowed: (keyof ForgeConfig)[] = [
       'forgePublicUrl',
-      'openclawContainerName',
-      'openclawGatewayUrl',
-      'openclawToken',
+      'zimaosContainerName',
+      'zimaosGatewayUrl',
+      'zimaosToken',
       'forgeApiToken',
       'ollamaUrl',
       'githubToken', 'vercelToken', 'githubWebhookSecret', 'cloudflareToken',

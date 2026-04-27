@@ -1,5 +1,5 @@
 # scripts/pull-models.ps1
-# Script pour installer les mod\u00e8les n\u00e9cessaires sur le gateway OpenClaw (NAS)
+# Script pour installer les mod\u00e8les n\u00e9cessaires sur le gateway ZimaOS (NAS)
 
 $GATEWAY_IP = "10.1.0.58"
 $MODELS = @("qwen2.5:32b", "qwen2.5-coder:32b", "llama3.1:8b", "nomic-embed-text")

@@ -72,8 +72,8 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         ].filter(Boolean);
         body = bits.join(' · ') || body;
       }
-    } else if (action === 'swarm.task.sent_openclaw') {
-      title = 'Tâche poussée vers OpenClaw';
+    } else if (action === 'swarm.task.sent_zimaos') {
+      title = 'Tâche poussée vers ZimaOS';
       icon = '▶️';
       tone = 'info';
       if (detailsObj) {
@@ -125,7 +125,7 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         ].filter(Boolean);
         body = bits.join(' · ') || body;
       }
-    } else if (action === 'swarm.task.completed_via_openclaw_scan') {
+    } else if (action === 'swarm.task.completed_via_zimaos_scan') {
       title = 'Clôture automatique (FORGE_DONE détecté)';
       icon = '✅';
       tone = 'success';
@@ -202,7 +202,7 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         : st === 'failed'
           ? 'en échec (nouvelle tentative possible)'
           : st === 'running'
-            ? 'en cours sur OpenClaw'
+            ? 'en cours sur ZimaOS'
             : st === 'pending'
               ? 'en file d’attente'
               : st;

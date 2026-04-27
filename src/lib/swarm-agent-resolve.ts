@@ -1,7 +1,7 @@
-import { mapSessionToAgentRow } from './openclaw-gateway';
+import { mapSessionToAgentRow } from './zimaos-gateway';
 
 /**
- * Trouve la session OpenClaw brute correspondant à l’id d’URL swarm (ex. CHEF_TECHNIQUE).
+ * Trouve la session ZimaOS brute correspondant à l’id d’URL swarm (ex. CHEF_TECHNIQUE).
  * Même heuristique que la page `swarm/[id]` + score utilisé côté `/api/agents`.
  */
 export function findRawSessionForSwarmAgentKey(

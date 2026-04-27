@@ -78,13 +78,13 @@ export default function ApiTokensTab({
           <code class="text-gray-500">custom</code> (clé normalisée en MAJUSCULES, ex.{' '}
           <code class="text-gray-500">ma_cle</code> → <code class="text-gray-500">MA_CLE</code>). Les agents sur le réseau
           local récupèrent le tout via{' '}
-          <code class="text-gray-500">GET /api/agent-api-secrets</code> (y compris OpenClaw, voir la doc agents /
+          <code class="text-gray-500">GET /api/agent-api-secrets</code> (y compris ZimaOS, voir la doc agents /
           FORGE_API_CONTRACT).
         </p>
         <div class="space-y-4">
           <FormField
             label="Jeton API Forge (agents)"
-            hint="Utilisé par OpenClaw/agents pour appeler les endpoints Forge depuis une machine distante. Header accepté : Authorization: Bearer <token>."
+            hint="Utilisé par ZimaOS/agents pour appeler les endpoints Forge depuis une machine distante. Header accepté : Authorization: Bearer <token>."
           >
             <div class="space-y-2">
               <input
@@ -173,7 +173,7 @@ export default function ApiTokensTab({
             <p class="text-[11px] text-gray-400 mt-1">
               Vérification HMAC des POST vers{' '}
               <code class="text-gray-500">/api/webhooks/github-jules</code>. Stocké en base (Config). En secours :{' '}
-              <code class="text-gray-500">GITHUB_WEBHOOK_SECRET</code>. Si tu enregistres un autre onglet (OpenClaw,
+              <code class="text-gray-500">GITHUB_WEBHOOK_SECRET</code>. Si tu enregistres un autre onglet (ZimaOS,
               Infra) sans retaper ce champ, la valeur en base est conservée.
             </p>
           </FormField>

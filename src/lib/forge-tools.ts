@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * forge-tools.ts — Abstractions d'outils inspirées des patterns Claude Code.
- * Réimplémenté from scratch pour DevForge (Astro/Node.js).
+ * Réimplémenté from scratch pour ZimaDev (Astro/Node.js).
  * SERVEUR UNIQUEMENT — utilise child_process et fs.
  */
 import { execFileSync, execSync } from 'child_process';

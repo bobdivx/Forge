@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1",
+  "displayName": "ZimaDev ZimaOS Orchestrator",
+  "description": "Déclenche la création d'application et le démarrage de l'orchestrateur ZimaOS/Ollama.",
+  "trigger": {
+    "name": "manual_trigger",
+    "type": "EMPTY",
+    "settings": {}
+  },
+  "steps": [
+    {
+      "name": "prepare_workspace",
+      "type": "CODE",
+      "language": "bash",
+      "input": {
+        "command": "mkdir -p media/Github"
+      }
+    },
+    {
+      "name": "start_chef_technique",
+      "type": "CODE",
+      "language": "bash",
+      "input": {
+        "command": "zimaos start --engine ollama --model qwen2.5:32b --instructions ./instructions/SOUL.md --name CHEF_TECHNIQUE"
+      }
+    },
+    {
+      "name": "create_new_app",
+      "type": "CODE",
+      "language": "bash",
+      "input": {
+        "command": "mkdir -p media/Github/{{app_name}} && cd media/Github/{{app_name}} && git init"
+      }
+    },
+    {
+      "name": "delegate_pipeline",
+      "type": "CODE",
+      "language": "bash",
+      "input": {
+        "command": "zimaos task --agent ARCHITECTE_LOGICIEL --input \"Définit l'architecture de {{app_name}}\" && zimaos task --agent DEV_BACKEND --input \"Génère le backend de {{app_name}}\" && zimaos task --agent DEV_FRONTEND --input \"Génère le frontend de {{app_name}} en respectant Astro+Preact\" && zimaos task --agent EXPERT_GITHUB --input \"Prépare le premier commit et push de {{app_name}}\""
+      }
+    }
+  ],
+  "inputs": {
+    "app_name": {
+      "type": "string",
+      "required": true
+    }
+  }
+}

@@ -70,7 +70,7 @@ const Request = defineTable({
     author: column.text({ default: 'Mathieu' }),
     /** Fonctionnalite | Correction */
     requestType: column.text({ optional: true }),
-    /** Agent OpenClaw cible (sinon déduit du type de demande). */
+    /** Agent ZimaOS cible (sinon déduit du type de demande). */
     assigneeAgentId: column.text({ optional: true }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
@@ -102,12 +102,12 @@ const ForgeUser = defineTable({
 
 /**
  * Instructions système des agents — source de vérité gérée via le dashboard.
- * Un enregistrement = un agent OpenClaw. Le fichier .md correspondant est
+ * Un enregistrement = un agent ZimaOS. Le fichier .md correspondant est
  * regénéré via POST /api/sync-agents.
  */
 const AgentInstruction = defineTable({
   columns: {
-    /** Identifiant OpenClaw (ex: "DEV_FRONTEND", "CHEF_TECHNIQUE"). */
+    /** Identifiant ZimaOS (ex: "DEV_FRONTEND", "CHEF_TECHNIQUE"). */
     agentId: column.text({ primaryKey: true }),
     /** Modèle Ollama utilisé par cet agent. */
     model: column.text(),
@@ -123,7 +123,7 @@ const AgentInstruction = defineTable({
 
 /**
  * Catalogue local des modèles utilisables pour les agents Forge.
- * Sert de source stable quand OpenClaw est indisponible.
+ * Sert de source stable quand ZimaOS est indisponible.
  */
 const AgentModel = defineTable({
   columns: {
@@ -131,7 +131,7 @@ const AgentModel = defineTable({
     id: column.text({ primaryKey: true }),
     /** Libellé affiché dans les sélecteurs. */
     label: column.text(),
-    /** Origine du modèle: local | openclaw | seed. */
+    /** Origine du modèle: local | zimaos | seed. */
     source: column.text({ default: 'seed' }),
     /** 1 = visible dans les UI, 0 = masqué. */
     enabled: column.number({ default: 1 }),
@@ -329,21 +329,21 @@ const HeartbeatRun = defineTable({
     durationMs: column.number({ optional: true }),
     /** Message d'erreur si failed. */
     error: column.text({ optional: true }),
-    /** ID de run externe (OpenClaw session id). */
+    /** ID de run externe (ZimaOS session id). */
     externalRunId: column.text({ optional: true }),
     createdAt: column.date({ default: new Date() }),
   },
 });
 
 /**
- * Fiches « membre d’équipe » pour les **sessions OpenClaw** (clé = sessionKey renvoyée par le gateway).
+ * Fiches « membre d’équipe » pour les **sessions ZimaOS** (clé = sessionKey renvoyée par le gateway).
  * Les champs sont optionnels : si vides, l’UI retombe sur l’inférence (nom brut, rôle, initiales).
  */
-const OpenClawAgentProfile = defineTable({
+const ZimaOSAgentProfile = defineTable({
   columns: {
-    /** Clé de session OpenClaw (identifiant unique côté gateway, ex. CHEF_TECHNIQUE ou clé longue). */
+    /** Clé de session ZimaOS (identifiant unique côté gateway, ex. CHEF_TECHNIQUE ou clé longue). */
     sessionKey: column.text({ primaryKey: true }),
-    /** Nom affiché dans Forge (remplace le nom dérivé OpenClaw). */
+    /** Nom affiché dans Forge (remplace le nom dérivé ZimaOS). */
     displayName: column.text({ optional: true }),
     /** Titre de rôle affiché (remplace l’inférence depuis le nom / modèle). */
     roleTitle: column.text({ optional: true }),
@@ -401,6 +401,6 @@ export default defineDb({
     AgentBudget,
     ActivityLog,
     HeartbeatRun,
-    OpenClawAgentProfile,
+    ZimaOSAgentProfile,
   },
 });

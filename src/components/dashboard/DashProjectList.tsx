@@ -25,10 +25,10 @@ type HealthProject = {
 };
 
 type SwarmHealth = {
-  openclawOk: boolean;
-  openclawSessions: number;
+  zimaosOk: boolean;
+  zimaosSessions: number;
   agentsBusy: number;
-  openclawError: string | null;
+  zimaosError: string | null;
   workScheduler: {
     state: string;
     schedulerActive: boolean;
@@ -118,7 +118,7 @@ export default function DashProjectList({ projects }: Props) {
         </a>
       </div>
 
-      {/* Liaison swarm / OpenClaw */}
+      {/* Liaison swarm / ZimaOS */}
       <div class="mb-4 rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5 space-y-1.5">
         {!health && <div class="h-10 rounded-lg bg-gray-100 animate-pulse" />}
         {health?.dbError && (
@@ -129,24 +129,24 @@ export default function DashProjectList({ projects }: Props) {
         {health && !health.dbError && swarm && (
           <>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-              <span class="text-gray-500 font-medium">OpenClaw</span>
-              {swarm.openclawOk ? (
+              <span class="text-gray-500 font-medium">ZimaOS</span>
+              {swarm.zimaosOk ? (
                 <span class="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
                   <PulseDot tone="live" title="Gateway joignable" />
                   {swarm.agentsBusy > 0
                     ? `${swarm.agentsBusy} session(s) active(s)`
-                    : `${swarm.openclawSessions} session(s) · veille`}
+                    : `${swarm.zimaosSessions} session(s) · veille`}
                 </span>
               ) : (
                 <span class="inline-flex items-center gap-1.5 text-amber-700">
-                  <PulseDot tone="warn" title={swarm.openclawError ?? 'Gateway injoignable'} />
+                  <PulseDot tone="warn" title={swarm.zimaosError ?? 'Gateway injoignable'} />
                   Injoignable
                 </span>
               )}
             </div>
-            {swarm.openclawError && (
+            {swarm.zimaosError && (
               <p class="text-[10px] text-amber-800 font-mono break-all bg-amber-50 rounded px-2 py-1">
-                {swarm.openclawError}
+                {swarm.zimaosError}
               </p>
             )}
             {swarm.workScheduler && (
@@ -170,9 +170,9 @@ export default function DashProjectList({ projects }: Props) {
                 )}
               </div>
             )}
-            {!swarm.openclawOk && (
+            {!swarm.zimaosOk && (
               <a href="/settings" class="text-[10px] text-[#175B37] hover:underline font-medium">
-                Paramètres → Connexion OpenClaw
+                Paramètres → Connexion ZimaOS
               </a>
             )}
           </>

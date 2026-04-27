@@ -3,8 +3,8 @@ import FormField from '../ui/FormField';
 
 type Config = {
   forgePublicUrl: string;
-  openclawGatewayUrl: string;
-  openclawToken: string;
+  zimaosRuntimeUrl: string;
+  zimaosToken: string;
   forgeApiToken: string;
   ollamaUrl: string;
   forgeReposRoot: string;
@@ -16,12 +16,17 @@ type Config = {
   githubWebhookSecret: string;
 };
 
-const STEPS = ['OpenClaw', 'Applications & Docker', 'Jetons API', 'Validation'];
+type ValidationResult = {
+  ok: boolean;
+  checks: Record<string, { ok: boolean; detail: string }>;
+};
+
+const STEPS = ['Utilisateur', 'Connexion ZimaOS', 'Montages', 'Clés API', 'Validation'];
 
 const empty: Config = {
   forgePublicUrl: '',
-  openclawGatewayUrl: '',
-  openclawToken: '',
+  zimaosRuntimeUrl: '',
+  zimaosToken: '',
   forgeApiToken: '',
   ollamaUrl: '',
   forgeReposRoot: '',
@@ -39,8 +44,12 @@ export default function SetupWizard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
+  const [accountMsg, setAccountMsg] = useState<string | null>(null);
   const [healthMsg, setHealthMsg] = useState<string | null>(null);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
 
   useEffect(() => {
     fetch('/api/setup-wizard')
@@ -53,8 +62,8 @@ export default function SetupWizard() {
         const c = d.config || {};
         setCfg({
           forgePublicUrl: String(c.forgePublicUrl || ''),
-          openclawGatewayUrl: String(c.openclawGatewayUrl || empty.openclawGatewayUrl).trim(),
-          openclawToken: String(c.openclawToken || ''),
+          zimaosRuntimeUrl: String(c.zimaosRuntimeUrl || c.zimaosGatewayUrl || '').trim(),
+          zimaosToken: String(c.zimaosToken || c.zimaosToken || ''),
           forgeApiToken: String(c.forgeApiToken || ''),
           ollamaUrl: String(c.ollamaUrl || ''),
           forgeReposRoot: String(c.forgeReposRoot || empty.forgeReposRoot),
@@ -108,30 +117,51 @@ export default function SetupWizard() {
     merge({ forgeApiToken: `forge_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}` });
   };
 
-  const testOpenClaw = async () => {
+  const createUser = async () => {
+    setAccountMsg(null);
+    if (!accountEmail.trim() || !accountPassword.trim()) {
+      setAccountMsg('E-mail et mot de passe requis.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: accountEmail.trim(), password: accountPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setAccountMsg('Utilisateur créé, session active.');
+      } else {
+        setAccountMsg(String(data.error || 'Échec création utilisateur'));
+      }
+    } catch {
+      setAccountMsg('Erreur réseau.');
+    }
+  };
+
+  const testZimaosRuntime = async () => {
     setHealthMsg(null);
     setHealthOk(null);
     try {
-      const res = await fetch('/api/openclaw-probe', {
+      const res = await fetch('/api/setup-wizard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          openclawGatewayUrl: cfg.openclawGatewayUrl,
-          openclawToken: cfg.openclawToken,
+          action: 'validate',
+          ...cfg,
         }),
       });
       const j = await res.json().catch(() => ({}));
-      if (res.ok && j.reachable === true) {
+      const zimaos = j?.checks?.zimaosRuntime;
+      if (res.ok && zimaos?.ok) {
         setHealthOk(true);
-        setHealthMsg(
-          j.sessionCount > 0
-            ? `Gateway joignable (${j.sessionCount} session(s) listée(s)).`
-            : 'Gateway joignable (liste de sessions vide ou format inattendu).',
-        );
+        setHealthMsg(String(zimaos.detail || 'Runtime ZimaOS joignable.'));
       } else {
         setHealthOk(false);
-        setHealthMsg(String(j.error || j.message || 'Réponse inattendue'));
+        setHealthMsg(String(zimaos?.detail || j.error || j.message || 'Réponse inattendue'));
       }
+      setValidation(j as ValidationResult);
     } catch {
       setHealthOk(false);
       setHealthMsg('Erreur réseau.');
@@ -189,9 +219,9 @@ export default function SetupWizard() {
   return (
     <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
       <div class="px-6 sm:px-8 pt-8 pb-4 border-b border-gray-100">
-        <h1 class="text-2xl font-bold text-gray-900 mb-1">Bienvenue sur Forge</h1>
+        <h1 class="text-2xl font-bold text-gray-900 mb-1">Bienvenue sur ZimaDev</h1>
         <p class="text-sm text-gray-500">
-          Quelques réglages pour lier OpenClaw, vos dépôts et les jetons optionnels. Vous pourrez tout modifier dans{' '}
+          Assistant de configuration initiale pour ZimaOS, Docker, Ollama et vos clés API. Vous pourrez tout modifier dans{' '}
           <span class="font-medium text-gray-700">Paramètres</span>.
         </p>
         <div class="flex gap-2 mt-6 flex-wrap">
@@ -218,6 +248,41 @@ export default function SetupWizard() {
       <div class="px-6 sm:px-8 py-8 space-y-5">
         {step === 0 && (
           <>
+            <FormField label="Création utilisateur (optionnel)" hint="Créer un compte local dès l’assistant si nécessaire.">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="email"
+                  class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                  value={accountEmail}
+                  onInput={(e) => setAccountEmail((e.target as HTMLInputElement).value)}
+                  placeholder="admin@zima.dev"
+                  autoComplete="email"
+                />
+                <input
+                  type="password"
+                  class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
+                  value={accountPassword}
+                  onInput={(e) => setAccountPassword((e.target as HTMLInputElement).value)}
+                  placeholder="Mot de passe fort"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div class="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  class="text-sm font-medium px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+                  onClick={createUser}
+                >
+                  Créer l’utilisateur
+                </button>
+                {accountMsg && <span class="text-xs text-gray-600">{accountMsg}</span>}
+              </div>
+            </FormField>
+          </>
+        )}
+
+        {step === 1 && (
+          <>
             <FormField
               label="URL Forge joignable par les agents"
               hint="Ex. production Docker: http://forge-host:4331. Dev hôte: http://forge-host:4321. Si vide, Forge l'infère automatiquement."
@@ -229,21 +294,21 @@ export default function SetupWizard() {
               />
             </FormField>
             <FormField
-              label="URL du gateway OpenClaw"
-              hint="Ex. Forge Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190."
+              label="URL runtime ZimaOS (préremplie)"
+              hint="Détection auto: Docker -> host.docker.internal puis fallback sur l’hôte courant."
             >
               <input
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20"
-                value={cfg.openclawGatewayUrl}
-                onInput={(e) => merge({ openclawGatewayUrl: (e.target as HTMLInputElement).value })}
+                value={cfg.zimaosRuntimeUrl}
+                onInput={(e) => merge({ zimaosRuntimeUrl: (e.target as HTMLInputElement).value })}
               />
             </FormField>
-            <FormField label="Jeton OpenClaw" hint="Bearer utilisé par Forge pour invoquer le gateway (peut rester vide en local).">
+            <FormField label="Jeton runtime ZimaOS" hint="Bearer optionnel pour protéger la passerelle runtime.">
               <input
                 type="password"
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20 font-mono"
-                value={cfg.openclawToken}
-                onInput={(e) => merge({ openclawToken: (e.target as HTMLInputElement).value })}
+                value={cfg.zimaosToken}
+                onInput={(e) => merge({ zimaosToken: (e.target as HTMLInputElement).value })}
                 placeholder="(optionnel)"
                 autoComplete="off"
               />
@@ -283,21 +348,21 @@ export default function SetupWizard() {
               <button
                 type="button"
                 class="text-sm font-medium px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
-                onClick={testOpenClaw}
+                onClick={testZimaosRuntime}
               >
-                Tester la connexion
+                Tester runtime ZimaOS + Ollama
               </button>
               {healthMsg && (
                 <span class={`text-xs ${healthOk ? 'text-green-600' : 'text-amber-700'}`}>{healthMsg}</span>
               )}
             </div>
             <p class="text-[10px] text-gray-400">
-              Le test utilise <strong>l’URL et le jeton saisis ci-dessus</strong> (aucune sauvegarde préalable). « Terminer » enregistre ensuite la configuration en base.
+              Le test vérifie la communication Forge {'->'} runtime ZimaOS et Forge {'->'} Ollama avec les valeurs saisies.
             </p>
           </>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <>
             <FormField
               label="Répertoire des applications"
@@ -333,7 +398,7 @@ export default function SetupWizard() {
           </>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <>
             <FormField label="GitHub token" hint="Pour les intégrations API GitHub (optionnel).">
               <input
@@ -368,7 +433,7 @@ export default function SetupWizard() {
           </>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <div class="space-y-3 text-sm text-gray-600">
             <p class="font-medium text-gray-900">Récapitulatif</p>
             <ul class="space-y-2 font-mono text-xs bg-gray-50 rounded-xl border border-gray-100 p-4">
@@ -379,10 +444,10 @@ export default function SetupWizard() {
                 <span class="text-gray-400">Jeton Forge API</span> {cfg.forgeApiToken ? '•••• renseigné' : '(auto-généré si vide)'}
               </li>
               <li>
-                <span class="text-gray-400">OpenClaw</span> {cfg.openclawGatewayUrl}
+                <span class="text-gray-400">Runtime ZimaOS</span> {cfg.zimaosRuntimeUrl}
               </li>
               <li>
-                <span class="text-gray-400">Jeton OC</span> {cfg.openclawToken ? '•••• renseigné' : '(vide)'}
+                <span class="text-gray-400">Jeton runtime</span> {cfg.zimaosToken ? '•••• renseigné' : '(vide)'}
               </li>
               <li>
                 <span class="text-gray-400">Applications</span> {cfg.forgeReposRoot}
@@ -398,6 +463,15 @@ export default function SetupWizard() {
                 {[cfg.githubToken, cfg.vercelToken, cfg.githubWebhookSecret].some(Boolean) ? '•••• renseignés' : '(optionnels vides)'}
               </li>
             </ul>
+            {validation?.checks ? (
+              <ul class="space-y-2 text-xs rounded-xl border border-gray-200 bg-white p-4">
+                {Object.entries(validation.checks).map(([key, value]) => (
+                  <li key={key} class={value.ok ? 'text-green-700' : 'text-amber-700'}>
+                    <span class="font-semibold">{key}</span> - {value.detail}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         )}
 

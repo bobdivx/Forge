@@ -7,7 +7,7 @@ import { loadAstroDb } from '../../lib/load-astro-db';
 /**
  * POST /api/sync-agents
  * Lit tous les AgentInstruction actifs dans la DB et régénère les fichiers .md
- * correspondants sur le disque, pour qu'OpenClaw puisse les relire.
+ * correspondants sur le disque, pour qu'ZimaOS puisse les relire.
  *
  * Body optionnel : { agentId: "DEV_FRONTEND" }  → sync un seul agent
  */

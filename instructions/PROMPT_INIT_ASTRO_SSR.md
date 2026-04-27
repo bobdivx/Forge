@@ -1,4 +1,4 @@
-Agis en tant qu'Architecte Fullstack. Déploie une forge logicielle autonome de 14 agents via OpenClaw et Ollama.
+Agis en tant qu'Architecte Fullstack. Déploie une forge logicielle autonome de 14 agents via ZimaOS et Ollama.
 
 Objectifs :
 - Crée le fichier SOUL.md pour le CHEF_TECHNIQUE (Ollama qwen2.5:32b). Il doit pouvoir créer de nouvelles applications dans media/Github et générer les fichiers .md de ses 13 sous-agents s'ils sont manquants.
