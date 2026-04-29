@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
 import FormField from '../ui/FormField';
 import SaveRow from '../ui/SaveRow';
 
@@ -14,6 +15,7 @@ type Config = {
   zimaosSshUser: string;
   zimaosSshAuth: string;
   zimaosSshKeyPath: string;
+  zimaosSshKeyContent: string;
   zimaosSshPassword: string;
   ollamaUrl: string;
   [k: string]: string;
@@ -31,6 +33,12 @@ type ProbePayload = {
   ok?: boolean;
   checks?: Record<string, { ok: boolean; detail: string }>;
 };
+type SshPreflight = {
+  ok?: boolean;
+  platform?: string;
+  tools?: { ssh?: boolean; sshpass?: boolean; plink?: boolean };
+  message?: string;
+};
 
 const inputCls =
   'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition font-mono';
@@ -41,6 +49,9 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
   const [probeError, setProbeError] = useState('');
   const [sshTesting, setSshTesting] = useState(false);
   const [sshResult, setSshResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [provisioningKey, setProvisioningKey] = useState(false);
+  const [provisionResult, setProvisionResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [sshPreflight, setSshPreflight] = useState<SshPreflight | null>(null);
 
   const mode = settings.zimaosAccessMode === 'remote_ssh' ? 'remote_ssh' : 'local_docker';
 
@@ -84,7 +95,19 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
     setSshTesting(true);
     setSshResult(null);
     try {
-      const res = await fetch('/api/zimaos-ssh-test');
+      const res = await fetch('/api/zimaos-ssh-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          zimaosHost: settings.zimaosHost,
+          zimaosSshUser: settings.zimaosSshUser,
+          zimaosSshPort: settings.zimaosSshPort,
+          zimaosSshAuth: settings.zimaosSshAuth,
+          zimaosSshKeyPath: settings.zimaosSshKeyPath,
+          zimaosSshKeyContent: settings.zimaosSshKeyContent,
+          zimaosSshPassword: settings.zimaosSshPassword,
+        }),
+      });
       const data = await res.json();
       setSshResult(data);
     } catch {
@@ -93,6 +116,102 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
       setSshTesting(false);
     }
   };
+
+  const refreshSshSettingsFromServer = async () => {
+    try {
+      const s = await fetch('/api/settings').then((r) => r.json());
+      setSettings({
+        ...settings,
+        zimaosAccessMode: typeof s.zimaosAccessMode === 'string' ? s.zimaosAccessMode : settings.zimaosAccessMode,
+        zimaosHost: typeof s.zimaosHost === 'string' ? s.zimaosHost : settings.zimaosHost,
+        zimaosSshUser: typeof s.zimaosSshUser === 'string' ? s.zimaosSshUser : settings.zimaosSshUser,
+        zimaosSshPort: typeof s.zimaosSshPort === 'string' ? s.zimaosSshPort : settings.zimaosSshPort,
+        zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : settings.zimaosSshAuth,
+        zimaosSshKeyPath: typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : settings.zimaosSshKeyPath,
+        zimaosSshKeyContent:
+          typeof s.zimaosSshKeyContent === 'string' ? s.zimaosSshKeyContent : settings.zimaosSshKeyContent,
+        zimaosSshPassword:
+          typeof s.zimaosSshPassword === 'string' ? s.zimaosSshPassword : settings.zimaosSshPassword,
+      });
+    } catch {
+      // no-op
+    }
+  };
+
+  const provisionSshKey = async () => {
+    setProvisioningKey(true);
+    setProvisionResult(null);
+    try {
+      const res = await fetch('/api/zimaos-ssh-provision-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          zimaosHost: settings.zimaosHost,
+          zimaosSshUser: settings.zimaosSshUser,
+          zimaosSshPort: settings.zimaosSshPort,
+          zimaosSshAuth: settings.zimaosSshAuth,
+          zimaosSshKeyPath: settings.zimaosSshKeyPath,
+          zimaosSshKeyContent: settings.zimaosSshKeyContent,
+          zimaosSshPassword: settings.zimaosSshPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const ok = Boolean(data?.ok);
+      setProvisionResult({
+        ok,
+        message: String(data?.message || (ok ? 'Clé SSH provisionnée.' : 'Provisioning impossible.')),
+      });
+      if (ok) {
+        await refreshSshSettingsFromServer();
+      }
+    } catch {
+      setProvisionResult({ ok: false, message: 'Erreur réseau pendant le provisioning de clé.' });
+    } finally {
+      setProvisioningKey(false);
+    }
+  };
+
+  const rotateSshKey = async () => {
+    setProvisioningKey(true);
+    setProvisionResult(null);
+    try {
+      const res = await fetch('/api/zimaos-ssh-provision-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rotate: true,
+          zimaosHost: settings.zimaosHost,
+          zimaosSshUser: settings.zimaosSshUser,
+          zimaosSshPort: settings.zimaosSshPort,
+          zimaosSshAuth: settings.zimaosSshAuth,
+          zimaosSshKeyPath: settings.zimaosSshKeyPath,
+          zimaosSshKeyContent: settings.zimaosSshKeyContent,
+          zimaosSshPassword: settings.zimaosSshPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const ok = Boolean(data?.ok);
+      setProvisionResult({
+        ok,
+        message: String(data?.message || (ok ? 'Clé SSH régénérée.' : 'Rotation impossible.')),
+      });
+      if (ok) {
+        await refreshSshSettingsFromServer();
+      }
+    } catch {
+      setProvisionResult({ ok: false, message: 'Erreur réseau pendant la rotation de clé.' });
+    } finally {
+      setProvisioningKey(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mode !== 'remote_ssh') return;
+    fetch('/api/zimaos-ssh-preflight')
+      .then((r) => r.json())
+      .then((data) => setSshPreflight(data))
+      .catch(() => setSshPreflight(null));
+  }, [mode, settings.zimaosSshAuth]);
 
   return (
     <div class="p-6 space-y-6">
@@ -184,17 +303,28 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
               </select>
             </FormField>
             {settings.zimaosSshAuth === 'password' ? (
-              <FormField label="Mot de passe SSH">
-                <input
-                  type="password"
-                  class={inputCls}
-                  value={settings.zimaosSshPassword}
-                  onInput={(e) =>
-                    setSettings({ ...settings, zimaosSshPassword: (e.target as HTMLInputElement).value })
-                  }
-                  placeholder="••••••••"
-                />
-              </FormField>
+              <>
+                <FormField label="Mot de passe SSH">
+                  <input
+                    type="password"
+                    class={inputCls}
+                    value={settings.zimaosSshPassword}
+                    onInput={(e) =>
+                      setSettings({ ...settings, zimaosSshPassword: (e.target as HTMLInputElement).value })
+                    }
+                    placeholder="••••••••"
+                  />
+                </FormField>
+                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                  <p class="font-semibold">Authentification par mot de passe</p>
+                  <p>
+                    Le test SSH utilise désormais le transport natif Node <span class="font-mono">ssh2</span> (pas de dépendance plink/sshpass).
+                  </p>
+                  <p>
+                    Recommandé: utiliser l’authentification par clé SSH (plus fiable et plus sécurisée).
+                  </p>
+                </div>
+              </>
             ) : (
               <>
                 <FormField label="Chemin clé SSH" hint="Si vide, Forge essaie les clés par défaut dans ~/.ssh/">
@@ -218,6 +348,42 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
             )}
           </div>
           <div class="pt-2">
+            <p class="mb-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+              SSH UI v2 (provision + rotation)
+            </p>
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={provisionSshKey}
+                  class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-[#175B37]/30 bg-[#175B37]/10 text-[#175B37] hover:bg-[#175B37]/15 transition-colors"
+                  disabled={provisioningKey}
+                >
+                  {provisioningKey ? 'Provisioning clé…' : '🔐 Générer + installer une clé SSH'}
+                </button>
+                <button
+                  type="button"
+                  onClick={rotateSshKey}
+                  class="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors"
+                  disabled={provisioningKey}
+                >
+                  {provisioningKey ? 'Rotation clé…' : '♻️ Régénérer la clé SSH'}
+                </button>
+                {provisionResult && (
+                  <p class={`w-full text-[10px] mt-1.5 font-medium ${provisionResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                    {provisionResult.message}
+                  </p>
+                )}
+                {settings.zimaosSshAuth !== 'password' && (
+                  <p class="w-full text-[10px] text-gray-600">
+                    Provisioning possible aussi en mode clé (si la clé actuelle fonctionne).
+                  </p>
+                )}
+              </div>
+            {sshPreflight?.message && (
+              <p class="mb-2 text-[11px] text-gray-600">
+                Préflight SSH: {sshPreflight.message}
+              </p>
+            )}
              <button
               type="button"
               onClick={testSSH}

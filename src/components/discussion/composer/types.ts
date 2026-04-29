@@ -21,6 +21,10 @@ export type ChatMessage = {
   at: string;
   remediation?: GatewayRemediation;
   isAck?: boolean;
+  policy?: {
+    mode: 'off' | 'warn' | 'enforce';
+    state: 'idle' | 'compliant' | 'non_compliant';
+  };
 };
 
 export type GatewayRemediation = {

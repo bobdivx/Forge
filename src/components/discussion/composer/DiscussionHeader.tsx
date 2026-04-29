@@ -11,12 +11,23 @@ interface Props {
   setHeaderMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
   headerMenuOpen: boolean;
   copyToClipboard: (text: string) => Promise<void>;
+  policyBadge?: {
+    mode: 'off' | 'warn' | 'enforce';
+    state: 'idle' | 'compliant' | 'non_compliant';
+  };
 }
 
 export default function DiscussionHeader({
   selectedTeamProfile, selectedAgentId, selectedProject, selectedRequest,
-  setHeaderMenuOpen, headerMenuOpen, copyToClipboard
+  setHeaderMenuOpen, headerMenuOpen, copyToClipboard, policyBadge
 }: Props) {
+  const badgeClass =
+    policyBadge?.state === 'compliant'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+      : policyBadge?.state === 'non_compliant'
+        ? 'border-rose-200 bg-rose-50 text-rose-700'
+        : 'border-amber-200 bg-amber-50 text-amber-700';
+
   return (
     <header class="relative flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-5">
       <div class="flex min-w-0 flex-1 gap-3">
@@ -59,6 +70,13 @@ export default function DiscussionHeader({
               ) : null}
             </div>
           )}
+          {policyBadge && policyBadge.mode !== 'off' ? (
+            <div class="mt-2">
+              <span class={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${badgeClass}`}>
+                Policy strict: {policyBadge.mode} · {policyBadge.state === 'compliant' ? 'conforme' : policyBadge.state === 'non_compliant' ? 'non conforme' : 'en attente'}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
       <div class="relative shrink-0 flex items-center">

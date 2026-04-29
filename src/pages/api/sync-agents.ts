@@ -3,6 +3,38 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { getForgeRepoRoot } from '../../lib/forge-repo-root';
 import { loadAstroDb } from '../../lib/load-astro-db';
+import { buildAgentPolicyContext } from '../../lib/agent-rules';
+
+const GLOBAL_POLICY_START = '<!-- FORGE_GLOBAL_POLICY_START -->';
+const GLOBAL_POLICY_END = '<!-- FORGE_GLOBAL_POLICY_END -->';
+
+function renderLanguagePolicy(preferredLanguage: string): string {
+  if (preferredLanguage === 'en') return '- Language policy: English only for chat/reports.';
+  if (preferredLanguage === 'fr_en')
+    return '- Language policy: French first, then English for chat/reports.';
+  return '- Politique de langue: francais pour chat/rapports.';
+}
+
+function stripGlobalPolicyBlock(prompt: string): string {
+  const start = prompt.indexOf(GLOBAL_POLICY_START);
+  const end = prompt.indexOf(GLOBAL_POLICY_END);
+  if (start >= 0 && end > start) {
+    return `${prompt.slice(0, start).trim()}\n`;
+  }
+  return prompt;
+}
+
+function applyGlobalPolicyToPrompt(prompt: string, preferredLanguage: string, buildRules: string): string {
+  const clean = stripGlobalPolicyBlock(String(prompt || '')).trim();
+  const policyLines = [
+    GLOBAL_POLICY_START,
+    '## Forge Global Policy',
+    renderLanguagePolicy(preferredLanguage),
+    buildRules ? `- Build rules:\n${buildRules}` : '- Build rules: (none configured)',
+    GLOBAL_POLICY_END,
+  ];
+  return `${clean}\n\n${policyLines.join('\n')}\n`;
+}
 
 /**
  * POST /api/sync-agents
@@ -15,6 +47,14 @@ export const POST: APIRoute = async ({ request }) => {
   const { db, AgentInstruction } = await loadAstroDb();
   const body = await request.json().catch(() => ({}));
   const targetAgent: string | undefined = body?.agentId;
+  const policy = await buildAgentPolicyContext(undefined);
+  const preferredLanguage = policy.preferredLanguage;
+  const buildRules = policy.globalRules
+    .map(
+      (r) =>
+        `[${r.scope}${r.projectId != null ? `#${r.projectId}` : ''}] ${r.category}.${r.field} ${r.operator} ${r.value}`,
+    )
+    .join('\n');
 
   const repoRoot = getForgeRepoRoot();
 
@@ -36,7 +76,12 @@ export const POST: APIRoute = async ({ request }) => {
     try {
       const fullPath = resolve(repoRoot, agent.filePath);
       mkdirSync(dirname(fullPath), { recursive: true });
-      writeFileSync(fullPath, agent.systemPrompt, 'utf-8');
+      const promptWithPolicy = applyGlobalPolicyToPrompt(
+        String(agent.systemPrompt || ''),
+        preferredLanguage,
+        buildRules,
+      );
+      writeFileSync(fullPath, promptWithPolicy, 'utf-8');
       synced.push(agent.agentId);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -45,7 +90,16 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   return new Response(
-    JSON.stringify({ ok: true, synced, errors, total: toSync.length }),
+    JSON.stringify({
+      ok: true,
+      synced,
+      errors,
+      total: toSync.length,
+      appliedPolicy: {
+        preferredLanguage,
+        hasBuildRules: Boolean(buildRules),
+      },
+    }),
     { headers: { 'Content-Type': 'application/json' } }
   );
 };

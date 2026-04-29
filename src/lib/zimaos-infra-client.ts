@@ -7,6 +7,7 @@ export type ZimaOSInfraConfig = {
   host?: string;
   user?: string;
   port?: number;
+  sshAuth?: 'key' | 'password';
   password?: string;
   keyPath?: string;
   keyContent?: string;
@@ -18,15 +19,49 @@ export async function getZimaOSInfraConfig(): Promise<ZimaOSInfraConfig> {
   const host = await getConfig('zimaosHost');
   const user = await getConfig('zimaosSshUser');
   const port = Number(await getConfig('zimaosSshPort')) || 22;
+  const sshAuth = ((await getConfig('zimaosSshAuth')) || 'key') === 'password' ? 'password' : 'key';
   const containerName = (await getConfig('zimaosContainerName')) || 'openclaw';
   const keyPath = await getConfig('zimaosSshKeyPath');
   const keyContent = await getConfig('zimaosSshKeyContent');
   const password = await getConfig('zimaosSshPassword');
   
-  return { mode, host, user, port, containerName, keyPath, keyContent, password };
+  return { mode, host, user, port, sshAuth, containerName, keyPath, keyContent, password };
 }
 
 let _lastSshError: { timestamp: number; count: number } = { timestamp: 0, count: 0 };
+
+function sanitizeSshErrorMessage(raw: string, password?: string): string {
+  let out = String(raw || '');
+  // Masque l'option plink -pw "...."
+  out = out.replace(/-pw\s+"[^"]*"/gi, '-pw "***"');
+  out = out.replace(/-pw\s+\S+/gi, '-pw "***"');
+  // Masque toute occurrence brute du mot de passe si connue
+  if (password) {
+    out = out.split(password).join('***');
+  }
+  return out;
+}
+
+function buildSsh2ExecCommand(payloadBase64: string): string {
+  return (
+    `node -e "const { Client } = require('ssh2');` +
+    `const raw = Buffer.from(process.env.FORGE_SSH2_PAYLOAD || '', 'base64').toString('utf8');` +
+    `if (!raw) { console.error('Missing FORGE_SSH2_PAYLOAD'); process.exit(9); }` +
+    `const cfg = JSON.parse(raw);` +
+    `const conn = new Client();` +
+    `let done = false;` +
+    `const fail = (msg, code = 2) => { if (done) return; done = true; try { conn.end(); } catch {} ; console.error(msg); process.exit(code); };` +
+    `conn.on('ready', () => {` +
+    `conn.exec(cfg.command, (err, stream) => {` +
+    `if (err) return fail('SSH exec failed: ' + err.message, 3);` +
+    `stream.on('close', (code) => { try { conn.end(); } catch {} ; process.exit(code || 0); });` +
+    `stream.on('data', (d) => process.stdout.write(d));` +
+    `stream.stderr.on('data', (d) => process.stderr.write(d));` +
+    `});` +
+    `}).on('error', (err) => fail('SSH connect failed: ' + err.message, 4))` +
+    `.connect(cfg.connect);" && exit 0`
+  );
+}
 
 export class ZimaOSInfraClient {
   constructor(private config: ZimaOSInfraConfig) {}
@@ -49,13 +84,15 @@ export class ZimaOSInfraClient {
         throw new Error(`SSH bloqué temporairement (Permission denied). Réessayez dans ${remaining}s ou vérifiez le chemin de votre clé SSH.`);
       }
 
-      const { host, user, port, keyPath, keyContent } = this.config as any;
+      const { host, user, port, keyPath, keyContent, password, sshAuth } = this.config as any;
       if (!host || !user) throw new Error('SSH host or user not configured');
       
       let effectiveKeyPath = keyPath;
+      let execEnv: NodeJS.ProcessEnv | undefined = undefined;
       
-      // Si on a du contenu en DB mais pas de chemin, on matérialise la clé
-      if (!effectiveKeyPath && keyContent) {
+      // Priorité au contenu clé DB (clé provisionnée/régénérée par Forge),
+      // pour éviter qu'un ancien keyPath invalide soit utilisé.
+      if (keyContent) {
         const tempKeyPath = 'scratch/zimaos_db_key';
         if (!fs.existsSync('scratch')) fs.mkdirSync('scratch');
         fs.writeFileSync(tempKeyPath, keyContent.trim() + '\n', { mode: 0o600 });
@@ -63,17 +100,92 @@ export class ZimaOSInfraClient {
       }
 
       const identity = effectiveKeyPath ? `-i "${effectiveKeyPath.replace(/\\/g, '/')}"` : '';
-      const sshCmd = `ssh -p ${port} ${identity} -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no ${user}@${host} "${command.replace(/"/g, '\\"')}"`;
+      const escapedCommand = command.replace(/"/g, '\\"');
+      let sshCmd = '';
+      const wantPassword = sshAuth === 'password';
+
+      // Auth explicitement demandée: mot de passe
+      if (wantPassword && password) {
+        const payload = Buffer.from(
+          JSON.stringify({
+            connect: {
+              host: String(host),
+              port: Number(port) || 22,
+              username: String(user),
+              password: String(password),
+              readyTimeout: 5000,
+            },
+            command: String(command),
+          }),
+          'utf8',
+        ).toString('base64');
+        execEnv = { ...process.env, FORGE_SSH2_PAYLOAD: payload };
+        sshCmd = buildSsh2ExecCommand(payload);
+      } else if (wantPassword && !password) {
+        throw new Error("SSH password auth sélectionnée, mais aucun mot de passe n'est enregistré.");
+      } else if (effectiveKeyPath || keyContent) {
+        // Auth par clé via ssh2 (évite les incompatibilités de format OpenSSH CLI).
+        let privateKey = '';
+        if (effectiveKeyPath) {
+          try {
+            privateKey = fs.readFileSync(effectiveKeyPath, 'utf-8');
+          } catch (e: any) {
+            throw new Error(`Lecture clé SSH impossible: ${e?.message || 'erreur inconnue'}`);
+          }
+        } else {
+          privateKey = String(keyContent || '');
+        }
+        const payload = Buffer.from(
+          JSON.stringify({
+            connect: {
+              host: String(host),
+              port: Number(port) || 22,
+              username: String(user),
+              privateKey: String(privateKey),
+              readyTimeout: 5000,
+            },
+            command: String(command),
+          }),
+          'utf8',
+        ).toString('base64');
+        execEnv = { ...process.env, FORGE_SSH2_PAYLOAD: payload };
+        sshCmd = buildSsh2ExecCommand(payload);
+      } else if (password) {
+        // Fallback compat: mot de passe présent mais mode non explicite.
+        const payload = Buffer.from(
+          JSON.stringify({
+            connect: {
+              host: String(host),
+              port: Number(port) || 22,
+              username: String(user),
+              password: String(password),
+              readyTimeout: 5000,
+            },
+            command: String(command),
+          }),
+          'utf8',
+        ).toString('base64');
+        execEnv = { ...process.env, FORGE_SSH2_PAYLOAD: payload };
+        sshCmd = buildSsh2ExecCommand(payload);
+      } else {
+        sshCmd = `ssh -p ${port} -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no ${user}@${host} "${escapedCommand}"`;
+      }
       
       try {
-        const res = execSync(sshCmd, { encoding: 'utf-8', windowsHide: true });
+        const res = execSync(sshCmd, { encoding: 'utf-8', windowsHide: true, env: execEnv || process.env });
         // Succès: on reset le compteur d'erreurs
         _lastSshError = { timestamp: 0, count: 0 };
         return res;
       } catch (e: any) {
         _lastSshError.timestamp = Date.now();
         _lastSshError.count++;
-        throw new Error(`SSH exec failed (Permission denied?): ${e.message}`);
+        const msg = sanitizeSshErrorMessage(e?.message, password);
+        if (/Cannot parse privateKey|Unsupported key format/i.test(msg)) {
+          throw new Error(
+            "SSH exec failed: format de clé privée incompatible. Utilisez 'Régénérer la clé SSH' dans Settings > ZimaOS.",
+          );
+        }
+        throw new Error(`SSH exec failed: ${msg}`);
       }
     }
   }

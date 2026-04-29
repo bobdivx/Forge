@@ -1,0 +1,138 @@
+import type { APIRoute } from 'astro';
+import { asc, desc, eq } from 'drizzle-orm';
+import { loadAstroDb } from '../../lib/load-astro-db';
+import { runForgeOrchestrator } from '../../lib/forge-orchestrator';
+
+const MAX_MESSAGE = 120_000;
+
+function normalizeError(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+export const POST: APIRoute = async ({ request, locals }) => {
+  if (!locals.user?.email) {
+    return new Response(JSON.stringify({ error: 'Non authentifié' }), { status: 401 });
+  }
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const sessionId = String(body.sessionId || body.sessionKey || '').trim();
+  const agentId = String(body.agentId || sessionId || '').trim();
+  const message = String(body.message || '').trim();
+  const modelHint = String(body.modelHint || '').trim() || undefined;
+  const projectId = typeof body.projectId === 'number' ? body.projectId : undefined;
+  const requestId = typeof body.requestId === 'number' ? body.requestId : undefined;
+
+  if (!sessionId || !agentId || !message) {
+    return new Response(JSON.stringify({ error: 'sessionId/agentId/message requis' }), { status: 400 });
+  }
+  if (message.length > MAX_MESSAGE) {
+    return new Response(JSON.stringify({ error: 'Message trop long' }), { status: 400 });
+  }
+
+  try {
+    const { db, ForgeChatSession, ForgeChatMessage, ForgeChatStep } = await loadAstroDb();
+    const now = new Date();
+    const existing = await db.select().from(ForgeChatSession).where(eq(ForgeChatSession.id, sessionId));
+    if (!existing.length) {
+      await db.insert(ForgeChatSession).values({
+        id: sessionId,
+        agentId,
+        projectId,
+        requestId,
+        title: `Session ${agentId}`,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      await db.update(ForgeChatSession).set({ updatedAt: now }).where(eq(ForgeChatSession.id, sessionId));
+    }
+
+    await db.insert(ForgeChatMessage).values({
+      sessionId,
+      role: 'user',
+      content: message,
+      meta: JSON.stringify({ author: locals.user.email }),
+      createdAt: now,
+    });
+
+    const orchestrated = await runForgeOrchestrator({ agentId, message, modelHint, projectId });
+    await db.insert(ForgeChatMessage).values({
+      sessionId,
+      role: 'assistant',
+      content: orchestrated.reply,
+      provider: orchestrated.provider,
+      model: orchestrated.model,
+      meta: orchestrated.toolResult ? JSON.stringify({ toolResult: orchestrated.toolResult }) : null,
+      createdAt: new Date(),
+    });
+    for (const step of orchestrated.steps) {
+      await db.insert(ForgeChatStep).values({
+        sessionId,
+        type: step.type,
+        label: step.label,
+        payload: step.payload || null,
+        status: step.status,
+        createdAt: new Date(),
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        via: 'forge-chat',
+        sessionId,
+        result: { status: 'completed', reply: orchestrated.reply },
+        steps: orchestrated.steps,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  } catch (e) {
+    return new Response(JSON.stringify({ error: normalizeError(e) }), { status: 502 });
+  }
+};
+
+export const GET: APIRoute = async ({ request, locals }) => {
+  if (!locals.user?.email) {
+    return new Response(JSON.stringify({ error: 'Non authentifié' }), { status: 401 });
+  }
+  const url = new URL(request.url);
+  const sessionId = String(url.searchParams.get('sessionId') || url.searchParams.get('sessionKey') || '').trim();
+  const limitRaw = Number(url.searchParams.get('limit') || 100);
+  const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, Math.floor(limitRaw))) : 100;
+  if (!sessionId) return new Response(JSON.stringify({ error: 'sessionId requis' }), { status: 400 });
+
+  try {
+    const { db, ForgeChatMessage, ForgeChatStep } = await loadAstroDb();
+    const rows = await db
+      .select()
+      .from(ForgeChatMessage)
+      .where(eq(ForgeChatMessage.sessionId, sessionId))
+      .orderBy(desc(ForgeChatMessage.createdAt))
+      .limit(limit);
+    const steps = await db
+      .select()
+      .from(ForgeChatStep)
+      .where(eq(ForgeChatStep.sessionId, sessionId))
+      .orderBy(asc(ForgeChatStep.createdAt));
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        sessionId,
+        messages: rows.reverse().map((r) => ({
+          id: `forge-msg-${r.id}`,
+          role: r.role,
+          text: r.content,
+          at: new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          meta: r.meta || null,
+          provider: r.provider || null,
+          model: r.model || null,
+        })),
+        steps,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  } catch (e) {
+    return new Response(JSON.stringify({ error: normalizeError(e) }), { status: 500 });
+  }
+};
+

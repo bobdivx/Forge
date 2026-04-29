@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { desc, eq } from 'drizzle-orm';
+import { loadAstroDb } from '../../lib/load-astro-db';
 import {
   fetchZimaOSSessionsForDiscussion,
   resolveBestZimaOSSessionForKey,
@@ -27,6 +29,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // Chemin principal Forge-native : historique persisté localement.
+  try {
+    const { db, ForgeChatMessage } = await loadAstroDb();
+    const local = await db
+      .select()
+      .from(ForgeChatMessage)
+      .where(eq(ForgeChatMessage.sessionId, sessionKey))
+      .orderBy(desc(ForgeChatMessage.createdAt))
+      .limit(maxMessages);
+    if (local.length > 0) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          messages: local.reverse().map((m) => ({
+            id: `forge-msg-${m.id}`,
+            role: m.role,
+            text: m.content,
+            at: new Date(m.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          })),
+          selectedSessionKey: sessionKey,
+          source: 'forge',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+  } catch {
+    // fallback below
   }
 
   const list = await fetchZimaOSSessionsForDiscussion(locals.user.email as string, 120);

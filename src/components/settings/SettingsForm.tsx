@@ -8,6 +8,7 @@ import AgentModelsTab from './AgentModelsTab';
 import OllamaTab from './OllamaTab';
 import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
+import AgentRulesTab from './AgentRulesTab';
 
 type Config = {
   forgePublicUrl: string;
@@ -27,8 +28,11 @@ type Config = {
   zimaosSshUser: string;
   zimaosSshAuth: string;
   zimaosSshKeyPath: string;
+  zimaosSshKeyContent: string;
   zimaosSshPassword: string;
   ollamaUrl: string;
+  agentGlobalBuildRules: string;
+  agentPreferredLanguage: string;
 };
 
 type AuthState = {
@@ -45,6 +49,7 @@ const TABS = [
   { id: 'integration', label: 'Docker & Chemins' },
   { id: 'api', label: 'Jetons API' },
   { id: 'models', label: 'Modèles agents' },
+  { id: 'policy', label: 'Politique agents' },
   { id: 'schedule', label: 'Horaires de travail' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
@@ -69,8 +74,11 @@ export default function SettingsForm() {
     zimaosSshUser: '',
     zimaosSshAuth: 'key',
     zimaosSshKeyPath: '',
+    zimaosSshKeyContent: '',
     zimaosSshPassword: '',
     ollamaUrl: '',
+    agentGlobalBuildRules: '',
+    agentPreferredLanguage: 'fr',
   });
   const [auth, setAuth] = useState<AuthState>({
     currentEmail: '',
@@ -138,9 +146,15 @@ export default function SettingsForm() {
           zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : prev.zimaosSshAuth,
           zimaosSshKeyPath:
             typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : prev.zimaosSshKeyPath,
+          zimaosSshKeyContent:
+            typeof s.zimaosSshKeyContent === 'string' ? s.zimaosSshKeyContent : prev.zimaosSshKeyContent,
           zimaosSshPassword:
             typeof s.zimaosSshPassword === 'string' ? s.zimaosSshPassword : prev.zimaosSshPassword,
           ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
+          agentGlobalBuildRules:
+            typeof s.agentGlobalBuildRules === 'string' ? s.agentGlobalBuildRules : prev.agentGlobalBuildRules,
+          agentPreferredLanguage:
+            typeof s.agentPreferredLanguage === 'string' ? s.agentPreferredLanguage : prev.agentPreferredLanguage,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
         const items = Array.isArray(t.items) ? t.items : [];
@@ -185,9 +199,15 @@ export default function SettingsForm() {
       zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : prev.zimaosSshAuth,
       zimaosSshKeyPath:
         typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : prev.zimaosSshKeyPath,
+      zimaosSshKeyContent:
+        typeof s.zimaosSshKeyContent === 'string' ? s.zimaosSshKeyContent : prev.zimaosSshKeyContent,
       zimaosSshPassword:
         typeof s.zimaosSshPassword === 'string' ? s.zimaosSshPassword : prev.zimaosSshPassword,
       ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
+      agentGlobalBuildRules:
+        typeof s.agentGlobalBuildRules === 'string' ? s.agentGlobalBuildRules : prev.agentGlobalBuildRules,
+      agentPreferredLanguage:
+        typeof s.agentPreferredLanguage === 'string' ? s.agentPreferredLanguage : prev.agentPreferredLanguage,
     }));
   };
 
@@ -364,6 +384,7 @@ export default function SettingsForm() {
           />
         )}
         {activeTab === 'models' && <AgentModelsTab />}
+        {activeTab === 'policy' && <AgentRulesTab />}
         {activeTab === 'schedule' && <WorkScheduleTab />}
         {activeTab === 'maintenance' && (
           <MaintenanceTab

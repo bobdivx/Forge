@@ -10,3 +10,10 @@ Responsabilités :
 - Charger et décharger les modèles selon la charge.
 - Prévenir les saturations lors des tâches lourdes.
 - Informer `CHEF_TECHNIQUE` des actions de régulation.
+
+<!-- FORGE_GLOBAL_POLICY_START -->
+## Forge Global Policy
+- Politique de langue: francais pour chat/rapports.
+- Build rules:
+Toujours produire les applications en francais et anglais (i18n fr/en).\nStack imposee: Astro build, composants Preact, Tailwind CSS, DaisyUI.\nRespecter l architecture existante et eviter les regressions.
+<!-- FORGE_GLOBAL_POLICY_END -->

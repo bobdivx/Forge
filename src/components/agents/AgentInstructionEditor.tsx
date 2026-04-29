@@ -28,6 +28,33 @@ type AgentTemplate = {
 };
 
 const MODEL_FALLBACK = ['qwen2.5-coder:7b', 'qwen2.5:7b', 'llama3.1:8b'];
+const GLOBAL_POLICY_START = '<!-- FORGE_GLOBAL_POLICY_START -->';
+const GLOBAL_POLICY_END = '<!-- FORGE_GLOBAL_POLICY_END -->';
+
+function stripGlobalPolicyBlock(prompt: string): string {
+  const start = prompt.indexOf(GLOBAL_POLICY_START);
+  const end = prompt.indexOf(GLOBAL_POLICY_END);
+  if (start >= 0 && end > start) return `${prompt.slice(0, start).trim()}\n`;
+  return prompt;
+}
+
+function renderLanguagePolicy(preferredLanguage: string): string {
+  if (preferredLanguage === 'en') return '- Language policy: English only for chat/reports.';
+  if (preferredLanguage === 'fr_en') return '- Language policy: French first, then English for chat/reports.';
+  return '- Politique de langue: francais pour chat/rapports.';
+}
+
+function buildMergedPrompt(prompt: string, preferredLanguage: string, buildRules: string): string {
+  const clean = stripGlobalPolicyBlock(String(prompt || '')).trim();
+  const policyLines = [
+    GLOBAL_POLICY_START,
+    '## Forge Global Policy',
+    renderLanguagePolicy(preferredLanguage),
+    buildRules ? `- Build rules:\n${buildRules}` : '- Build rules: (none configured)',
+    GLOBAL_POLICY_END,
+  ];
+  return `${clean}\n\n${policyLines.join('\n')}\n`;
+}
 
 export default function AgentInstructionEditor() {
   const [agents, setAgents] = useState<AgentRow[]>([]);
@@ -49,6 +76,9 @@ export default function AgentInstructionEditor() {
   const [newAgentModelFromList, setNewAgentModelFromList] = useState(MODEL_FALLBACK[0]);
   const [newAgentModelCustom, setNewAgentModelCustom] = useState('');
   const [newAgentPrompt, setNewAgentPrompt] = useState('');
+  const [preferredLanguage, setPreferredLanguage] = useState('fr');
+  const [globalBuildRules, setGlobalBuildRules] = useState('');
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
 
   const selected = useMemo(
     () => agents.find((a) => a.agentId === selectedId) ?? null,
@@ -71,6 +101,7 @@ export default function AgentInstructionEditor() {
         fetch('/api/agent-template-models').then((r) => r.json().catch(() => ({ templates: [] })),
         ),
       ]);
+      const settings = await fetch('/api/settings').then((r) => r.json().catch(() => ({})));
       const nextTemplates = Array.isArray((rTemplates as { templates?: unknown[] }).templates)
         ? ((rTemplates as { templates: AgentTemplate[] }).templates as AgentTemplate[])
         : [];
@@ -94,6 +125,12 @@ export default function AgentInstructionEditor() {
       setSyncStatus(nextSync);
       setModels(mergedModels);
       setTemplates(nextTemplates);
+      setPreferredLanguage(
+        typeof settings.agentPreferredLanguage === 'string' ? settings.agentPreferredLanguage : 'fr',
+      );
+      setGlobalBuildRules(
+        typeof settings.agentGlobalBuildRules === 'string' ? settings.agentGlobalBuildRules : '',
+      );
 
       if (!selectedId && nextAgents.length > 0) {
         setSelectedId(nextAgents[0].agentId);
@@ -419,10 +456,28 @@ export default function AgentInstructionEditor() {
                 >
                   Rafraîchir
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPromptPreview((v) => !v)}
+                  class="rounded-full border border-[#175B37]/30 bg-white px-4 py-2 text-xs font-semibold text-[#175B37] hover:bg-[#175B37]/5"
+                >
+                  {showPromptPreview ? 'Masquer aperçu' : 'Prévisualiser prompt final'}
+                </button>
                 <span class="ml-auto text-[10px] text-gray-500">
                   {draftPrompt.length.toLocaleString()} caractères
                 </span>
               </div>
+              {showPromptPreview ? (
+                <div class="space-y-1">
+                  <p class="text-[11px] font-semibold text-gray-600">Prompt final (avec policy globale)</p>
+                  <textarea
+                    readOnly
+                    rows={14}
+                    value={buildMergedPrompt(draftPrompt, preferredLanguage, globalBuildRules)}
+                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-700"
+                  />
+                </div>
+              ) : null}
             </div>
           )}
         </div>

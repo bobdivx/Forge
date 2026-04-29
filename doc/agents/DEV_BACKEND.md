@@ -47,3 +47,10 @@ source /mnt/GitHub/Forge/scripts/forge_env.sh
 ## Règle absolue
 Toute API créée → forge-hook `completion` avec la documentation du format de réponse pour DEV_FRONTEND.
 Consulte `/mnt/GitHub/Forge/doc/FORGE_API_CONTRACT.md` pour le contrat complet.
+
+<!-- FORGE_GLOBAL_POLICY_START -->
+## Forge Global Policy
+- Politique de langue: francais pour chat/rapports.
+- Build rules:
+Toujours produire les applications en francais et anglais (i18n fr/en).\nStack imposee: Astro build, composants Preact, Tailwind CSS, DaisyUI.\nRespecter l architecture existante et eviter les regressions.
+<!-- FORGE_GLOBAL_POLICY_END -->

@@ -4,6 +4,7 @@ export const prerender = false;
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import { loadAstroDb } from '../lib/load-astro-db';
 import WorkModals from '../components/work/WorkModals';
+import WorkSystemPanel from '../components/work/WorkSystemPanel';
 
 let requests = [];
 let issues = [];
@@ -100,6 +101,8 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
         </span>
       </div>
     </div>
+
+    <WorkSystemPanel client:load />
 
     <!-- ── Demandes & Fonctionnalités ──────────────────────────────────── -->
     <section>

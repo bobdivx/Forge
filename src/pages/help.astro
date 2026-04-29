@@ -12,6 +12,15 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
     </header>
 
     <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
+      <h2 class="text-lg font-semibold text-zinc-900">0) Mode principal Forge-native</h2>
+      <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
+        <li>Le chat principal passe maintenant par <code class="font-mono">/api/forge-chat</code> avec persistance locale.</li>
+        <li>Le endpoint <code class="font-mono">/api/zimaos-directive</code> reste disponible en mode <strong>legacy/admin</strong>.</li>
+        <li>ZimaOS sert prioritairement de couche infra (SSH, Docker, fichiers) via le ToolBus Forge.</li>
+      </ul>
+    </section>
+
+    <section class="bg-white border border-zinc-100 rounded-3xl p-6 shadow-sm space-y-3">
       <h2 class="text-lg font-semibold text-zinc-900">1) Vérifier la connectivité ZimaOS</h2>
       <ul class="list-disc pl-5 text-sm text-zinc-700 space-y-1">
         <li>Ouvrir <a class="underline" href="/health">/health</a> et vérifier <strong>sessions_list</strong> et <strong>agents_list</strong>.</li>

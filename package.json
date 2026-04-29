@@ -19,11 +19,15 @@
     "dev:unc": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prep-npm-unc.ps1 -RunDev",
     "build": "node ./scripts/run-astro.mjs build",
     "prepreview": "node scripts/ensure-win32-natives.cjs && node scripts/assert-astro-stack.cjs && node scripts/patch-astro-node-polyfill.cjs && node scripts/patch-astro-db-vite-sync-no-drop.cjs",
-    "preview": "node ./scripts/run-astro.mjs preview"
+    "preview": "node ./scripts/run-astro.mjs preview",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e"
   },
   "optionalDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "4.60.1",
-    "@rollup/rollup-linux-x64-gnu": "^4.60.2"
+    "@rollup/rollup-linux-x64-gnu": "^4.60.2",
+    "@rollup/rollup-win32-x64-msvc": "4.60.1"
   },
   "dependencies": {
     "@astrojs/db": "^0.20.1",
@@ -36,6 +40,10 @@
     "daisyui": "latest",
     "esbuild": "^0.25.0",
     "preact": "^10.29.1",
+    "ssh2": "^1.17.0",
     "tailwindcss": "^3.4.19"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }

@@ -42,3 +42,10 @@ curl -s ${FORGE_AUTH_CURL_ARGS[@]} -X POST "${FORGE_HOOK_URL:-http://127.0.0.1:4
 ### Règle absolue
 
 **Ne jamais te contenter d’une réponse texte dans la session ZimaOS.** La vérité opérationnelle est la base Forge : voir `doc/FORGE_API_CONTRACT.md`.
+
+<!-- FORGE_GLOBAL_POLICY_START -->
+## Forge Global Policy
+- Politique de langue: francais pour chat/rapports.
+- Build rules:
+Toujours produire les applications en francais et anglais (i18n fr/en).\nStack imposee: Astro build, composants Preact, Tailwind CSS, DaisyUI.\nRespecter l architecture existante et eviter les regressions.
+<!-- FORGE_GLOBAL_POLICY_END -->

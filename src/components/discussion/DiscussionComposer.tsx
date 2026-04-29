@@ -19,6 +19,7 @@ const POLL_ATTEMPTS = 48; // 48 * 2.5s = ~2 minutes
 const POLL_INTERVAL_MS = 2500;
 
 export default function DiscussionComposer() {
+  type PolicyBadgeState = { mode: 'off' | 'warn' | 'enforce'; state: 'idle' | 'compliant' | 'non_compliant' };
   const [projects, setProjects] = useState<Project[]>([]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
@@ -40,20 +41,20 @@ export default function DiscussionComposer() {
   const [profileDraft, setProfileDraft] = useState({ displayName: '', roleTitle: '', bio: '', avatarUrl: '', avatarEmoji: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [swarmCommandMode, setSwarmCommandMode] = useState<'direct' | 'leader'>('direct');
+  const [policyBadge, setPolicyBadge] = useState<PolicyBadgeState>({ mode: 'off', state: 'idle' });
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const currentAgentRef = useRef<string>('');
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/projects').then(r => r.json()),
-      fetch('/api/requests').then(r => r.json()),
+      fetch('/api/discussion-context').then(r => r.json()),
       fetch('/api/agents').then(r => r.json()),
-      fetch('/api/openclaw-profiles').then(r => r.json()).catch(() => ({}))
-    ]).then(([p, req, a, profData]) => {
-      setProjects(Array.isArray(p.data) ? p.data : []);
-      setRequests(Array.isArray(req.data) ? req.data : []);
-      setAgents(Array.isArray(a.data) ? a.data : []);
-      setOcProfiles(profData.data || {});
+      fetch('/api/zimaos-agent-profiles').then(r => r.json()).catch(() => ({}))
+    ]).then(([ctx, a, profData]) => {
+      setProjects(Array.isArray(ctx.projects) ? ctx.projects : []);
+      setRequests(Array.isArray(ctx.requests) ? ctx.requests : []);
+      setAgents(Array.isArray(a.agents) ? a.agents : Array.isArray(a.data) ? a.data : []);
+      setOcProfiles(profData.profiles || {});
       setLoading(false);
     }).catch(err => {
       console.error(err);
@@ -117,10 +118,14 @@ export default function DiscussionComposer() {
     if (!id) return;
     setHistoryLoading(true);
     try {
-      const res = await fetch(`/api/discussion-history?sessionKey=${encodeURIComponent(id)}`);
+      const res = await fetch('/api/discussion-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionKey: id, maxMessages: 100 }),
+      });
       if (!res.ok) throw new Error('Erreur history');
       const data = await res.json();
-      if (Array.isArray(data.chat)) setChat(data.chat);
+      if (Array.isArray(data.messages)) setChat(data.messages);
     } catch (err) {
       console.error(err);
     } finally {
@@ -134,21 +139,21 @@ export default function DiscussionComposer() {
     setError(null);
     try {
       const payload = {
-        agentId,
+        sessionKey: agentId,
         displayName: profileDraft.displayName.trim() || null,
         roleTitle: profileDraft.roleTitle.trim() || null,
         bio: profileDraft.bio.trim() || null,
         avatarUrl: profileDraft.avatarUrl.trim() || null,
         avatarEmoji: profileDraft.avatarEmoji.trim() || null,
       };
-      const res = await fetch('/api/openclaw-profiles', {
+      const res = await fetch('/api/zimaos-agent-profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Échec sauvegarde');
-      const updated = await fetch('/api/openclaw-profiles').then(r => r.json());
-      setOcProfiles(updated.data || {});
+      const updated = await fetch('/api/zimaos-agent-profiles').then(r => r.json());
+      setOcProfiles(updated.profiles || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -173,6 +178,7 @@ export default function DiscussionComposer() {
     setSending(true);
     setError(null);
     setCopyFeedback(null);
+    setPolicyBadge((prev) => (prev.mode === 'off' ? prev : { ...prev, state: 'idle' }));
     
     const ts = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const userMsg: ChatMessage = { id: `${Date.now()}-u`, role: 'user', text, at: ts };
@@ -180,28 +186,50 @@ export default function DiscussionComposer() {
 
     try {
       const payload = {
-        agentId,
+        sessionKey: agentId,
         message: text,
+        modelHint: selectedAgent?.model && selectedAgent.model !== '—' ? selectedAgent.model : undefined,
         projectId: projectId ? parseInt(projectId, 10) : undefined,
         requestId: requestId ? parseInt(requestId, 10) : undefined
       };
-      const res = await fetch('/api/zimaos-directive', {
+      const res = await fetch('/api/forge-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur gateway');
+      if (!res.ok) {
+        const errText = typeof data?.error === 'string' ? data.error : 'Erreur gateway';
+        setError(errText);
+        setChat(c => [...c, {
+          id: `${Date.now()}-err`,
+          role: 'system',
+          text: `Erreur d'envoi: ${errText}`,
+          at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          remediation: data?.remediation,
+        }]);
+        return;
+      }
       
+      const steps = Array.isArray(data?.steps) ? data.steps as Array<Record<string, unknown>> : [];
+      const strictModeStep = steps.find((s) => s?.type === 'policy' && s?.label === 'strict_mode');
+      const strictAuditStep = steps.find((s) => s?.type === 'policy' && s?.label === 'strict_audit');
+      const modeRaw = String(strictModeStep?.payload || 'off').toLowerCase();
+      const mode: PolicyBadgeState['mode'] = modeRaw === 'warn' || modeRaw === 'enforce' ? modeRaw : 'off';
+      const auditRaw = String(strictAuditStep?.payload || '').toLowerCase();
+      const state: PolicyBadgeState['state'] =
+        auditRaw === 'compliant' ? 'compliant' : auditRaw === 'non_compliant' ? 'non_compliant' : 'idle';
       const ackMsg: ChatMessage = {
         id: `${Date.now()}-ack`,
         role: 'assistant',
-        text: data.message || 'Transmis à ZimaOS.',
+        text: data?.result?.reply || data.message || 'Réponse Forge reçue.',
         at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         remediation: data.remediation,
-        isAck: true
+        isAck: false,
+        policy: { mode, state }
       };
       setChat(c => [...c, ackMsg]);
+      setPolicyBadge({ mode, state });
     } catch (err) {
       setChat(c => [...c, {
         id: `${Date.now()}-err`,
@@ -247,7 +275,7 @@ export default function DiscussionComposer() {
       <div class="flex min-h-[min(100dvh,680px)] min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
         <DiscussionHeader 
            selectedTeamProfile={selectedTeamProfile} selectedAgentId={agentId} selectedProject={selectedProject} selectedRequest={selectedRequest}
-           setHeaderMenuOpen={setHeaderMenuOpen} headerMenuOpen={headerMenuOpen} copyToClipboard={copyToClipboard}
+           setHeaderMenuOpen={setHeaderMenuOpen} headerMenuOpen={headerMenuOpen} copyToClipboard={copyToClipboard} policyBadge={policyBadge}
         />
         <ChatThread 
            chat={chat} historyLoading={historyLoading} agentId={agentId} selectedTeamProfile={selectedTeamProfile}

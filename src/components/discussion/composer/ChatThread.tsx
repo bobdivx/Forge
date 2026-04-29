@@ -60,6 +60,12 @@ export default function ChatThread({
               ? 'rounded-2xl rounded-bl-md bg-amber-50 px-4 py-2.5 text-sm text-amber-950'
               : m.isAck ? 'rounded-2xl rounded-bl-md bg-sky-50 px-4 py-2.5 text-sm text-sky-950'
               : 'rounded-2xl rounded-bl-md bg-gray-100 px-4 py-2.5 text-sm text-gray-800';
+            const policyClass =
+              m.policy?.state === 'compliant'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : m.policy?.state === 'non_compliant'
+                  ? 'border-rose-200 bg-rose-50 text-rose-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-700';
 
             return (
               <div key={m.id} class="animate-fade-up flex justify-start gap-2">
@@ -69,6 +75,13 @@ export default function ChatThread({
                 <div class="min-w-0 max-w-[85%] flex-1">
                   <div class={bubbleBase}>
                     <p class="whitespace-pre-wrap">{m.text}</p>
+                    {m.role === 'assistant' && m.policy && m.policy.mode !== 'off' ? (
+                      <div class="mt-2">
+                        <span class={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${policyClass}`}>
+                          policy {m.policy.mode} · {m.policy.state === 'compliant' ? 'conforme' : m.policy.state === 'non_compliant' ? 'non conforme' : 'en attente'}
+                        </span>
+                      </div>
+                    ) : null}
                     {m.remediation && <RemediationGuide remediation={m.remediation} copyToClipboard={copyToClipboard} />}
                   </div>
                   <p class="mt-1 pl-0.5 text-[11px] text-gray-400">{m.at}</p>

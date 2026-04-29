@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { getConfig, setConfig } from './config-db';
+import { getZimaOSInfraClient } from './zimaos-infra-client';
 import {
   getZimaOSGatewayBaseUrl,
   getZimaOSToken,
@@ -135,16 +136,52 @@ export async function runZimaOSAutoRepair(options?: {
   if (!winner && options?.restartDocker) {
     const configured = (await getConfig('zimaosContainerName')).trim();
     const detected = detectZimaOSContainerName();
-    const container = configured || detected || '';
+    const accessMode = (await getConfig('zimaosAccessMode')).trim() || 'local_docker';
+    let remoteDetected = '';
+    let remoteNames: string[] = [];
+    if (accessMode === 'remote_ssh') {
+      try {
+        const infra = await getZimaOSInfraClient();
+        const out = infra.exec('docker ps --format "{{.Names}}"');
+        remoteNames = String(out)
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        remoteDetected =
+          remoteNames.find((n) => /zimaos|openclaw|gateway/i.test(n)) ||
+          remoteNames[0] ||
+          '';
+      } catch {
+        remoteDetected = '';
+        remoteNames = [];
+      }
+    }
+    const configuredUsable =
+      !configured ||
+      accessMode !== 'remote_ssh' ||
+      remoteNames.length === 0 ||
+      remoteNames.includes(configured);
+    const container = (configuredUsable ? configured : '') || remoteDetected || detected || '';
     if (container) {
       try {
-        execSync(`docker restart ${container}`, {
-          encoding: 'utf-8',
-          timeout: 12_000,
-          windowsHide: true,
-        });
+        if (accessMode === 'remote_ssh') {
+          const infra = await getZimaOSInfraClient();
+          // Reset du circuit-breaker SSH avant action de réparation.
+          await infra.testConnection();
+          infra.exec(`docker restart ${container}`);
+        } else {
+          execSync(`docker restart ${container}`, {
+            encoding: 'utf-8',
+            timeout: 12_000,
+            windowsHide: true,
+          });
+        }
         dockerRestart = { ok: true, container };
-        actions.push(`Conteneur Docker redémarré : ${container}.`);
+        actions.push(
+          accessMode === 'remote_ssh'
+            ? `Conteneur Docker distant redémarré via SSH : ${container}.`
+            : `Conteneur Docker redémarré : ${container}.`,
+        );
         outer2: for (const base of bases) {
           for (const { token, source } of tokenOrder) {
             probesTried += 1;

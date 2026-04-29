@@ -74,6 +74,12 @@ async function validateSetup(data: Record<string, unknown>) {
     const host = String(data.zimaosHost ?? '').trim();
     const sshUser = String(data.zimaosSshUser ?? '').trim();
     const sshPort = String(data.zimaosSshPort ?? '').trim() || '22';
+    checks.appsRoot = {
+      ok: Boolean(reposRoot),
+      detail: reposRoot
+        ? `Chemin apps distant configuré: ${reposRoot} (validation locale ignorée en mode SSH distant).`
+        : 'Renseigner le chemin apps distant (ex: /media/GitHub).',
+    };
     checks.zimaosAccessMode = { ok: true, detail: 'Mode distant SSH actif.' };
     checks.zimaosSsh = {
       ok: Boolean(host && sshUser),

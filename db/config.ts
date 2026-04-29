@@ -358,6 +358,53 @@ const ZimaOSAgentProfile = defineTable({
 });
 
 /**
+ * Sessions conversationnelles natives Forge (découplées du gateway conversationnel ZimaOS).
+ */
+const ForgeChatSession = defineTable({
+  columns: {
+    id: column.text({ primaryKey: true }),
+    agentId: column.text(),
+    projectId: column.number({ optional: true, references: () => Project.columns.id }),
+    requestId: column.number({ optional: true, references: () => Request.columns.id }),
+    title: column.text({ optional: true }),
+    status: column.text({ default: 'active' }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Messages conversationnels Forge (chat user/assistant/system).
+ */
+const ForgeChatMessage = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    sessionId: column.text(),
+    role: column.text(),
+    content: column.text(),
+    provider: column.text({ optional: true }),
+    model: column.text({ optional: true }),
+    meta: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Traces d’étapes d’orchestration Forge (sous-agents, outils, décisions).
+ */
+const ForgeChatStep = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    sessionId: column.text(),
+    type: column.text(),
+    label: column.text(),
+    payload: column.text({ optional: true }),
+    status: column.text({ default: 'completed' }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
  * Demandes d’approbation (Human-in-the-Loop) — inspirées de Paperclip.
  * Les agents peuvent soumettre une demande qui bloque une action critique.
  * Statuts : pending | approved | rejected
@@ -398,6 +445,28 @@ const OllamaInstance = defineTable({
   },
 });
 
+/**
+ * Valeurs de listes pour le Rule Builder (frameworks, UI libs, langues, qualité...).
+ */
+const AgentRuleOption = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Catégorie visible dans l'UI: framework | ui | language | reporting | quality */
+    category: column.text(),
+    /** Type interne de liste: framework | component | css | ui_library | i18n | reporting_language | quality */
+    kind: column.text(),
+    /** Valeur persistée de l'option. */
+    value: column.text(),
+    /** Libellé affiché. */
+    label: column.text(),
+    /** 1 = visible, 0 = masqué. */
+    enabled: column.number({ default: 1 }),
+    /** Ordre d'affichage. */
+    sortOrder: column.number({ default: 100 }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
   tables: {
     Project,
@@ -422,6 +491,10 @@ export default defineDb({
     ActivityLog,
     HeartbeatRun,
     ZimaOSAgentProfile,
+    ForgeChatSession,
+    ForgeChatMessage,
+    ForgeChatStep,
     OllamaInstance,
+    AgentRuleOption,
   },
 });

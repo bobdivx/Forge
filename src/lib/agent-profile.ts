@@ -39,11 +39,13 @@ const AVATAR_COLORS = [
 ] as const;
 
 export function formatAgentName(name: string): string {
-  if (name.includes('subagent:')) {
-    const parts = name.split(':');
+  const safeName = String(name || '');
+  if (!safeName.trim()) return 'Agent';
+  if (safeName.includes('subagent:')) {
+    const parts = safeName.split(':');
     return `Sous-agent (${(parts.pop() || '').slice(0, 8)})`;
   }
-  return name
+  return safeName
     .replace('telegram:g-agent-', '')
     .replace('agent:', '')
     .replace(':main', '')
@@ -55,8 +57,8 @@ export function formatAgentName(name: string): string {
 }
 
 function roleFromNameOrId(name: string, id: string): string | null {
-  const n = name.toLowerCase();
-  const i = id.toLowerCase();
+  const n = String(name || '').toLowerCase();
+  const i = String(id || '').toLowerCase();
   if (n.includes('architecte') || n.includes('architect') || i.includes('architect')) return 'Architecte logiciel';
   if ((n.includes('dev') && n.includes('front')) || i.includes('front')) return 'Développeur front-end';
   if ((n.includes('dev') && n.includes('back')) || i.includes('back')) return 'Développeur back-end';
@@ -78,7 +80,7 @@ function roleFromNameOrId(name: string, id: string): string | null {
 }
 
 function roleFromModel(model: string): string | null {
-  const m = model.toLowerCase();
+  const m = String(model || '').toLowerCase();
   if (!m.trim()) return null;
   if (m.includes('embed')) return 'Spécialiste embeddings';
   if (m.includes('vision')) return 'Spécialiste vision';
@@ -88,7 +90,7 @@ function roleFromModel(model: string): string | null {
 }
 
 export function inferAgentRole(agent: Pick<AgentLike, 'name' | 'id' | 'model'>): string {
-  return roleFromNameOrId(agent.name, agent.id) ?? roleFromModel(agent.model) ?? 'Coéquipier IA';
+  return roleFromNameOrId(String(agent.name || ''), String(agent.id || '')) ?? roleFromModel(String(agent.model || '')) ?? 'Coéquipier IA';
 }
 
 export function getProfileInitials(displayName: string): string {
@@ -114,25 +116,29 @@ export function shortModelLabel(model: string): string {
 function mapPresence(agent: AgentLike): { presence: AgentTeamProfile['presence']; presenceLabel: string } {
   if (agent.raw?.offline) return { presence: 'offline', presenceLabel: 'Hors ligne' };
   if (agent.raw?.disabledInDb) return { presence: 'offline', presenceLabel: 'Désactivé' };
-  const s = agent.status.toLowerCase();
+  const safeStatus = String(agent.status || '').trim();
+  const s = safeStatus.toLowerCase();
   if (s.includes('désactiv') || s.includes('desactiv')) return { presence: 'offline', presenceLabel: 'Indisponible' };
   if (s.includes('actif')) return { presence: 'online', presenceLabel: 'Disponible' };
   if (s.includes('veille')) return { presence: 'away', presenceLabel: 'En veille' };
   if (s.includes('occup') || s.includes('busy') || s.includes('cours'))
-    return { presence: 'away', presenceLabel: agent.status };
-  return { presence: 'away', presenceLabel: agent.status };
+    return { presence: 'away', presenceLabel: safeStatus || 'En veille' };
+  return { presence: 'away', presenceLabel: safeStatus || 'En veille' };
 }
 
 export function buildAgentTeamProfile(agent: AgentLike): AgentTeamProfile {
-  const displayName = formatAgentName(agent.name);
+  const safeId = String(agent.id || '');
+  const safeName = String(agent.name || safeId || 'Agent');
+  const safeModel = String(agent.model || '');
+  const displayName = formatAgentName(safeName);
   const role = inferAgentRole(agent);
   const initials = getProfileInitials(displayName);
-  const avatarClass = getAvatarPaletteClass(`${agent.id}|${agent.name}`);
-  const modelShort = shortModelLabel(agent.model);
+  const avatarClass = getAvatarPaletteClass(`${safeId}|${safeName}`);
+  const modelShort = shortModelLabel(safeModel);
   const { presence, presenceLabel } = mapPresence(agent);
   return {
-    id: agent.id,
-    zimaosSessionKey: agent.id,
+    id: safeId || safeName,
+    zimaosSessionKey: safeId || safeName,
     displayName,
     role,
     initials,

@@ -64,6 +64,12 @@ export type ForgeConfig = {
   routineWatchAgentId: string;
   /** Agent dédié aux propositions d'amélioration (vTech). */
   routineImproveAgentId: string;
+  /** Règles globales appliquées aux réponses agents et à l'orchestrateur Forge. */
+  agentGlobalBuildRules: string;
+  /** Langue préférée pour chat, rapports et demandes agents (fr | en | fr_en). */
+  agentPreferredLanguage: string;
+  /** Règles structurées agents (JSON string). */
+  agentPolicyRules: string;
 };
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
@@ -97,6 +103,12 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   routineGithubRoot: '',
   routineWatchAgentId: 'MAINTENANCE_REPO',
   routineImproveAgentId: 'VEILLE_TECH',
+  agentGlobalBuildRules:
+    'Toujours produire les applications en francais et anglais (i18n fr/en).\\n' +
+    'Stack imposee: Astro build, composants Preact, Tailwind CSS, DaisyUI.\\n' +
+    'Respecter l architecture existante et eviter les regressions.',
+  agentPreferredLanguage: 'fr',
+  agentPolicyRules: '[]',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);

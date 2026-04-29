@@ -9,11 +9,13 @@ import {
   getZimaOSGatewayBaseUrl,
   resolveSessionsSendKey,
 } from '../../lib/zimaos-gateway';
-import { getConfig } from '../../lib/config-db';
+import { getConfig, getOllamaOriginResolved } from '../../lib/config-db';
 import { attemptZimaOSPreRepair } from './_zimaos-pre-repair';
 
 const MAX_MESSAGE = 120_000;
 const execFileAsync = promisify(execFile);
+const LEGACY_NOTICE =
+  'Endpoint legacy: utilisez /api/forge-chat pour le flux conversationnel principal Forge-native.';
 
 function extractReplyFromGatewayDetail(detail: unknown): string {
   if (detail == null || typeof detail !== 'object') return '';
@@ -237,12 +239,120 @@ async function invokeDirectiveViaCli(agentId: string, message: string): Promise<
   }
 }
 
+async function invokeOllamaDirect(message: string, modelHint?: string): Promise<{
+  ok: boolean;
+  via?: string;
+  reply?: string;
+  error?: string;
+}> {
+  async function resolveAvailableModel(origin: string, preferred: string): Promise<string> {
+    try {
+      const r = await fetch(`${origin}/api/tags`, { signal: AbortSignal.timeout(15_000) });
+      if (!r.ok) return preferred;
+      const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      const names = (Array.isArray(j.models) ? (j.models as Array<Record<string, unknown>>) : [])
+        .map((m) => String(m.name || m.model || '').trim())
+        .filter(Boolean);
+      if (!names.length) return preferred;
+      if (names.includes(preferred)) return preferred;
+      for (const c of ['qwen3-coder:30b', 'llama3.2:latest', 'qwen2.5:7b', 'gemma4:latest']) {
+        if (names.includes(c)) return c;
+      }
+      return names[0];
+    } catch {
+      return preferred;
+    }
+  }
+  const origin = (await getOllamaOriginResolved()).replace(/\/$/, '');
+  if (!origin) return { ok: false, error: 'URL Ollama non configurée' };
+  const preferredLanguage = (await getConfig('agentPreferredLanguage')).trim() || 'fr';
+  const globalRules = (await getConfig('agentGlobalBuildRules')).trim();
+  const langInstruction =
+    preferredLanguage === 'en'
+      ? 'Always answer in English.'
+      : preferredLanguage === 'fr_en'
+        ? 'Answer in French first, then provide an English version.'
+        : 'Toujours repondre en francais.';
+  const preferredModel =
+    String(modelHint || '').trim() ||
+    process.env.OLLAMA_MODEL?.trim() ||
+    'llama3.2:latest';
+  const chosenModel = await resolveAvailableModel(origin, preferredModel);
+  try {
+    const res = await fetch(`${origin}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: chosenModel,
+        stream: false,
+        messages: [
+          { role: 'system', content: `${langInstruction}\n\n${globalRules}`.trim() },
+          { role: 'user', content: message.slice(0, MAX_MESSAGE) },
+        ],
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok && res.status === 404) {
+      const genRes = await fetch(`${origin}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: chosenModel,
+          stream: false,
+          prompt: `${langInstruction}\n\n${globalRules}\n\n${message.slice(0, MAX_MESSAGE)}`.trim(),
+        }),
+        signal: AbortSignal.timeout(45_000),
+      });
+      const gen = (await genRes.json().catch(() => ({}))) as Record<string, unknown>;
+      if (genRes.ok) {
+        const reply = typeof gen.response === 'string' ? gen.response.trim() : '';
+        return { ok: true, via: `ollama-generate(${chosenModel})`, reply: reply || 'Réponse Ollama reçue.' };
+      }
+      if (genRes.status === 404) {
+        const v1Res = await fetch(`${origin}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: chosenModel,
+            messages: [
+              { role: 'system', content: `${langInstruction}\n\n${globalRules}`.trim() },
+              { role: 'user', content: message.slice(0, MAX_MESSAGE) },
+            ],
+          }),
+          signal: AbortSignal.timeout(45_000),
+        });
+        const v1 = (await v1Res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (v1Res.ok) {
+          const choices = Array.isArray(v1.choices) ? (v1.choices as Array<Record<string, unknown>>) : [];
+          const reply =
+            typeof choices[0]?.message === 'object'
+              ? String((choices[0].message as Record<string, unknown>).content || '').trim()
+              : '';
+          return { ok: true, via: `openai-chat(${chosenModel})`, reply: reply || 'Réponse Ollama reçue.' };
+        }
+      }
+      return { ok: false, error: `Ollama HTTP ${genRes.status}` };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `Ollama HTTP ${res.status}` };
+    }
+    const reply =
+      typeof (data.message as Record<string, unknown> | undefined)?.content === 'string'
+        ? String((data.message as Record<string, unknown>).content).trim()
+        : '';
+    return { ok: true, via: `ollama-chat(${chosenModel})`, reply: reply || 'Réponse Ollama reçue.' };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Envoie un message utilisateur dans une session agent.
  * Priorité: sessions_send ; fallback: agents_invoke ; fallback final: v1/chat/completions.
  */
 export const POST: APIRoute = async ({ request }) => {
-  let body: { sessionKey?: string; message?: string; timeoutSeconds?: number };
+  let body: { sessionKey?: string; message?: string; timeoutSeconds?: number; modelHint?: string };
   try {
     body = await request.json();
   } catch {
@@ -271,6 +381,7 @@ export const POST: APIRoute = async ({ request }) => {
     typeof body.timeoutSeconds === 'number' && body.timeoutSeconds >= 0 && body.timeoutSeconds <= 600
       ? Math.floor(body.timeoutSeconds)
       : 120;
+  const modelHint = String(body.modelHint || '').trim() || undefined;
 
   const isSwarmCommand = /\[FORGE_SWARM_COMMAND\]/i.test(message);
   let preRepair: { attempted: boolean; ok: boolean; note?: string; error?: string } | undefined;
@@ -281,18 +392,59 @@ export const POST: APIRoute = async ({ request }) => {
   const resolvedSessionKey =
     (await resolveSessionsSendKey(undefined, [sessionKey]).catch(() => null)) || sessionKey;
 
-  const result = await invokeZimaOSSessionsSend({
+  let result = await invokeZimaOSSessionsSend({
     sessionKey: resolvedSessionKey,
     message,
     timeoutSeconds,
     asyncDelivery: false,
   });
 
+  // Même hors commande swarm, on tente une auto-réparation si la chaîne native échoue
+  // puis on retente sessions_send une fois avant les fallbacks.
+  if (!result.ok && shouldRunFallbackChain(result.error, result.httpStatus)) {
+    if (!preRepair?.attempted) {
+      preRepair = await attemptZimaOSPreRepair('directive-native-repair');
+    }
+    if (preRepair?.ok) {
+      const retriedSessionKey =
+        (await resolveSessionsSendKey(undefined, [resolvedSessionKey, sessionKey]).catch(() => null)) ||
+        resolvedSessionKey;
+      const retry = await invokeZimaOSSessionsSend({
+        sessionKey: retriedSessionKey,
+        message,
+        timeoutSeconds,
+        asyncDelivery: false,
+      });
+      if (retry.ok) {
+        const reply = extractReplyFromGatewayDetail(retry.detail);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+          legacy: true,
+          notice: LEGACY_NOTICE,
+            via: 'sessions_send_after_repair',
+            preRepair,
+            routedSessionKey: retriedSessionKey,
+            result: reply ? { status: 'completed', reply } : { status: 'accepted' },
+            detail: retry.detail ?? { ok: true },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      result = retry;
+    }
+  }
+
   if (result.ok) {
     const reply = extractReplyFromGatewayDetail(result.detail);
     return new Response(
       JSON.stringify({
         ok: true,
+        legacy: true,
+        notice: LEGACY_NOTICE,
         via: 'sessions_send',
         preRepair,
         routedSessionKey: resolvedSessionKey,
@@ -317,6 +469,8 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(
         JSON.stringify({
           ok: true,
+          legacy: true,
+          notice: LEGACY_NOTICE,
           via: 'agents_invoke_fallback',
           preRepair,
           routedSessionKey: resolvedSessionKey,
@@ -336,6 +490,8 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(
         JSON.stringify({
           ok: true,
+          legacy: true,
+          notice: LEGACY_NOTICE,
           via: fallback2.via,
           preRepair,
           routedSessionKey: resolvedSessionKey,
@@ -363,6 +519,8 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(
         JSON.stringify({
           ok: true,
+          legacy: true,
+          notice: LEGACY_NOTICE,
           via: fallback3.via,
           preRepair,
           routedSessionKey: resolvedSessionKey,
@@ -380,11 +538,38 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
+    const fallback4 = await invokeOllamaDirect(message, modelHint);
+    if (fallback4.ok) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          legacy: true,
+          notice: LEGACY_NOTICE,
+          via: fallback4.via,
+          preRepair,
+          routedSessionKey: resolvedSessionKey,
+          result: { status: 'completed', reply: fallback4.reply || '' },
+          detail: {
+            sessionsSend: result.detail,
+            agentsInvoke: fallback.detail,
+            chatCompletion: fallback2.detail,
+            cli: fallback3,
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
+
     return new Response(
       JSON.stringify({
+        legacy: true,
+        notice: LEGACY_NOTICE,
         error: sanitizeErr(
           // Priorité aux erreurs gateway (racine), puis seulement aux fallbacks CLI locaux.
-          fallback2.error || fallback.error || result.error || fallback3.error,
+          fallback2.error || fallback.error || result.error || fallback3.error || fallback4.error,
           errorForStatus(
             result.httpStatus,
             'Envoi ZimaOS refusé — vérifiez URL gateway, token et exposition des endpoints API.',
@@ -411,6 +596,8 @@ export const POST: APIRoute = async ({ request }) => {
     const status = 502;
     return new Response(
       JSON.stringify({
+        legacy: true,
+        notice: LEGACY_NOTICE,
         error: sanitizeErr(
           result.error,
           errorForStatus(

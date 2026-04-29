@@ -115,3 +115,10 @@ URL de base des hooks : définir **`FORGE_HOOK_BASE_URL`** si tu n’es pas sur 
   1. Résumer l'état en 5 lignes maximum.
   2. Abandonner l'historique détaillé non critique.
   3. Continuer avec le résumé comme base de travail.
+
+<!-- FORGE_GLOBAL_POLICY_START -->
+## Forge Global Policy
+- Politique de langue: francais pour chat/rapports.
+- Build rules:
+Toujours produire les applications en francais et anglais (i18n fr/en).\nStack imposee: Astro build, composants Preact, Tailwind CSS, DaisyUI.\nRespecter l architecture existante et eviter les regressions.
+<!-- FORGE_GLOBAL_POLICY_END -->

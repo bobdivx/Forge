@@ -3,6 +3,7 @@ import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
 import { inferZimaOSBackedPathDefaults } from '../../lib/zimaos-path-defaults';
+import { resetZimaOSInfraClient } from '../../lib/zimaos-infra-client';
 
 export const GET: APIRoute = async () => {
   const config = await getAllConfig();
@@ -26,6 +27,8 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'vercelToken',
   'cloudflareToken',
   'forgeApiToken',
+  'zimaosSshPassword',
+  'zimaosSshKeyContent',
 ];
 
 export const POST: APIRoute = async ({ request }) => {
@@ -44,11 +47,15 @@ export const POST: APIRoute = async ({ request }) => {
       'zimaosSshUser',
       'zimaosSshAuth',
       'zimaosSshKeyPath',
+      'zimaosSshKeyContent',
+      'zimaosSshPassword',
       'forgeApiToken',
       'ollamaUrl',
       'githubToken', 'vercelToken', 'githubWebhookSecret', 'cloudflareToken',
       'forgeReposRoot', 'dockerYamlDir', 'dockerAppDataDir',
       'forgeReposRootAgent',
+      'agentGlobalBuildRules',
+      'agentPreferredLanguage',
     ];
     for (const key of allowed) {
       if (!(key in data)) continue;
@@ -71,6 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     await setConfig(payload);
+    resetZimaOSInfraClient();
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
