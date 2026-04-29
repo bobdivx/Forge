@@ -5,12 +5,16 @@ import SaveRow from '../ui/SaveRow';
 type Config = {
   zimaosAccessMode: string;
   zimaosRuntimeUrl: string;
+  /** Nom du conteneur Docker (Sandbox) où tournent les agents (ex: zimaos-runtime). */
   zimaosContainerName: string;
+  /** URL du service Gateway sur l'hôte ZimaOS. */
+  zimaosGatewayUrl: string;
   zimaosHost: string;
   zimaosSshPort: string;
   zimaosSshUser: string;
   zimaosSshAuth: string;
   zimaosSshKeyPath: string;
+  zimaosSshPassword: string;
   ollamaUrl: string;
   [k: string]: string;
 };
@@ -35,6 +39,8 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
   const [testing, setTesting] = useState(false);
   const [probe, setProbe] = useState<ProbePayload | null>(null);
   const [probeError, setProbeError] = useState('');
+  const [sshTesting, setSshTesting] = useState(false);
+  const [sshResult, setSshResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const mode = settings.zimaosAccessMode === 'remote_ssh' ? 'remote_ssh' : 'local_docker';
 
@@ -74,6 +80,20 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
     }
   };
 
+  const testSSH = async () => {
+    setSshTesting(true);
+    setSshResult(null);
+    try {
+      const res = await fetch('/api/zimaos-ssh-test');
+      const data = await res.json();
+      setSshResult(data);
+    } catch {
+      setSshResult({ ok: false, message: 'Erreur réseau.' });
+    } finally {
+      setSshTesting(false);
+    }
+  };
+
   return (
     <div class="p-6 space-y-6">
       <p class="text-xs text-gray-500">
@@ -109,8 +129,8 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
       </FormField>
 
       <FormField
-        label="Nom du conteneur ZimaOS"
-        hint="Utilisé pour les vérifications Docker et montages en mode local_docker."
+        label="Nom du conteneur d’exécution (Sandbox)"
+        hint="Le nom du conteneur géré par ZimaOS dans lequel les agents travaillent (ex: zimaos-runtime). Requis pour les vérifications de montages."
       >
         <input
           type="text"
@@ -159,19 +179,64 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
                 value={settings.zimaosSshAuth || 'key'}
                 onChange={(e) => setSettings({ ...settings, zimaosSshAuth: (e.target as HTMLSelectElement).value })}
               >
-                <option value="key">Clé privée</option>
-                <option value="password">Mot de passe (non stocké)</option>
+                <option value="key">Clé privée (Auto/Chemin)</option>
+                <option value="password">Mot de passe</option>
               </select>
             </FormField>
-            <FormField label="Chemin clé SSH (si key)">
-              <input
-                type="text"
-                class={inputCls}
-                value={settings.zimaosSshKeyPath}
-                onInput={(e) => setSettings({ ...settings, zimaosSshKeyPath: (e.target as HTMLInputElement).value })}
-                placeholder="/run/secrets/zimadev_ssh_key"
-              />
-            </FormField>
+            {settings.zimaosSshAuth === 'password' ? (
+              <FormField label="Mot de passe SSH">
+                <input
+                  type="password"
+                  class={inputCls}
+                  value={settings.zimaosSshPassword}
+                  onInput={(e) =>
+                    setSettings({ ...settings, zimaosSshPassword: (e.target as HTMLInputElement).value })
+                  }
+                  placeholder="••••••••"
+                />
+              </FormField>
+            ) : (
+              <>
+                <FormField label="Chemin clé SSH" hint="Si vide, Forge essaie les clés par défaut dans ~/.ssh/">
+                  <input
+                    type="text"
+                    class={inputCls}
+                    value={settings.zimaosSshKeyPath}
+                    onInput={(e) => setSettings({ ...settings, zimaosSshKeyPath: (e.target as HTMLInputElement).value })}
+                    placeholder="/run/secrets/zimadev_ssh_key"
+                  />
+                </FormField>
+                <FormField label="Contenu clé privée (DB)" hint="Collez ici le contenu de votre clé ---BEGIN OPENSSH PRIVATE KEY---">
+                  <textarea
+                    class={`${inputCls} h-24 resize-y py-2`}
+                    value={settings.zimaosSshKeyContent}
+                    onInput={(e) => setSettings({ ...settings, zimaosSshKeyContent: (e.target as HTMLTextAreaElement).value })}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."
+                  />
+                </FormField>
+              </>
+            )}
+          </div>
+          <div class="pt-2">
+             <button
+              type="button"
+              onClick={testSSH}
+              class={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-colors ${
+                sshResult?.ok 
+                  ? 'bg-green-50 border-green-200 text-green-700' 
+                  : sshResult 
+                    ? 'bg-red-50 border-red-200 text-red-700'
+                    : 'bg-white border-gray-200 hover:bg-gray-50'
+              }`}
+              disabled={sshTesting}
+            >
+              {sshTesting ? 'Test en cours…' : '⚡ Tester la connexion SSH'}
+            </button>
+            {sshResult && (
+              <p class={`text-[10px] mt-1.5 font-medium ${sshResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+                {sshResult.message}
+              </p>
+            )}
           </div>
         </div>
       )}

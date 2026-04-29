@@ -345,60 +345,72 @@ export async function pingZimaOSChatCompletion(opts: {
 }
 
 /**
- * Liste les tags Ollama si une origine est connue : Paramètres (`ollamaUrl`), puis env (optionnel).
+ * Liste les tags Ollama en agrégeant toutes les instances configurées dans la DB.
  */
 export async function fetchOllamaTagNames(): Promise<{
   configured: boolean;
   names: string[];
   error?: string;
 }> {
-  const raw = await getOllamaOriginResolved();
-  if (!raw) return { configured: false, names: [] };
-  let base = raw.replace(/\/$/, '');
-  // Beaucoup d'instances exposent une URL OpenAI (`.../v1`) dans les paramètres.
-  // Pour la surface Ollama native, on doit appeler /api/tags à la racine.
-  base = base.replace(/\/v1$/i, '').replace(/\/api$/i, '');
-  const url = `${base}/api/tags`;
+  const { loadAstroDb } = await import('./load-astro-db');
+  const { db, OllamaInstance } = await loadAstroDb();
+  
+  let instances: { url: string; enabled: number | null }[] = [];
   try {
-    const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
-    const text = await res.text();
-    let data: unknown = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = null;
+    if (OllamaInstance) {
+      instances = await db.select().from(OllamaInstance);
     }
-    if (!res.ok) {
-      return {
-        configured: true,
-        names: [],
-        error: `Ollama HTTP ${res.status}`,
-      };
-    }
-    const models = (data as { models?: { name?: string }[] })?.models ?? [];
-    const names = models.map((m) => String(m.name || '').trim()).filter(Boolean);
-    return { configured: true, names };
-  } catch (e: unknown) {
-    // Fallback utile si l'URL paramétrée expose uniquement l'API OpenAI-compatible.
-    try {
-      const v1 = await fetch(`${base}/v1/models`, { method: 'GET', headers: { Accept: 'application/json' } });
-      const txt = await v1.text();
-      let payload: unknown = null;
-      try {
-        payload = txt ? JSON.parse(txt) : null;
-      } catch {
-        payload = null;
-      }
-      if (v1.ok) {
-        const data = (payload as { data?: Array<{ id?: string; name?: string }> } | null)?.data ?? [];
-        const names = data
-          .map((m) => String(m.name || m.id || '').trim())
-          .filter(Boolean);
-        if (names.length > 0) return { configured: true, names };
-      }
-    } catch {
-      // ignore fallback error, on retourne l'erreur principale
-    }
-    return { configured: true, names: [], error: e instanceof Error ? e.message : 'Ollama injoignable' };
+  } catch {
+    // Table non trouvée
   }
+
+  // Fallback sur l'URL globale si aucune instance n'est définie
+  if (instances.length === 0) {
+    const raw = await getOllamaOriginResolved();
+    if (raw) instances.push({ url: raw, enabled: 1 });
+  }
+
+  const enabledInstances = instances.filter(i => Number(i.enabled) !== 0);
+  if (enabledInstances.length === 0) return { configured: false, names: [] };
+
+  const allNames = new Set<string>();
+  let lastError: string | undefined;
+
+  await Promise.all(enabledInstances.map(async (inst) => {
+    let base = inst.url.replace(/\/$/, '');
+    base = base.replace(/\/v1$/i, '').replace(/\/api$/i, '');
+    const url = `${base}/api/tags`;
+    
+    try {
+      const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data = await res.json();
+        const models = (data as { models?: { name?: string }[] })?.models ?? [];
+        models.forEach(m => {
+          const name = String(m.name || '').trim();
+          if (name) allNames.add(name);
+        });
+      }
+    } catch (e: any) {
+      lastError = e.message;
+      // Fallback OpenAI /v1/models pour cette instance
+      try {
+        const v1 = await fetch(`${base}/v1/models`, { method: 'GET', headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(3000) });
+        if (v1.ok) {
+          const payload = await v1.json();
+          const data = (payload as { data?: Array<{ id?: string; name?: string }> } | null)?.data ?? [];
+          data.forEach(m => {
+            const name = String(m.name || m.id || '').trim();
+            if (name) allNames.add(name);
+          });
+        }
+      } catch { /* ignore */ }
+    }
+  }));
+
+  return { 
+    configured: true, 
+    names: Array.from(allNames), 
+    error: allNames.size === 0 ? lastError : undefined 
+  };
 }

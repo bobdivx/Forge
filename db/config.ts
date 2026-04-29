@@ -378,6 +378,26 @@ const Approval = defineTable({
   },
 });
 
+/**
+ * Instances Ollama distantes ou locales.
+ * Permet de gérer plusieurs déploiements (NAS, PC Windows, etc.).
+ */
+const OllamaInstance = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Nom libellé (ex: "ZimaCube NAS", "PC Gaming"). */
+    name: column.text(),
+    /** URL de base (ex: http://10.1.0.58:38197). */
+    url: column.text(),
+    /** Jeton d'authentification optionnel. */
+    apiKey: column.text({ optional: true }),
+    /** 1 = active, 0 = ignorée. */
+    enabled: column.number({ default: 1 }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
   tables: {
     Project,
@@ -402,5 +422,6 @@ export default defineDb({
     ActivityLog,
     HeartbeatRun,
     ZimaOSAgentProfile,
+    OllamaInstance,
   },
 });

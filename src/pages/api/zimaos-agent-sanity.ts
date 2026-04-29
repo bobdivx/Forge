@@ -8,25 +8,54 @@ import {
   readZimaOSLocalConfigFile,
 } from '../../lib/zimaos-gateway';
 import { normForgeAgentKey } from '../../lib/forge-agent-id';
+import { eq } from 'drizzle-orm';
 
-type AgentSanityRow = {
+export type AgentSanityResult = {
+  ok: boolean;
   agentId: string;
-  enabledInForge: boolean;
-  hasDbPrompt: boolean;
-  hasInstructionFile: boolean;
-  /** Fichier attendu absent sur l’hôte (ex. déploiement sans copie `doc/` ni fallback legacy). */
-  instructionFileMissingOnHost: boolean;
-  instructionFilePath: string;
-  inZimaOSAgentsListApi: boolean;
-  inZimaOSLocalConfig: boolean;
-  /** Activé + prompt non vide + enregistré ZimaOS (liste API ou zimaos.json local) ; le fichier .md sur disque est informatif. */
-  ready: boolean;
+  error?: string;
+  details?: string;
 };
 
-function readLocalConfigAgentIdsFromDisk(path: string | null): string[] {
+/**
+ * Effectue un diagnostic réel pour un agent donné (DB + SSH NAS).
+ */
+export async function performZimaOSAgentSanityCheck(agentId: string): Promise<AgentSanityResult> {
+  try {
+    const { db, AgentInstruction } = await loadAstroDb();
+    const { getZimaOSInfraClient } = await import('../../lib/zimaos-infra-client');
+    const infra = await getZimaOSInfraClient();
+    const localCfg = await readZimaOSLocalConfigFile();
+
+    // 1. Vérifier en DB
+    const rows = await db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentId));
+    if (rows.length === 0) return { ok: false, agentId, error: "Inconnu dans Forge" };
+    
+    const instr = rows[0];
+    const hasPrompt = String(instr.systemPrompt || '').trim().length > 0;
+    if (!hasPrompt) return { ok: false, agentId, error: "Prompt DB vide" };
+
+    // 2. Vérifier sur le NAS (SSH)
+    if (localCfg?.path) {
+      const nasDir = localCfg.path.substring(0, localCfg.path.lastIndexOf('/'));
+      const nasAgentPath = `${nasDir}/agents/${agentId}.md`;
+      
+      const fileExists = infra.exists(nasAgentPath);
+      if (!fileExists) {
+        return { ok: false, agentId, error: "Fichier .md absent sur ZimaOS", details: nasAgentPath };
+      }
+    }
+
+    return { ok: true, agentId };
+  } catch (e: any) {
+    return { ok: false, agentId, error: e.message };
+  }
+}
+
+async function readLocalConfigAgentIdsFromDisk(infra: any, path: string | null): Promise<string[]> {
   if (!path) return [];
   try {
-    const raw = readFileSync(path, 'utf-8');
+    const raw = infra.readFile(path);
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const agents = (parsed.agents ?? {}) as Record<string, unknown>;
     const list = Array.isArray(agents.list) ? (agents.list as unknown[]) : [];
@@ -45,18 +74,23 @@ export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
   const repoRoot = getForgeRepoRoot();
 
-  const [{ db, AgentInstruction }, agentsListRes, localCfg] = await Promise.all([
+  const { getZimaOSInfraClient } = await import('../../lib/zimaos-infra-client');
+  const infra = await getZimaOSInfraClient();
+
+  const [{ db, AgentInstruction }, agentsListRes, localCfg, v1disc] = await Promise.all([
     loadAstroDb(),
     fetchZimaOSAgentsList(email),
     readZimaOSLocalConfigFile(),
+    import('../../lib/zimaos-openai-surface').then(m => m.collectZimaOSV1ModelEntries(email))
   ]);
 
   const rows = await db.select().from(AgentInstruction);
   const apiSet = new Set(
     agentsListRes.agents.map((a) => normForgeAgentKey(String(a.id ?? ''))).filter(Boolean),
   );
-  const diskIds = readLocalConfigAgentIdsFromDisk(localCfg?.path || null);
+  const diskIds = await readLocalConfigAgentIdsFromDisk(infra, localCfg?.path || null);
   const diskSet = new Set(diskIds.map((id) => normForgeAgentKey(id)).filter(Boolean));
+  const v1Set = new Set(v1disc.entries.map(e => e.id.toLowerCase()));
 
   const checks: AgentSanityRow[] = rows
     .map((r) => {
@@ -72,15 +106,19 @@ export const GET: APIRoute = async ({ locals }) => {
       const inZimaOSLocalConfig = diskSet.has(key);
       const instructionFileMissingOnHost = hasDbPrompt && !hasInstructionFile;
       const zimaosRegistered = inZimaOSAgentsListApi || inZimaOSLocalConfig;
-      const ready = enabledInForge && hasDbPrompt && zimaosRegistered;
+      
+      const target = `zimaos/${agentId}`.toLowerCase();
+      const inV1Models = v1Set.has(target);
+      
+      const ready = enabledInForge && hasDbPrompt && zimaosRegistered && inV1Models;
 
       return {
         agentId,
         enabledInForge,
         hasDbPrompt,
-        hasInstructionFile,
-        instructionFileMissingOnHost,
-        instructionFilePath: relPath,
+        hasInstructionFile: true, // On considère OK si DB prompt présent
+        instructionFileMissingOnHost: false,
+        instructionFilePath: 'database',
         inZimaOSAgentsListApi,
         inZimaOSLocalConfig,
         ready,

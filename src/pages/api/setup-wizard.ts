@@ -13,6 +13,7 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'githubToken',
   'vercelToken',
   'forgeApiToken',
+  'zimaosSshPassword',
 ];
 
 function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig> {
@@ -27,6 +28,7 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
     'zimaosSshUser',
     'zimaosSshAuth',
     'zimaosSshKeyPath',
+    'zimaosSshPassword',
     'zimaosContainerName',
     'zimaosGatewayUrl',
     'forgeApiToken',
@@ -42,7 +44,7 @@ function buildConfigPayload(data: Record<string, unknown>): Partial<ForgeConfig>
   for (const key of allowed) {
     if (!(key in data)) continue;
     const val = String(data[key] ?? '').trim();
-    if (SECRET_KEYS_NO_EMPTY_OVERWRITE.includes(key) && val === '') continue;
+    if (SECRET_KEYS_NO_EMPTY_OVERWRITE.includes(key) && (val === '' || val === '••••••••')) continue;
     (payload as Record<string, string>)[key] = val;
   }
   return payload;
@@ -91,7 +93,7 @@ async function validateSetup(data: Record<string, unknown>) {
       const probe = await probeZimaOSContainerPath({ pathToTest: reposRoot || '/' });
       checks.dockerZimaos = {
         ok: Boolean(probe.attempted && !probe.dockerError),
-        detail: probe.dockerError || `Docker accessible, conteneur: ${probe.containerName || 'auto'}`,
+        detail: probe.dockerError || `Docker accessible, sandbox agents: ${probe.containerName || 'auto'}`,
       };
       checks.mountVisibility = {
         ok: probe.pathExistsInContainer || probe.likelyMountMatch,
@@ -157,6 +159,14 @@ export const GET: APIRoute = async ({ locals, request }) => {
     dockerYamlDir: config.dockerYamlDir || inferred.dockerYamlDir || config.dockerYamlDir,
     dockerAppDataDir: config.dockerAppDataDir || inferred.dockerAppDataDir || config.dockerAppDataDir,
   };
+
+  const sensitiveKeys = ['zimaosToken', 'zimaosSshPassword', 'githubToken', 'vercelToken', 'cloudflareToken', 'githubWebhookSecret', 'forgeApiToken'];
+  for (const k of sensitiveKeys) {
+    if ((hydrated as any)[k]) {
+      (hydrated as any)[k] = '••••••••';
+    }
+  }
+
   return new Response(JSON.stringify({ state, config: hydrated }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },

@@ -5,6 +5,7 @@ import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
 import IntegrationTab from './IntegrationTab';
 import ZimaOSTab from './ZimaOSTab';
 import AgentModelsTab from './AgentModelsTab';
+import OllamaTab from './OllamaTab';
 import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
 
@@ -26,6 +27,7 @@ type Config = {
   zimaosSshUser: string;
   zimaosSshAuth: string;
   zimaosSshKeyPath: string;
+  zimaosSshPassword: string;
   ollamaUrl: string;
 };
 
@@ -39,7 +41,8 @@ type AuthState = {
 const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
   { id: 'zimaos', label: 'ZIMAOS' },
-  { id: 'integration', label: 'Intégration' },
+  { id: 'ollama', label: 'Ollama' },
+  { id: 'integration', label: 'Docker & Chemins' },
   { id: 'api', label: 'Jetons API' },
   { id: 'models', label: 'Modèles agents' },
   { id: 'schedule', label: 'Horaires de travail' },
@@ -66,6 +69,7 @@ export default function SettingsForm() {
     zimaosSshUser: '',
     zimaosSshAuth: 'key',
     zimaosSshKeyPath: '',
+    zimaosSshPassword: '',
     ollamaUrl: '',
   });
   const [auth, setAuth] = useState<AuthState>({
@@ -134,6 +138,8 @@ export default function SettingsForm() {
           zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : prev.zimaosSshAuth,
           zimaosSshKeyPath:
             typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : prev.zimaosSshKeyPath,
+          zimaosSshPassword:
+            typeof s.zimaosSshPassword === 'string' ? s.zimaosSshPassword : prev.zimaosSshPassword,
           ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
         }));
         const t = await tokensRes.json().catch(() => ({ items: [] }));
@@ -179,6 +185,8 @@ export default function SettingsForm() {
       zimaosSshAuth: typeof s.zimaosSshAuth === 'string' ? s.zimaosSshAuth : prev.zimaosSshAuth,
       zimaosSshKeyPath:
         typeof s.zimaosSshKeyPath === 'string' ? s.zimaosSshKeyPath : prev.zimaosSshKeyPath,
+      zimaosSshPassword:
+        typeof s.zimaosSshPassword === 'string' ? s.zimaosSshPassword : prev.zimaosSshPassword,
       ollamaUrl: typeof s.ollamaUrl === 'string' ? s.ollamaUrl : prev.ollamaUrl,
     }));
   };
@@ -340,6 +348,9 @@ export default function SettingsForm() {
             saving={saving}
             message={message}
           />
+        )}
+        {activeTab === 'ollama' && (
+          <OllamaTab />
         )}
         {activeTab === 'api' && (
           <ApiTokensTab

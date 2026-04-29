@@ -16,6 +16,7 @@ import {
   normForgeAgentKey,
   resolveCanonicalForgeAgentId,
 } from '../../lib/forge-agent-id';
+import { performZimaOSAgentSanityCheck } from './zimaos-agent-sanity';
 
 type TaskStats = {
   total: number;
@@ -42,6 +43,29 @@ function canonicalAgentIdCandidate(raw: string): string {
 const CANONICAL_AGENT_ID_SET: Set<string> = new Set(
   FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId),
 );
+
+const FORGE_AGENT_KEYS = new Set(
+  FORGE_AGENT_INSTRUCTION_ROWS.map((r) => normForgeAgentKey(r.agentId)),
+);
+
+/**
+ * Filtre de sécurité : empêche l'affichage d'agents tiers (OpenClaw, etc) qui ne font pas partie
+ * de l'essaim Forge natif.
+ */
+function isAuthorizedForgeAgent(id: string): boolean {
+  if (!id) return false;
+  const nk = normForgeAgentKey(id);
+  if (FORGE_AGENT_KEYS.has(nk)) return true;
+
+  // Cas des sous-agents ZimaOS (format agent:slug:main ou subagent:slug:...)
+  const parts = id.toLowerCase().split(':');
+  if (parts.length >= 2 && (parts[0] === 'agent' || parts[0] === 'subagent')) {
+    const parentSlug = parts[1];
+    if (FORGE_AGENT_KEYS.has(normForgeAgentKey(parentSlug))) return true;
+  }
+
+  return false;
+}
 
 /**
  * Rattache les lignes AgentTask / forge-hook (github, Expert GitHub…) à l’id canonique Forge.
@@ -287,60 +311,73 @@ export const GET: APIRoute = async ({ locals }) => {
     dbInstructionRowCount = allInstructions.length;
     dbEnabledInstructionCount = allInstructions.filter((r) => Number(r.enabled) === 1).length;
 
-    const enabledInstructionIds = new Set(
-      allInstructions
-        .filter((r) => Number(r.enabled) === 1)
-        .map((r) => normForgeAgentKey(String(r.agentId))),
-    );
     const byInstructionId = new Map(
       allInstructions.map((r) => [normForgeAgentKey(String(r.agentId)), r]),
     );
 
-    // Liste "réelle" = sessions ZimaOS (actives/récentes) + registre gateway.
+    // 1. Liste de base : tous les agents définis en DB
     const byId = new Map<string, any>();
-    const keyToId = new Map<string, string>();
-    const normalizeIdKey = (v: unknown) =>
-      normForgeAgentKey(canonicalAgentIdCandidate(String(v ?? '')));
-    for (const raw of rawSessions) {
-      const mapped = mapSessionToAgentRow(raw);
-      const id = String(mapped.id || '').trim();
-      if (!id) continue;
-      const upper = normalizeIdKey(id);
-      const base = canonicalAgentIdCandidate(id);
-      const inst = byInstructionId.get(upper);
-      const canonicalId =
-        inst?.agentId ||
-        keyToId.get(upper) ||
-        resolveCanonicalForgeAgentId(base) ||
-        resolveCanonicalForgeAgentId(id);
-      keyToId.set(upper, canonicalId);
-      byId.set(canonicalId, {
-        ...mapped,
-        id: canonicalId,
-        name: canonicalId,
-        model: mapped.model && mapped.model !== '—' ? mapped.model : String(inst?.model || mapped.model || '—'),
-        raw: { ...(mapped.raw || {}), source: 'session' },
+    for (const inst of allInstructions) {
+      const id = inst.agentId;
+      const model = String(inst.model || '—');
+      const enabled = Number(inst.enabled) === 1;
+      
+      byId.set(id, {
+        id,
+        name: id,
+        status: enabled ? 'en veille' : 'désactivé',
+        model,
+        contextTokens: null,
+        totalTokens: 0,
+        estimatedCostUsd: 0,
+        runtimeMs: 0,
+        lastSeenMs: 0,
+        lastSeen: '—',
+        raw: { source: 'database', enabledInForge: enabled },
       });
     }
 
+    // 2. Enrichissement avec les sessions ZimaOS réelles
+    const usedSessionIndices = new Set<number>();
+    for (const inst of allInstructions) {
+      const idx = result.ok ? bestSessionIndexForAgent(rawSessions, inst.agentId, usedSessionIndices) : -1;
+      if (idx >= 0) {
+        usedSessionIndices.add(idx);
+        const raw = rawSessions[idx];
+        const mapped = mapSessionToAgentRow(raw);
+        const current = byId.get(inst.agentId);
+        
+        byId.set(inst.agentId, {
+          ...current,
+          ...mapped,
+          id: inst.agentId,
+          name: inst.agentId,
+          // On garde le modèle de la session s'il est présent, sinon celui de la DB
+          model: mapped.model && mapped.model !== '—' ? mapped.model : current.model,
+          raw: { ...current.raw, ...mapped.raw, source: 'database+session' },
+        });
+      }
+    }
+
+    // 3. Ajout des agents ZimaOS qui ne sont pas dans la DB Forge (cas rares / subagents)
     for (const reg of zimaosRegistry.agents) {
       const id = String(reg.id || '').trim();
       if (!id) continue;
-      const upper = normalizeIdKey(id);
-      const base = canonicalAgentIdCandidate(id);
-      const canonicalId =
-        byInstructionId.get(upper)?.agentId ||
-        keyToId.get(upper) ||
-        resolveCanonicalForgeAgentId(base) ||
-        resolveCanonicalForgeAgentId(id);
-      if (byId.has(canonicalId)) continue;
-      keyToId.set(upper, canonicalId);
+      if (!isAuthorizedForgeAgent(id)) continue;
+
+      const upper = normForgeAgentKey(id);
       const inst = byInstructionId.get(upper);
+      if (inst) continue; // Déjà traité
+
+      const base = canonicalAgentIdCandidate(id);
+      const canonicalId = resolveCanonicalForgeAgentId(base) || resolveCanonicalForgeAgentId(id) || id;
+      if (byId.has(canonicalId)) continue;
+
       byId.set(canonicalId, {
         id: canonicalId,
         name: canonicalId,
         status: 'en veille',
-        model: String(inst?.model || '—'),
+        model: '—',
         contextTokens: null,
         totalTokens: 0,
         estimatedCostUsd: 0,
@@ -350,43 +387,22 @@ export const GET: APIRoute = async ({ locals }) => {
         raw: {
           source: 'registry',
           registryOnly: true,
-          reason: 'Agent présent dans agents_list mais sans session active.',
-          enabledInForge: enabledInstructionIds.has(upper),
+          reason: 'Agent présent dans ZimaOS mais absent de la DB Forge.',
         },
       });
     }
 
-    // Complément: certains agents n'apparaissent plus dans ZimaOS
-    // (session expirée / registre restreint) mais existent dans le journal AgentTask.
-    // On les expose quand même pour aligner la grille avec l'historique des missions.
-    for (const taskAgentId of Object.keys(taskStatsDb)) {
-      const id = String(taskAgentId || '').trim();
-      if (!id) continue;
-      const upper = normForgeAgentKey(id);
-      const canonicalId = byInstructionId.get(upper)?.agentId || resolveCanonicalForgeAgentId(id) || id;
-      if (byId.has(canonicalId)) continue;
-      const inst = byInstructionId.get(upper);
-      byId.set(canonicalId, {
-        id: canonicalId,
-        name: canonicalId,
-        status: 'en veille',
-        model: String(inst?.model || '—'),
-        contextTokens: null,
-        totalTokens: 0,
-        estimatedCostUsd: 0,
-        runtimeMs: 0,
-        lastSeenMs: 0,
-        lastSeen: '—',
-        raw: {
-          source: 'task_history',
-          taskHistoryOnly: true,
-          reason: 'Agent visible via AgentTask (historique) mais absent des sessions/registry ZimaOS.',
-          enabledInForge: enabledInstructionIds.has(upper),
-        },
-      });
-    }
+    // 4. Diagnostic SSH réel (parallélisé)
+    const sanityResults = await Promise.all(
+      Array.from(byId.keys()).map(id => performZimaOSAgentSanityCheck(id))
+    );
+    const sanityMap = new Map(sanityResults.map(s => [s.agentId, s]));
 
-    agents = Array.from(byId.values()).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    agents = Array.from(byId.values()).map(a => ({
+      ...a,
+      sanity: sanityMap.get(a.id)
+    })).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    
     mergedWithInstructions = true;
   } catch {
     /* DB indisponible : on reste sur la liste réelle gateway uniquement. */

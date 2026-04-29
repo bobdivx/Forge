@@ -22,18 +22,24 @@ export type ZimaOSLocalDiskConfig = {
 
 export async function readZimaOSLocalConfigFile(): Promise<ZimaOSLocalDiskConfig | null> {
   const { getConfig } = await import('./config-db');
+  const { getZimaOSInfraClient } = await import('./zimaos-infra-client');
+  const infra = await getZimaOSInfraClient();
+  
   const appDataDir = (await getConfig('dockerAppDataDir')).trim();
   const probePaths = [
     appDataDir ? path.join(appDataDir, 'zimaos', 'zimaos.json') : '',
     'X:/AppData/zimaos/zimaos.json',
+    'X:/AppData/zimaos/config/zimaos.json',
     'C:/DATA/AppData/zimaos/zimaos.json',
     '/DATA/AppData/zimaos/zimaos.json',
+    '/data/AppData/zimaos/zimaos.json',
   ].filter(Boolean);
 
   for (const p of probePaths) {
-    if (!fs.existsSync(p)) continue;
+    if (!infra.exists(p)) continue;
     try {
-      const parsed = JSON.parse(fs.readFileSync(p, 'utf-8')) as Record<string, unknown>;
+      const raw = infra.readFile(p);
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
       const gw = (parsed.gateway as Record<string, unknown>) || {};
       const auth = (gw.auth as Record<string, unknown>) || {};
       const port = Number(gw.port);
@@ -243,6 +249,7 @@ export async function getZimaOSClientDebugMeta(): Promise<{
   tokenConfigured: boolean;
   tokenSource: 'env' | 'database' | 'none';
   settingsScope: 'instance';
+  sshKeyPath: string;
 }> {
   const envUrl = process.env.ZIMAOS_GATEWAY_URL?.trim() || '';
   const envTok = process.env.ZIMAOS_GATEWAY_TOKEN?.trim() || '';
@@ -250,6 +257,7 @@ export async function getZimaOSClientDebugMeta(): Promise<{
   const tokenStr = await getZimaOSToken();
   const { getConfig } = await import('./config-db');
   const dbUrl = (await getConfig('zimaosGatewayUrl')).trim();
+  const sshKeyPath = (await getConfig('zimaosSshKeyPath')).trim();
 
   const urlSource: 'env' | 'database' | 'default' = envUrl
     ? 'env'
@@ -266,6 +274,7 @@ export async function getZimaOSClientDebugMeta(): Promise<{
     tokenConfigured,
     tokenSource,
     settingsScope: 'instance',
+    sshKeyPath,
   };
 }
 
@@ -978,22 +987,40 @@ export async function fetchZimaOSModelCatalog(_email: string | undefined): Promi
         };
     }
 
-    // Ultime recours : Découverte directe des providers connus (NAS & Windows)
-    // Cette partie assure que même si la gateway masque le catalogue, Forge voit les modèles configurés.
-    const providers = [
-        'https://ollamanas.briseteia.me/v1/models',
-        'https://ollama.briseteia.me/v1/models'
-    ];
+    // Ultime recours : Découverte directe via les instances Ollama configurées
+    // Cette partie assure que Forge voit les modèles configurés sur plusieurs machines.
+    let instances: any[] = [];
+    try {
+        const { db, OllamaInstance, eq } = await loadAstroDb();
+        instances = await db.select().from(OllamaInstance).where(eq(OllamaInstance.enabled, 1));
+    } catch {
+        // Fallback hardcodé si la table n'existe pas encore
+        instances = [
+            { name: 'NAS', url: 'https://ollamanas.briseteia.me', enabled: 1 },
+            { name: 'PC', url: 'https://ollama.briseteia.me', enabled: 1 }
+        ];
+    }
     
-    const parallelDiscovery = await Promise.all(providers.map(async url => {
+    if (instances.length === 0) return { ok: false, status: 404, models: [], error: 'Aucune instance Ollama configurée' };
+
+    const parallelDiscovery = await Promise.all(instances.map(async instance => {
+        const url = `${instance.url.replace(/\/$/, '')}/v1/models`;
         try {
-            const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+            const headers: Record<string, string> = { 'Accept': 'application/json' };
+            if (instance.apiKey) {
+                headers['Authorization'] = `Bearer ${instance.apiKey}`;
+            }
+            const resp = await fetch(url, { 
+                headers,
+                signal: AbortSignal.timeout(5000) 
+            });
             if (!resp.ok) return [];
             const json = await resp.json();
+            const sourceName = instance.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
             return (json.data || []).map((m: any) => ({
                 id: String(m.id),
                 name: String(m.name || m.id),
-                ownedBy: url.includes('nas') ? 'ollama-nas' : 'ollama-windows'
+                ownedBy: `ollama-${sourceName}`
             }));
         } catch { return []; }
     }));

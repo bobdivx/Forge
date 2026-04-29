@@ -70,6 +70,7 @@ function parseZimaOSAgentsList(config: Record<string, unknown>): ZimaOSAgentEntr
 function sanitizeAgentsListForSync(
   existingEntries: ZimaOSAgentEntry[],
   forgeAgentIds: string[],
+  forgeModelsMap: Map<string, string>,
 ): ZimaOSAgentEntry[] {
   const byId = new Map(existingEntries.map((e) => [e.id, e]));
   const forgeSet = new Set(forgeAgentIds);
@@ -77,8 +78,8 @@ function sanitizeAgentsListForSync(
 
   // Base canonique Forge (ajout/retrait piloté par Forge)
   for (const id of forgeAgentIds) {
-    const previous = byId.get(id);
-    next.push(previous?.model ? { id, model: previous.model } : { id });
+    const model = forgeModelsMap.get(id);
+    next.push(model ? { id, model } : { id });
   }
 
   // Conserver seulement les sous-agents applicatifs valides déjà présents.
@@ -106,25 +107,32 @@ async function resolveZimaOSJsonCandidates(): Promise<string[]> {
     join(base, 'zimaos', 'zimaos.json'),
     join(base, 'AppData', 'zimaos', 'zimaos.json'),
     'X:/AppData/zimaos/zimaos.json',
+    'X:/AppData/zimaos/config/zimaos.json',
     'C:/DATA/AppData/zimaos/zimaos.json',
     '/DATA/AppData/zimaos/zimaos.json',
   ];
   return [...new Set(candidates)];
 }
 
-async function resolveZimaOSJsonPath(): Promise<{ path: string; candidates: string[] }> {
+async function resolveZimaOSJsonPath(infra: any): Promise<{ path: string; candidates: string[] }> {
   const candidates = await resolveZimaOSJsonCandidates();
-  const found = candidates.find((p) => existsSync(p));
+  let found: string | undefined;
+  for (const p of candidates) {
+    if (infra.exists(p)) {
+      found = p;
+      break;
+    }
+  }
   return { path: found || candidates[0], candidates };
 }
 
-function readZimaOSJson(path: string): Record<string, unknown> {
-  const raw = readFileSync(path, 'utf-8');
+function readZimaOSJson(infra: any, path: string): Record<string, unknown> {
+  const raw = infra.readFile(path);
   return JSON.parse(raw) as Record<string, unknown>;
 }
 
-function writeZimaOSJson(path: string, data: Record<string, unknown>): void {
-  writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8');
+function writeZimaOSJson(infra: any, path: string, data: Record<string, unknown>): void {
+  infra.writeFile(path, JSON.stringify(data, null, 2));
 }
 
 function diagnoseSubagentPolicy(config: Record<string, unknown>): SubagentPolicyReport {
@@ -217,15 +225,13 @@ function enforceSubagentPolicy(config: Record<string, unknown>): {
   return { changed, report: { ...report, repaired: changed && report.ok }, nextConfig };
 }
 
-function detectZimaOSContainer(): string | null {
+function detectZimaOSContainer(infra: any): string | null {
   try {
-    // Tente de détecter localement, sinon retourne null pour laisser le body spécifier
-    const out = execSync("docker ps --format '{{.Names}}' 2>/dev/null", { timeout: 2000 })
-      .toString()
+    const out = infra.exec("docker ps --format '{{.Names}}'")
       .split('\n')
-      .map((s) => s.trim())
+      .map((s: string) => s.trim())
       .filter(Boolean);
-    return out.find((n) => n.toLowerCase().includes('zimaos')) ?? null;
+    return out.find((n: string) => n.toLowerCase().includes('zimaos')) ?? null;
   } catch {
     return null;
   }
@@ -304,29 +310,36 @@ async function trySyncViaGatewayApi(forgeAgentIds: string[]): Promise<{
   via?: string;
   error?: string;
 }> {
+  const { db, AgentInstruction } = await loadAstroDb();
+  const rows = await db.select().from(AgentInstruction);
+  const instructionsMap = new Map(rows.map(r => [r.agentId, r]));
+
   const payloads: { via: string; body: Record<string, unknown> }[] = [
+    {
+      via: 'agents_upsert',
+      body: {
+        tool: 'agents_upsert',
+        action: 'json',
+        args: { 
+          agents: forgeAgentIds.map((id) => {
+            const instr = instructionsMap.get(id);
+            return { 
+              id, 
+              name: id,
+              model: instr?.model || 'qwen2.5:7b',
+              systemPrompt: instr?.systemPrompt || '',
+              provider: 'ollama' 
+            };
+          }) 
+        },
+      },
+    },
     {
       via: 'agents_sync',
       body: {
         tool: 'agents_sync',
         action: 'json',
         args: { agents: forgeAgentIds.map((id) => ({ id })), merge: true },
-      },
-    },
-    {
-      via: 'agents_set',
-      body: {
-        tool: 'agents_set',
-        action: 'json',
-        args: { list: forgeAgentIds.map((id) => ({ id })) },
-      },
-    },
-    {
-      via: 'agents_upsert',
-      body: {
-        tool: 'agents_upsert',
-        action: 'json',
-        args: { agents: forgeAgentIds.map((id) => ({ id })) },
       },
     },
   ];
@@ -361,10 +374,12 @@ async function trySyncViaGatewayApi(forgeAgentIds: string[]): Promise<{
 
 export const GET: APIRoute = async () => {
   try {
-    const { path, candidates } = await resolveZimaOSJsonPath();
-    const exists = existsSync(path);
+    const { getZimaOSInfraClient } = await import('../../lib/zimaos-infra-client');
+    const infra = await getZimaOSInfraClient();
+    const { path, candidates } = await resolveZimaOSJsonPath(infra);
+    const exists = infra.exists(path);
     let { ids: forgeAgentIds } = await resolveSyncTargetAgentIds(false);
-    const container = detectZimaOSContainer();
+    const container = detectZimaOSContainer(infra);
     const agentsRes = await fetchZimaOSAgentsList(undefined);
     const gatewayCurrentIds = normalizeAgentIds(agentsRes.agents.map((a) => a.id));
     if (forgeAgentIds.length === 0 && gatewayCurrentIds.length > 0) {
@@ -373,13 +388,13 @@ export const GET: APIRoute = async () => {
     const virtualIds = await readVirtualAgentsFromForgeConfig();
     const currentIds = exists
       ? (() => {
-          const config = readZimaOSJson(path);
+          const config = readZimaOSJson(infra, path);
           const currentEntries = parseZimaOSAgentsList(config);
           return currentEntries.map((a) => a.id);
         })()
       : [...new Set([...gatewayCurrentIds, ...virtualIds])];
     const subagentPolicy = exists
-      ? diagnoseSubagentPolicy(readZimaOSJson(path))
+      ? diagnoseSubagentPolicy(readZimaOSJson(infra, path))
       : ({ ok: false, issues: ['zimaos.json introuvable: politique subagents non vérifiable.'] } as SubagentPolicyReport);
 
     if (!exists && !agentsRes.ok) {
@@ -436,14 +451,16 @@ export async function performZimaOSAgentsSync(containerNameOverride?: string): P
   adoptedFromGateway: boolean;
   restart: unknown;
 }> {
-    const { path, candidates } = await resolveZimaOSJsonPath();
+    const { getZimaOSInfraClient } = await import('../../lib/zimaos-infra-client');
+    const infra = await getZimaOSInfraClient();
+    const { path, candidates } = await resolveZimaOSJsonPath(infra);
     const { db, ActivityLog } = await loadAstroDb();
     const now = new Date();
 
     const { ids: forgeAgentIds, autoEnabled, adoptedFromGateway } = await resolveSyncTargetAgentIds(true);
     let syncMode: 'api' | 'file' | 'api-virtual' = 'file';
     let syncVia: string | null = null;
-    if (!existsSync(path)) {
+    if (!infra.exists(path)) {
       const apiSync = await trySyncViaGatewayApi(forgeAgentIds);
       if (!apiSync.ok) {
         // Fallback robuste: registre virtuel côté Forge quand le gateway est en mode lecture seule.
@@ -456,25 +473,28 @@ export async function performZimaOSAgentsSync(containerNameOverride?: string): P
         await writeVirtualAgentsToForgeConfig([]);
       }
     } else {
-      const beforeRaw = readFileSync(path, 'utf-8');
+      const beforeRaw = infra.readFile(path);
+      const rows = await db.select().from(AgentInstruction);
+      const forgeModelsMap = new Map(rows.map(r => [r.agentId, r.model || '']));
+      
       const config = JSON.parse(beforeRaw) as Record<string, unknown>;
       const agents = (config.agents ?? {}) as Record<string, unknown>;
       const existingEntries = parseZimaOSAgentsList(config);
-      const newList = sanitizeAgentsListForSync(existingEntries, normalizeAgentIds(forgeAgentIds));
+      const newList = sanitizeAgentsListForSync(existingEntries, normalizeAgentIds(forgeAgentIds), forgeModelsMap);
       const syncedConfig = { ...config, agents: { ...agents, list: newList } } as Record<string, unknown>;
       const repairedPolicy = enforceSubagentPolicy(syncedConfig);
       if (!isLikelyHealthyZimaOSConfig(repairedPolicy.nextConfig)) {
         throw new Error('Sync refusée: structure zimaos.json invalide après merge (gateway/models/agents.list requis).');
       }
-      writeZimaOSJson(path, repairedPolicy.nextConfig);
+      writeZimaOSJson(infra, path, repairedPolicy.nextConfig);
       try {
-        const reloaded = readZimaOSJson(path);
+        const reloaded = readZimaOSJson(infra, path);
         if (!isLikelyHealthyZimaOSConfig(reloaded)) {
-          writeFileSync(path, beforeRaw, 'utf-8');
+          infra.writeFile(path, beforeRaw);
           throw new Error('Sync annulée: vérification post-écriture invalide, rollback effectué.');
         }
       } catch (e) {
-        writeFileSync(path, beforeRaw, 'utf-8');
+        infra.writeFile(path, beforeRaw);
         throw e;
       }
       await writeVirtualAgentsToForgeConfig([]);
@@ -491,11 +511,11 @@ export async function performZimaOSAgentsSync(containerNameOverride?: string): P
       createdAt: now,
     });
 
-    const containerName = containerNameOverride || detectZimaOSContainer();
+    const containerName = containerNameOverride || detectZimaOSContainer(infra);
     let restartResult = null;
-    if (containerName) {
+    if (containerName && containerName !== "NO_RESTART") {
       try {
-        const out = execSync(`docker restart ${containerName}`, { timeout: 10000 }).toString();
+        const out = infra.restartContainer();
         restartResult = { ok: true, output: out };
       } catch (e: any) {
         restartResult = { ok: false, error: e.message };

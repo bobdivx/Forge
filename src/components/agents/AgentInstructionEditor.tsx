@@ -376,18 +376,6 @@ export default function AgentInstructionEditor() {
                   />
                   Activé
                 </label>
-                <span class="ml-auto text-[10px] text-gray-500">{selected.filePath}</span>
-                {selectedSync ? (
-                  <span
-                    class={`rounded px-2 py-0.5 text-[10px] ${
-                      selectedSync.fileExists
-                        ? 'bg-green-900 text-green-300'
-                        : 'bg-yellow-900 text-yellow-300'
-                    }`}
-                  >
-                    {selectedSync.fileExists ? 'fichier OK' : 'fichier absent'}
-                  </span>
-                ) : null}
               </div>
 
               <div>
@@ -423,14 +411,6 @@ export default function AgentInstructionEditor() {
                   class="rounded-full bg-[#175B37] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90"
                 >
                   {saving ? 'Sauvegarde…' : 'Sauvegarder'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void syncSelected()}
-                  disabled={syncing}
-                  class="rounded-full bg-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 hover:opacity-90"
-                >
-                  {syncing ? 'Sync…' : 'Sync .md'}
                 </button>
                 <button
                   type="button"

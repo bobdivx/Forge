@@ -1,5 +1,4 @@
 import AgentModelMatrix from './AgentModelMatrix';
-import AgentSanityPanel from './AgentSanityPanel';
 
 export default function AgentModelsTab() {
   return (
@@ -8,8 +7,7 @@ export default function AgentModelsTab() {
         <div>
           <h2 class="text-lg font-bold text-gray-900 mb-1">Modèles agents</h2>
           <p class="text-xs text-gray-500 max-w-2xl">
-            Attribution des modèles Ollama par rôle agent. Vérifiez que chaque agent a son modèle enregistré dans le
-            gateway ZimaOS.
+            Gestion centralisée de l'équipe d'agents. Chaque carte reflète l'état réel de synchronisation avec ZimaOS.
           </p>
         </div>
         <a
@@ -19,10 +17,9 @@ export default function AgentModelsTab() {
           <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
           </svg>
-          Instructions
+          Instructions agents
         </a>
       </div>
-      <AgentSanityPanel />
       <AgentModelMatrix />
     </div>
   );

@@ -42,7 +42,7 @@ export const GET: APIRoute = async ({ locals }) => {
         dbEnabled = dbCatalog
           .filter((m) => Number(m.enabled) === 1)
           .map((m) => ({
-            id: `zimaos/${String(m.id).trim()}`,
+            id: String(m.id).trim(),
             name: String(m.label || m.id).trim() || String(m.id).trim(),
             ownedBy: 'forge-db',
           }));
@@ -50,7 +50,7 @@ export const GET: APIRoute = async ({ locals }) => {
     } catch {
       // Schéma/table potentiellement non migré: on continue sans bloquer l'endpoint.
       dbEnabled = FORGE_DEFAULT_AGENT_MODELS.map((m) => ({
-        id: `zimaos/${m.id}`,
+        id: m.id,
         name: m.label,
         ownedBy: 'forge-default',
       }));
@@ -59,26 +59,36 @@ export const GET: APIRoute = async ({ locals }) => {
     const instructionModels = instructionModelsRaw
       .map((row) => String(row.model || '').trim())
       .filter(Boolean)
-      .map((id) => ({ id: `zimaos/${id}`, name: id, ownedBy: 'forge-instruction' }));
+      .map((id) => ({ id: id, name: id, ownedBy: 'forge-instruction' }));
     
     // 1. Récupérer les agents (sessions/capabilities)
     const agentsRes = await fetchZimaOSAgentsList(email);
     const agentModels = agentsRes.ok ? agentsRes.agents.map(a => ({
-        id: `zimaos/${a.id}`,
+        id: a.id,
         name: a.name || a.id,
         ownedBy: 'zimaos-agent',
     })) : [];
 
     // 2. Récupérer le catalogue global (Ollama, etc)
-    const catalogRes = await fetchZimaOSModelCatalog(email);
+    const [catalogRes, ollamaRes] = await Promise.all([
+      fetchZimaOSModelCatalog(email),
+      import('../../lib/zimaos-openai-surface').then(m => m.fetchOllamaTagNames())
+    ]);
+
     const catalogModels = catalogRes.ok ? catalogRes.models.map(m => ({
-        id: `zimaos/${m.id}`,
+        id: m.id,
         name: m.name || m.id,
         ownedBy: m.ownedBy || 'zimaos',
     })) : [];
 
+    const extraOllamaModels = ollamaRes.names.map(name => ({
+        id: name,
+        name: name,
+        ownedBy: 'ollama-instances',
+    }));
+
     // 3. Fusion unique (par ID)
-    const allModels = [...dbEnabled, ...instructionModels, ...agentModels, ...catalogModels];
+    const allModels = [...dbEnabled, ...instructionModels, ...agentModels, ...catalogModels, ...extraOllamaModels];
     const uniqueModels = Array.from(new Map(allModels.map(m => [m.id, m])).values());
 
     return new Response(JSON.stringify(uniqueModels), {

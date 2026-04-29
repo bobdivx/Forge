@@ -12,6 +12,7 @@ import {
   syntheticZimaOSTargetsFromAgents,
   syntheticZimaOSTargetsFromForgeAgentIds,
 } from '../../lib/zimaos-openai-surface';
+import { performZimaOSAgentSanityCheck, type AgentSanityResult } from './zimaos-agent-sanity';
 
 /** Correspondance registre gateway ↔ ids métier Forge (casse + préfixe zimaos/). */
 function gatewayRegistryKeySet(agents: { id: string }[]): Set<string> {
@@ -33,8 +34,12 @@ export type ZimaOSModelsRow = {
   enabled: boolean;
   inGatewayRegistry: boolean;
   inV1Models: boolean;
+  /** True si inV1Models est déduit par Forge car le gateway n’a pas répondu sur /v1/models */
+  isV1Synthetic: boolean;
   /** null si Ollama non configuré côté serveur Forge */
   ollamaPresent: boolean | null;
+  /** Résultat du sanity check réel (SSH) */
+  sanity?: AgentSanityResult;
 };
 
 export const GET: APIRoute = async ({ locals }) => {
@@ -109,6 +114,12 @@ export const GET: APIRoute = async ({ locals }) => {
   const registryKeys = gatewayRegistryKeySet(agentsRes.agents);
   const ollamaLower = new Set(ollama.names.map((n) => n.toLowerCase()));
 
+  // Sanity check réel pour chaque agent (parallélisé)
+  const sanityResults = await Promise.all(
+    instructions.map(row => performZimaOSAgentSanityCheck(row.agentId))
+  );
+  const sanityMap = new Map(sanityResults.map(s => [s.agentId, s]));
+
   const rows: ZimaOSModelsRow[] = instructions.map((row) => {
     const target = `zimaos/${row.agentId}`;
     const backend = String(row.model || '').trim();
@@ -123,7 +134,9 @@ export const GET: APIRoute = async ({ locals }) => {
       enabled: row.enabled === 1,
       inGatewayRegistry: registryKeys.has(row.agentId.toLowerCase()),
       inV1Models: v1Lower.has(target.toLowerCase()),
+      isV1Synthetic: v1Lower.has(target.toLowerCase()) && !v1disc.anyHttpOk,
       ollamaPresent,
+      sanity: sanityMap.get(row.agentId),
     };
   });
 

@@ -295,20 +295,6 @@ export default function IntegrationTab({
               class={inputCls}
             />
           </FormField>
-          <FormField
-            label="URL API Ollama"
-            hint="GET /api/tags (ex. http://host.docker.internal:11434). Utilisée par les sondes modèles / audit."
-          >
-            <input
-              type="url"
-              placeholder="http://127.0.0.1:11434"
-              value={settings.ollamaUrl}
-              onInput={(e) =>
-                setSettings({ ...settings, ollamaUrl: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
         </div>
       </section>
 

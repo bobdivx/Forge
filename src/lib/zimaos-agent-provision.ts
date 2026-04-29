@@ -37,21 +37,21 @@ function isLikelyHealthyZimaOSConfig(raw: string): boolean {
   }
 }
 
-async function snapshotZimaOSConfig(): Promise<ConfigSnapshot | null> {
+async function snapshotZimaOSConfig(infra: any): Promise<ConfigSnapshot | null> {
   const local = await readZimaOSLocalConfigFile();
   const filePath = local?.path;
   if (!filePath) return null;
   try {
-    const raw = readFileSync(filePath, 'utf-8');
+    const raw = infra.readFile(filePath);
     return { path: filePath, raw, size: Buffer.byteLength(raw, 'utf-8') };
   } catch {
     return null;
   }
 }
 
-function rollbackZimaOSConfig(snapshot: ConfigSnapshot): string | null {
+async function rollbackZimaOSConfig(infra: any, snapshot: ConfigSnapshot): Promise<string | null> {
   try {
-    writeFileSync(snapshot.path, snapshot.raw, 'utf-8');
+    infra.writeFile(snapshot.path, snapshot.raw);
     return null;
   } catch (e: unknown) {
     return e instanceof Error ? e.message : String(e);
@@ -87,23 +87,27 @@ export async function provisionAgentInZimaOS(params: {
 }): Promise<ProvisionAgentResult> {
   const steps: ProvisionStep[] = [];
 
-  // 1) Stratégie locale: écrire le fichier d'instructions dans le repo Forge
-  try {
-    const repoRoot = getForgeRepoRoot();
-    const fullPath = resolve(repoRoot, params.filePath);
-    mkdirSync(dirname(fullPath), { recursive: true });
-    writeFileSync(fullPath, params.systemPrompt, 'utf-8');
-    steps.push({ strategy: 'write_instruction_file', ok: true, detail: params.filePath });
-  } catch (e: unknown) {
-    steps.push({
-      strategy: 'write_instruction_file',
-      ok: false,
-      detail: e instanceof Error ? e.message : String(e),
-    });
+  // 1) Stratégie locale: écrire le fichier d'instructions (seulement si demandé)
+  if (params.filePath && params.filePath.endsWith('.md')) {
+    try {
+      const repoRoot = getForgeRepoRoot();
+      const fullPath = resolve(repoRoot, params.filePath);
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, params.systemPrompt, 'utf-8');
+      steps.push({ strategy: 'write_instruction_file', ok: true, detail: params.filePath });
+    } catch (e: unknown) {
+      steps.push({
+        strategy: 'write_instruction_file',
+        ok: false,
+        detail: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
-  // 2) Stratégie API gateway: tenter agents_upsert (si tool exposé)
-  const configBefore = await snapshotZimaOSConfig();
+  // 2) Stratégie API gateway: tenter agents_upsert avec TOUTES les infos (DB-first)
+  const { getZimaOSInfraClient } = await import('./zimaos-infra-client');
+  const infra = await getZimaOSInfraClient();
+  const configBefore = await snapshotZimaOSConfig(infra);
   const upsert = await fetchZimaOSJson(undefined, '/tools/invoke', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -111,7 +115,14 @@ export async function provisionAgentInZimaOS(params: {
       tool: 'agents_upsert',
       action: 'json',
       args: {
-        agents: [{ id: params.agentId }],
+        agents: [{ 
+          id: params.agentId, 
+          name: params.agentId,
+          model: params.model,
+          systemPrompt: params.systemPrompt,
+          // Si on est en mode DB, on peut aussi signaler au gateway de ne pas chercher de fichier
+          provider: 'ollama', 
+        }],
       },
     }),
   });
@@ -126,13 +137,13 @@ export async function provisionAgentInZimaOS(params: {
       let safe = true;
       let detail = 'upsert_ok';
       try {
-        const afterRaw = readFileSync(configBefore.path, 'utf-8');
+        const afterRaw = infra.readFile(configBefore.path);
         const afterSize = Buffer.byteLength(afterRaw, 'utf-8');
         const severeShrink = afterSize < Math.floor(configBefore.size * 0.5);
         const missingCoreSections = !isLikelyHealthyZimaOSConfig(afterRaw);
         if (severeShrink || missingCoreSections) {
           safe = false;
-          const rollbackErr = rollbackZimaOSConfig(configBefore);
+          const rollbackErr = await rollbackZimaOSConfig(infra, configBefore);
           detail = rollbackErr
             ? `unsafe_config_detected(size:${configBefore.size}->${afterSize}, missingCoreSections:${missingCoreSections}); rollback_failed:${rollbackErr}`
             : `unsafe_config_detected(size:${configBefore.size}->${afterSize}, missingCoreSections:${missingCoreSections}); rollback_done`;
@@ -140,7 +151,7 @@ export async function provisionAgentInZimaOS(params: {
       } catch (e: unknown) {
         safe = false;
         const msg = e instanceof Error ? e.message : String(e);
-        const rollbackErr = rollbackZimaOSConfig(configBefore);
+        const rollbackErr = await rollbackZimaOSConfig(infra, configBefore);
         detail = rollbackErr
           ? `post_upsert_check_failed:${msg}; rollback_failed:${rollbackErr}`
           : `post_upsert_check_failed:${msg}; rollback_done`;

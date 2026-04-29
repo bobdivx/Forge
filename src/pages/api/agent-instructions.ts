@@ -101,16 +101,17 @@ export const POST: APIRoute = async ({ request }) => {
   await db.insert(AgentInstruction).values({
     agentId,
     model,
-    filePath,
+    filePath: `db://${agentId}`, // Placeholder path since we use DB now
     systemPrompt: prompt,
     enabled,
     updatedAt: new Date(),
   });
 
+  // Provisioning ZimaOS (Push de la config DB vers le gateway)
   const provision = await provisionAgentInZimaOS({
     agentId,
     model,
-    filePath,
+    filePath: '', // On passe vide pour signaler le mode DB
     systemPrompt: prompt,
   });
 
