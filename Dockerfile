@@ -20,7 +20,8 @@ ENV PORT=4321
 ENV ASTRO_DATABASE_FILE=file:/app/.astro/content.db
 
 # Git est requis pour execFileSync('git', …) (historique / résumé dépôt côté serveur).
-RUN apk add --no-cache git
+# CLI Docker : sonde ZimaOS (docker inspect / exec) via /var/run/docker.sock monté par le compose NAS.
+RUN apk add --no-cache git docker-cli
 
 COPY package.json package-lock.json .npmrc ./
 COPY scripts/ ./scripts/

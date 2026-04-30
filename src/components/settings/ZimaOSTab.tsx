@@ -18,6 +18,9 @@ type Config = {
   zimaosSshKeyContent: string;
   zimaosSshPassword: string;
   ollamaUrl: string;
+  forgeReposRoot: string;
+  dockerYamlDir: string;
+  dockerAppDataDir: string;
   [k: string]: string;
 };
 
@@ -67,6 +70,7 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
           action: 'validate',
           zimaosAccessMode: mode,
           zimaosRuntimeUrl: settings.zimaosRuntimeUrl,
+          zimaosContainerName: settings.zimaosContainerName,
           zimaosHost: settings.zimaosHost,
           zimaosSshPort: settings.zimaosSshPort,
           zimaosSshUser: settings.zimaosSshUser,
@@ -216,7 +220,10 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
   return (
     <div class="p-6 space-y-6">
       <p class="text-xs text-gray-500">
-        Onglet dédié à la communication ZimaDev ↔ ZimaOS. Choisissez le mode local Docker ou distant SSH.
+        Onglet dédié à la communication ZimaDev ↔ ZimaOS. Choisissez le mode local Docker ou distant SSH. En Docker sur
+        le NAS, Forge utilise la CLI <span class="font-mono">docker</span> vers le socket de l’hôte (pas seulement le
+        mode privilégié) pour lister les montages du sandbox — voir le compose « Forge (NAS) » :{' '}
+        <span class="font-mono">docker.sock</span> + image avec <span class="font-mono">docker-cli</span>.
       </p>
 
       <FormField label="Mode d’accès ZimaOS">

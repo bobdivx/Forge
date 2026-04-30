@@ -15,7 +15,10 @@ services:
       - ASTRO_DATABASE_FILE=file:/app/.astro/content.db
       - HOST=0.0.0.0
       - NODE_ENV=production
-      - OLLAMA_HOST=
+      # Origine API Ollama (GET /api/tags) depuis le conteneur → hôte NAS. Surchargeable en UI Paramètres.
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      # Runtime ZimaOS public (port typique 24190) si la base est vide ; UI / DB priment souvent.
+      - FORGE_ZIMAOS_RUNTIME_URL=http://host.docker.internal:24190
       - PORT=4321
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -40,6 +43,10 @@ services:
     pull_policy: always
     restart: unless-stopped
     volumes:
+      # Accès au démon Docker de l’hôte (sondes docker inspect / exec pour ZimaOS). Le mode privileged seul ne suffit pas.
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
       - type: bind
         source: /media/Docker/AppData/forge/astro
         target: /app/.astro

@@ -96,7 +96,11 @@ async function validateSetup(data: Record<string, unknown>) {
   } else {
     checks.zimaosAccessMode = { ok: true, detail: 'Mode local Docker actif.' };
     try {
-      const probe = await probeZimaOSContainerPath({ pathToTest: reposRoot || '/' });
+      const containerOverride = String(data.zimaosContainerName ?? '').trim();
+      const probe = await probeZimaOSContainerPath({
+        pathToTest: reposRoot || '/',
+        containerNameOverride: containerOverride || undefined,
+      });
       checks.dockerZimaos = {
         ok: Boolean(probe.attempted && !probe.dockerError),
         detail: probe.dockerError || `Docker accessible, sandbox agents: ${probe.containerName || 'auto'}`,
