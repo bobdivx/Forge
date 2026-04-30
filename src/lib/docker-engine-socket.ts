@@ -167,3 +167,106 @@ export async function execTestDirectory(containerId: string, dirPath: string): P
   }
   return { ok: false, exitCode: -1, error: 'exec inspect timeout' };
 }
+
+/** Port container typique du gateway ZimaOS (HTTP). */
+const ZIMAOS_GATEWAY_INTERNAL_PORT = 18789;
+
+type InspectJson = Record<string, unknown>;
+type NetworkSettingsPorts = { Ports?: Record<string, Array<{ HostIp?: string; HostPort?: string }> | null> };
+type HostConfigPortBindings = { PortBindings?: Record<string, Array<{ HostPort?: string }> | null> };
+
+function hostPortForContainerTcp(inspect: InspectJson, internalTcpPort: number): number | null {
+  const ns = inspect.NetworkSettings as NetworkSettingsPorts | undefined;
+  const ports = ns?.Ports;
+  const key = `${internalTcpPort}/tcp`;
+  if (ports && typeof ports === 'object' && ports[key] && Array.isArray(ports[key])) {
+    const b = ports[key]![0];
+    if (b?.HostPort) {
+      const hp = parseInt(String(b.HostPort), 10);
+      if (Number.isFinite(hp) && hp > 0 && hp < 65536) return hp;
+    }
+  }
+  const hc = inspect.HostConfig as HostConfigPortBindings | undefined;
+  const pb = hc?.PortBindings?.[key];
+  if (Array.isArray(pb) && pb[0]?.HostPort) {
+    const hp = parseInt(String(pb[0].HostPort), 10);
+    if (Number.isFinite(hp) && hp > 0 && hp < 65536) return hp;
+  }
+  return null;
+}
+
+function firstPublishedTcpHostPort(inspect: InspectJson): number | null {
+  const ns = inspect.NetworkSettings as { Ports?: Record<string, unknown> } | undefined;
+  const ports = ns?.Ports;
+  if (!ports || typeof ports !== 'object') return null;
+  for (const [k, val] of Object.entries(ports)) {
+    const m = /^(\d+)\/tcp$/.exec(k);
+    if (!m) continue;
+    const arr = val as Array<{ HostPort?: string }> | null | undefined;
+    if (Array.isArray(arr) && arr[0]?.HostPort) {
+      const hp = parseInt(String(arr[0].HostPort), 10);
+      if (Number.isFinite(hp) && hp > 0 && hp < 65536) return hp;
+    }
+  }
+  return null;
+}
+
+function zimaosContainerScore(c: DockerContainerSummary): number {
+  const n = (c.Names?.[0] ?? '').replace(/^\//, '').toLowerCase();
+  let s = 0;
+  if (n.includes('gateway') || n.includes('runtime')) s += 30;
+  if (n.includes('zimaos')) s += 15;
+  return s;
+}
+
+async function inspectContainerRaw(id: string): Promise<InspectJson | null> {
+  const r = await dockerApiRequest({
+    method: 'GET',
+    path: `${API_PREFIX}/containers/${encodeURIComponent(id)}/json`,
+  });
+  if (!r.ok || !r.json || typeof r.json !== 'object') return null;
+  return r.json as InspectJson;
+}
+
+function publishedPortFromInspect(inspect: InspectJson): number | null {
+  const p18789 = hostPortForContainerTcp(inspect, ZIMAOS_GATEWAY_INTERNAL_PORT);
+  if (p18789 != null) return p18789;
+  return firstPublishedTcpHostPort(inspect);
+}
+
+/**
+ * Lit le port **hôte** publié pour le gateway ZimaOS (mapping du port container 18789/tcp ou premier TCP publié).
+ * Ne nécessite pas la CLI `docker`, uniquement `/var/run/docker.sock`.
+ */
+export async function discoverZimaosGatewayPublishedPort(): Promise<number | null> {
+  if (!dockerSocketPresent()) return null;
+  try {
+    const ping = await dockerApiRequest({ method: 'GET', path: `${API_PREFIX}/version` });
+    if (!ping.ok) return null;
+  } catch {
+    return null;
+  }
+
+  const list = await listAllContainers();
+  const withZimaos = list.filter((c) => {
+    const names = c.Names ?? [];
+    return names.some((n) => n.replace(/^\//, '').toLowerCase().includes('zimaos'));
+  });
+  const ordered = [...withZimaos].sort((a, b) => zimaosContainerScore(b) - zimaosContainerScore(a));
+
+  for (const c of ordered) {
+    const raw = await inspectContainerRaw(c.Id);
+    if (!raw) continue;
+    const port = publishedPortFromInspect(raw);
+    if (port != null) return port;
+  }
+
+  for (const c of list) {
+    const raw = await inspectContainerRaw(c.Id);
+    if (!raw) continue;
+    const p = hostPortForContainerTcp(raw, ZIMAOS_GATEWAY_INTERNAL_PORT);
+    if (p != null) return p;
+  }
+
+  return null;
+}

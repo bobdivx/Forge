@@ -4,6 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { discoverZimaosGatewayPublishedPort } from './docker-engine-socket';
 
 const GATEWAY_HTTP_TIMEOUT_MS = 1_500;
 const ZIMAOS_GATEWAY_INTERNAL_PORT = 18789;
@@ -61,11 +62,28 @@ export async function readZimaOSLocalConfigFile(): Promise<ZimaOSLocalDiskConfig
 }
 
 export async function getZimaOSGatewayBaseUrl(): Promise<string> {
-  const env = process.env.ZIMAOS_GATEWAY_URL?.trim();
+  const env =
+    process.env.ZIMAOS_GATEWAY_URL?.trim() || process.env.FORGE_ZIMAOS_RUNTIME_URL?.trim();
   if (env) return env.replace(/\/$/, '');
   const { getConfig } = await import('./config-db');
   const fromDb = (await getConfig('zimaosGatewayUrl')).trim();
   if (fromDb) return fromDb.replace(/\/$/, '');
+  const fromDbRuntime = (await getConfig('zimaosRuntimeUrl')).trim();
+  if (fromDbRuntime) return fromDbRuntime.replace(/\/$/, '');
+
+  let dockerHostPort: number | null = null;
+  try {
+    dockerHostPort = await discoverZimaosGatewayPublishedPort();
+  } catch {
+    dockerHostPort = null;
+  }
+  if (dockerHostPort != null) {
+    if (isRunningInDockerContainer()) {
+      return `http://host.docker.internal:${dockerHostPort}`;
+    }
+    return `http://127.0.0.1:${dockerHostPort}`;
+  }
+
   if (isRunningInDockerContainer()) return `http://host.docker.internal:${ZIMAOS_GATEWAY_PUBLISHED_PORT}`;
   const localCfg = await readZimaOSLocalConfigFile();
   if (localCfg?.gatewayPort) return `http://127.0.0.1:${localCfg.gatewayPort}`;
@@ -109,8 +127,10 @@ async function discoverGatewayBaseUrlCandidates(): Promise<string[]> {
   };
 
   const { getConfig } = await import('./config-db');
-  const envUrl = process.env.ZIMAOS_GATEWAY_URL?.trim() || '';
+  const envUrl =
+    process.env.ZIMAOS_GATEWAY_URL?.trim() || process.env.FORGE_ZIMAOS_RUNTIME_URL?.trim() || '';
   const dbUrl = (await getConfig('zimaosGatewayUrl')).trim();
+  const dbRuntime = (await getConfig('zimaosRuntimeUrl')).trim();
   const appDataDir = (await getConfig('dockerAppDataDir')).trim();
 
   if (envUrl) push(envUrl);
@@ -126,6 +146,21 @@ async function discoverGatewayBaseUrlCandidates(): Promise<string[]> {
     } catch {
       /* ignore */
     }
+  }
+  if (dbRuntime) push(dbRuntime);
+
+  let dockerDiscoveredPort: number | null = null;
+  try {
+    dockerDiscoveredPort = await discoverZimaosGatewayPublishedPort();
+  } catch {
+    dockerDiscoveredPort = null;
+  }
+  if (dockerDiscoveredPort != null) {
+    if (isRunningInDockerContainer()) {
+      push(`http://host.docker.internal:${dockerDiscoveredPort}`);
+    }
+    push(`http://127.0.0.1:${dockerDiscoveredPort}`);
+    push(`http://localhost:${dockerDiscoveredPort}`);
   }
 
   if (isRunningInDockerContainer()) {
@@ -251,17 +286,19 @@ export async function getZimaOSClientDebugMeta(): Promise<{
   settingsScope: 'instance';
   sshKeyPath: string;
 }> {
-  const envUrl = process.env.ZIMAOS_GATEWAY_URL?.trim() || '';
+  const envUrl =
+    process.env.ZIMAOS_GATEWAY_URL?.trim() || process.env.FORGE_ZIMAOS_RUNTIME_URL?.trim() || '';
   const envTok = process.env.ZIMAOS_GATEWAY_TOKEN?.trim() || '';
   const gatewayBaseUrl = await getZimaOSGatewayBaseUrl();
   const tokenStr = await getZimaOSToken();
   const { getConfig } = await import('./config-db');
   const dbUrl = (await getConfig('zimaosGatewayUrl')).trim();
+  const dbRuntime = (await getConfig('zimaosRuntimeUrl')).trim();
   const sshKeyPath = (await getConfig('zimaosSshKeyPath')).trim();
 
   const urlSource: 'env' | 'database' | 'default' = envUrl
     ? 'env'
-    : dbUrl
+    : dbUrl || dbRuntime
       ? 'database'
       : 'default';
 
