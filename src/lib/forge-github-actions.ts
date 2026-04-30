@@ -150,6 +150,9 @@ export async function checkGithubActionsForProjects() {
 
     }
   } catch (error) {
+    if (isViteModuleRunnerClosedError(error)) return;
+    console.error('[github-actions] Global error:', error);
+  }
 }
 
 export async function checkGithubPullRequestsForProjects() {
