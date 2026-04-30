@@ -479,7 +479,8 @@ export default function AgentsGrid() {
         <div class="rounded-[1.5rem] border border-gray-100 bg-white px-4 py-3 text-xs text-gray-700 shadow-sm">
           {wakeMsg}
         </div>
-      ) : error && (
+      )}
+      {error && (
         <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           {error}
         </div>

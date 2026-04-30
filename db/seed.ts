@@ -9,9 +9,9 @@
 export default async function seed() {
   const { db, Config, AgentModel, AgentInstruction } = await import('astro:db');
   const { FORGE_DEFAULT_AGENT_MODELS } = await import('../src/lib/agent-model-defaults');
-  const {
+    const {
     FORGE_AGENT_INSTRUCTION_ROWS,
-    readInstructionMdFromRepo,
+    getInitialSystemPrompt,
   } = await import('../src/lib/agent-instruction-defaults');
 
   // ── 1. Config initiale (clés vides — pas de chemins imposés) ──
@@ -61,7 +61,7 @@ export default async function seed() {
     console.warn('AgentModel seed skipped: schema/table indisponible pour cette execution.');
   }
 
-  // ── 3. Migration instructions Markdown -> DB (source de vérité) ──
+  // ── 3. Initialisation instructions agents (source de vérité DB) ──
   try {
     if (!AgentInstruction) {
       console.warn('AgentInstruction seed skipped: table non resolue (schema Astro DB non regenere).');
@@ -74,13 +74,13 @@ export default async function seed() {
         FORGE_AGENT_INSTRUCTION_ROWS.map((row) => ({
           agentId: row.agentId,
           model: row.model,
-          filePath: row.filePath,
-          systemPrompt: readInstructionMdFromRepo(row.filePath),
+          filePath: `db://${row.agentId}`,
+          systemPrompt: getInitialSystemPrompt(row.agentId),
           enabled: 1,
           updatedAt: now,
         })),
       );
-      console.log('AgentInstruction seeded from legacy markdown files.');
+      console.log('AgentInstruction seeded (pure DB mode).');
     }
   } catch (e) {
     console.warn('AgentInstruction seed skipped:', e);
