@@ -2,13 +2,67 @@ import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { eq, desc } from 'drizzle-orm';
 
+type OllamaHealthProbe = {
+  ok: boolean;
+  status: number;
+  endpoint: string;
+  error?: string;
+};
+
+type OllamaInstanceRow = {
+  id: number;
+  name: string;
+  url: string;
+  apiKey?: string;
+  enabled: number | null;
+  updatedAt: Date;
+  createdAt: Date;
+};
+
+function normalizeBase(url: string): string {
+  return String(url || '').trim().replace(/\/$/, '').replace(/\/v1$/i, '').replace(/\/api$/i, '');
+}
+
+async function probeOllamaBase(base: string): Promise<OllamaHealthProbe> {
+  const candidates = ['/api/tags', '/v1/models'];
+  for (const endpoint of candidates) {
+    const target = `${base}${endpoint}`;
+    try {
+      const res = await fetch(target, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(2200),
+      });
+      if (res.ok) return { ok: true, status: res.status, endpoint };
+      if (res.status !== 404) {
+        return { ok: false, status: res.status, endpoint, error: `HTTP ${res.status}` };
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Erreur réseau';
+      return { ok: false, status: 0, endpoint, error: msg };
+    }
+  }
+  return { ok: false, status: 404, endpoint: '/api/tags', error: 'Endpoints Ollama non trouvés (/api/tags, /v1/models).' };
+}
+
 export const GET: APIRoute = async () => {
   try {
     const { db, OllamaInstance } = await loadAstroDb();
     if (!OllamaInstance) throw new Error('Table OllamaInstance non trouvée');
-    
-    const instances = await db.select().from(OllamaInstance).orderBy(desc(OllamaInstance.createdAt));
-    return new Response(JSON.stringify(instances), {
+
+    const instances = (await db.select().from(OllamaInstance).orderBy(desc(OllamaInstance.createdAt))) as OllamaInstanceRow[];
+    const withHealth = await Promise.all(
+      instances.map(async (inst) => {
+        const base = normalizeBase(inst.url);
+        const health = Number(inst.enabled) === 0 ? null : await probeOllamaBase(base);
+        return {
+          ...inst,
+          normalizedUrl: base,
+          health,
+        };
+      }),
+    );
+    return new Response(JSON.stringify(withHealth), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

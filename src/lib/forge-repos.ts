@@ -61,12 +61,14 @@ export async function toAgentPath(localPath: string): Promise<string> {
   const localRoot = await getReposRootResolved();
   const agentRoot = await getAgentReposRootResolved();
 
-  // On normalise les deux racines pour la comparaison
-  const normLocalRoot = path.resolve(localRoot).toLowerCase();
-  const normPath = path.resolve(localPath).toLowerCase();
+  const resolvedLocalRoot = path.resolve(localRoot);
+  const resolvedLocalPath = path.resolve(localPath);
+  // Windows est case-insensitive; Linux doit conserver la casse d'origine.
+  const comparableRoot = process.platform === 'win32' ? resolvedLocalRoot.toLowerCase() : resolvedLocalRoot;
+  const comparablePath = process.platform === 'win32' ? resolvedLocalPath.toLowerCase() : resolvedLocalPath;
 
-  if (normPath.startsWith(normLocalRoot)) {
-    const relativePart = path.relative(normLocalRoot, normPath);
+  if (comparablePath.startsWith(comparableRoot)) {
+    const relativePart = path.relative(resolvedLocalRoot, resolvedLocalPath);
     // On rejoint avec la racine agent et on force les slashes Linux
     return path.join(agentRoot, relativePart).replace(/\\/g, '/');
   }

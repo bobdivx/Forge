@@ -5,9 +5,16 @@ type OllamaInstance = {
   id: number;
   name: string;
   url: string;
+  normalizedUrl?: string;
   apiKey?: string;
   enabled: number;
   updatedAt: string;
+  health?: {
+    ok: boolean;
+    status: number;
+    endpoint: string;
+    error?: string;
+  } | null;
 };
 
 export default function OllamaTab() {
@@ -189,13 +196,37 @@ export default function OllamaTab() {
                   <div class="flex items-center justify-between">
                     <div class="space-y-1">
                       <div class="flex items-center gap-2">
-                        <span class={`w-2 h-2 rounded-full ${inst.enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        <span
+                          class={`w-2 h-2 rounded-full ${
+                            !inst.enabled
+                              ? 'bg-gray-300'
+                              : inst.health?.ok
+                                ? 'bg-green-500'
+                                : 'bg-rose-500'
+                          }`}
+                          title={
+                            !inst.enabled
+                              ? 'Instance désactivée'
+                              : inst.health?.ok
+                                ? `Disponible (${inst.health.endpoint}, HTTP ${inst.health.status})`
+                                : inst.health?.error || 'Instance indisponible'
+                          }
+                        />
                         <p class="font-bold text-sm text-gray-900">{inst.name}</p>
                         {inst.apiKey && (
                           <span class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider border border-blue-100">Auth</span>
                         )}
                       </div>
-                      <p class="text-xs font-mono text-gray-500">{inst.url}</p>
+                      <p class="text-xs font-mono text-gray-500">{inst.normalizedUrl || inst.url}</p>
+                      {inst.enabled ? (
+                        <p class={`text-[10px] ${inst.health?.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {inst.health?.ok
+                            ? `OK via ${inst.health.endpoint} (HTTP ${inst.health.status})`
+                            : inst.health?.error || 'Indisponible'}
+                        </p>
+                      ) : (
+                        <p class="text-[10px] text-gray-500">Instance désactivée</p>
+                      )}
                     </div>
                     <div class="flex items-center gap-2">
                       <button onClick={() => toggleInstance(inst)} class={`text-[10px] font-bold px-3 py-1 rounded-full border transition-colors ${inst.enabled ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}>

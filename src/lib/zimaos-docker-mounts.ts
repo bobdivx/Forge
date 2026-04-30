@@ -87,6 +87,19 @@ async function resolveContainerIdSocket(explicit?: string): Promise<string | nul
   return picked?.Id ?? null;
 }
 
+async function listZimaosContainersSocket(): Promise<string[]> {
+  const list = await listAllContainers();
+  const names = new Set<string>();
+  for (const c of list) {
+    for (const raw of c.Names ?? []) {
+      const n = raw.replace(/^\//, '').trim();
+      if (!n) continue;
+      if (n.toLowerCase().includes('zimaos')) names.add(n);
+    }
+  }
+  return [...names].sort();
+}
+
 async function resolveContainerNameCli(explicit?: string): Promise<string | null> {
   const trimmed = explicit?.trim();
   if (trimmed) {
@@ -100,6 +113,16 @@ async function resolveContainerNameCli(explicit?: string): Promise<string | null
     .map((s) => s.trim())
     .find(Boolean);
   return first ?? null;
+}
+
+async function listZimaosContainersCli(): Promise<string[]> {
+  const ps = await execDockerCli(['ps', '--filter', 'name=zimaos', '--format', '{{.Names}}']);
+  if (!ps.ok) return [];
+  const rows = ps.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return [...new Set(rows)].sort();
 }
 
 export async function probeZimaOSContainerPath(params: {
@@ -140,7 +163,14 @@ export async function probeZimaOSContainerPath(params: {
   let dockerError: string | undefined;
 
   if (socketAlive) {
-    containerId = await resolveContainerIdSocket(params.containerNameOverride);
+    const explicit = params.containerNameOverride?.trim();
+    const candidates = explicit ? [] : await listZimaosContainersSocket();
+    if (!explicit && candidates.length > 1) {
+      dockerError = `Plusieurs conteneurs ZimaOS détectés (${candidates.join(', ')}). Renseignez le nom exact dans Paramètres → ZimaOS.`;
+    }
+    if (!dockerError) {
+      containerId = await resolveContainerIdSocket(params.containerNameOverride);
+    }
     if (containerId) {
       const full = await inspectContainer(containerId);
       const raw = full.raw as { Name?: string } | undefined;
@@ -160,7 +190,12 @@ export async function probeZimaOSContainerPath(params: {
           ? `Pas de socket Docker lisible et pas de CLI « docker » dans le conteneur (${ver.stderr.slice(0, 200)})`
           : `CLI Docker inaccessible : ${ver.stderr.slice(0, 280)}`;
     } else {
-      const name = await resolveContainerNameCli(params.containerNameOverride);
+      const explicit = params.containerNameOverride?.trim();
+      const candidates = explicit ? [] : await listZimaosContainersCli();
+      if (!explicit && candidates.length > 1) {
+        dockerError = `Plusieurs conteneurs ZimaOS détectés (${candidates.join(', ')}). Renseignez le nom exact dans Paramètres → ZimaOS.`;
+      }
+      const name = dockerError ? null : await resolveContainerNameCli(params.containerNameOverride);
       if (name) {
         const idOut = await execDockerCli(['inspect', '--format', '{{.Id}}', name]);
         containerId = idOut.ok && idOut.stdout.trim() ? idOut.stdout.trim() : name;
