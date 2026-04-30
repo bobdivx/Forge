@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { getForgeRepoRoot } from '../../lib/forge-repo-root';
@@ -15,6 +15,18 @@ export type AgentSanityResult = {
   agentId: string;
   error?: string;
   details?: string;
+};
+
+export type AgentSanityRow = {
+  agentId: string;
+  enabledInForge: boolean;
+  hasDbPrompt: boolean;
+  hasInstructionFile: boolean;
+  instructionFileMissingOnHost: boolean;
+  instructionFilePath: string;
+  inZimaOSAgentsListApi: boolean;
+  inZimaOSLocalConfig: boolean;
+  ready: boolean;
 };
 
 /**

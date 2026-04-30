@@ -6,7 +6,7 @@
  */
 import type { APIRoute } from 'astro';
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { getConfig } from '../../lib/config-db';

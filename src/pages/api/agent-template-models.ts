@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import {
   FORGE_AGENT_INSTRUCTION_ROWS,
-  readInstructionMdFromRepo,
+  getInitialSystemPrompt,
 } from '../../lib/agent-instruction-defaults';
 
 export const GET: APIRoute = async () => {
@@ -9,8 +9,8 @@ export const GET: APIRoute = async () => {
     id: r.agentId,
     label: r.agentId.replace(/_/g, ' '),
     defaultModel: r.model,
-    filePath: r.filePath,
-    defaultPrompt: readInstructionMdFromRepo(r.filePath),
+    filePath: `db://${r.agentId}`,
+    defaultPrompt: getInitialSystemPrompt(r.agentId),
   }));
   return new Response(JSON.stringify({ templates }), {
     status: 200,
