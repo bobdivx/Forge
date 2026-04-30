@@ -800,7 +800,9 @@ async function tick() {
 
   // Background monitorings
   try {
+    const { checkGithubActionsForProjects, checkGithubPullRequestsForProjects } = await import('./forge-github-actions');
     await checkGithubActionsForProjects();
+    await checkGithubPullRequestsForProjects();
   } catch (e) {
     if (stopSchedulerAfterViteClose('github monitoring', e)) return;
     console.error('[work-scheduler] github monitoring error:', e);

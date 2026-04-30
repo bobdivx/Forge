@@ -115,7 +115,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
   const preferredModel = String(input.modelHint || '').trim() || process.env.OLLAMA_MODEL?.trim() || 'llama3.2:latest';
   const { origin, model } = await resolveAvailableModel(preferredModel);
 
-  const policy = await buildAgentPolicyContext(input.projectId);
+  const policy = await buildAgentPolicyContext(input.projectId, input.agentId);
   steps.push({
     type: 'policy',
     label: 'strict_mode',

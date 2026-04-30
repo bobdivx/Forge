@@ -68,12 +68,6 @@ export default function SwarmInteractionsBoard() {
 
   return (
     <div class="space-y-6">
-      {data!.gatewayError && (
-        <div class="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
-          ZimaOS : {data!.gatewayError} — vérifiez le jeton et l'URL du gateway dans les paramètres.
-        </div>
-      )}
-
       {/* Stats */}
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
@@ -97,7 +91,7 @@ export default function SwarmInteractionsBoard() {
           <div>
             <h3 class="text-base font-bold text-gray-900">Interactions entre agents</h3>
             <p class="text-xs text-gray-400 mt-0.5 max-w-2xl">
-              Fil unifié : sessions, messages <span class="font-mono text-gray-500">AgentMessage</span>, et tâches <span class="font-mono text-gray-500">AgentTask</span>.
+              Fil unifié : sessions internes, messages <span class="font-mono text-gray-500">AgentMessage</span>, et missions <span class="font-mono text-gray-500">AgentTask</span>.
             </p>
           </div>
           <div class="flex flex-wrap gap-2">

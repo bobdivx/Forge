@@ -47,7 +47,7 @@ function roleLabel(role: string) {
 
 type Props = {
   agentId: string;
-  /** Clé `sessions_send` si connue (souvent ≠ segment d’URL). */
+  /** Clé d'accès si connue. */
   sessionKey: string;
 };
 
@@ -128,18 +128,14 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
       const taskRow = data.task;
       let dispatchErr: string | null = null;
       if (sendNow && taskRow?.id) {
-        const key = String(sessionKey || '').trim() || String(oc?.sessionKey || '').trim();
-        if (key) {
-          const rd = await fetch('/api/agent-task-redispatch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: taskRow.id, sessionKey: key }),
-          });
-          const rdJson = (await rd.json().catch(() => ({}))) as { error?: string };
-          if (!rd.ok) dispatchErr = rdJson.error || `Relance HTTP ${rd.status}`;
-        } else {
-          dispatchErr = 'Aucune clé de session ZimaOS : mission créée en base uniquement.';
-        }
+        // Envoi interne Forge Orchestrator (pas ZimaOS Gateway)
+        const rd = await fetch('/api/agent-task-redispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId: taskRow.id }),
+        });
+        const rdJson = (await rd.json().catch(() => ({}))) as { error?: string };
+        if (!rd.ok) dispatchErr = rdJson.error || `Erreur d'orchestration HTTP ${rd.status}`;
       }
       setTitle('');
       setInstruction('');
@@ -148,7 +144,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
         text: dispatchErr
           ? `Mission créée (#${taskRow?.id}) — ${dispatchErr}`
           : sendNow
-            ? `Mission #${taskRow?.id} créée et envoyée à l’agent.`
+            ? `Mission #${taskRow?.id} créée et envoyée à l’orchestrateur.`
             : `Mission #${taskRow?.id} enregistrée (brouillon).`,
       });
       window.dispatchEvent(new CustomEvent('forge-swarm-refresh', { detail: { agentId } }));
@@ -169,12 +165,6 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
 
   return (
     <div class="space-y-4">
-      {panel?.gatewayError ? (
-        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-          ZimaOS : {panel.gatewayError}
-        </div>
-      ) : null}
-
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* En cours */}
         <div class="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm space-y-3">
@@ -184,11 +174,9 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
           </div>
           {oc?.matched ? (
             <p class="text-[11px] text-gray-500">
-              Session{' '}
-              <span class="font-mono text-gray-700">{String(oc.sessionKey).slice(0, 48)}</span>
-              {oc.sessionKey && String(oc.sessionKey).length > 48 ? '…' : ''} —{' '}
+              Statut Core :{' '}
               <span class={`font-semibold ${oc.status === 'actif' ? 'text-emerald-600' : 'text-gray-500'}`}>
-                {oc.status === 'actif' ? 'actif' : 'en veille'}
+                {oc.status === 'actif' ? 'opérationnel' : 'en pause'}
               </span>
               {oc.model ? (
                 <>
@@ -198,7 +186,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
               ) : null}
             </p>
           ) : (
-            <p class="text-xs text-gray-500">Pas de session ZimaOS associée à cet identifiant pour l’instant.</p>
+            <p class="text-xs text-gray-500">Agent non initialisé ou désactivé.</p>
           )}
           {buckets.running.length > 0 ? (
             <ul class="space-y-2">
@@ -213,22 +201,20 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
               ))}
             </ul>
           ) : (
-            <p class="text-xs text-gray-400 italic">Aucune mission « en cours » en base.</p>
+            <p class="text-xs text-gray-400 italic">Aucune mission « en cours ».</p>
           )}
           {lastAssistant?.preview ? (
             <div class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-              <p class="text-[10px] font-bold uppercase text-gray-400 mb-1">Dernier message assistant (ZimaOS)</p>
+              <p class="text-[10px] font-bold uppercase text-gray-400 mb-1">Dernière activité</p>
               <p class="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap">{lastAssistant.preview}</p>
             </div>
-          ) : oc?.matched && (oc.messages?.length ?? 0) === 0 ? (
-            <p class="text-[11px] text-gray-400">Le gateway n’a pas renvoyé d’historique de messages pour cette session.</p>
           ) : null}
         </div>
 
         {/* Historique récent */}
         <div class="rounded-[1.5rem] border border-gray-100 bg-white p-5 shadow-sm space-y-3">
           <h2 class="text-sm font-bold text-gray-900">Historique récent</h2>
-          <p class="text-[11px] text-gray-500">Missions terminées ou closes (Astro DB) et fil de session ZimaOS.</p>
+          <p class="text-[11px] text-gray-500">Missions terminées ou closes (Astro DB).</p>
           {buckets.recentDone.length > 0 ? (
             <ul class="max-h-56 overflow-y-auto space-y-2 pr-1">
               {buckets.recentDone.map((x) => (
@@ -248,7 +234,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
           )}
           {(oc?.messages?.length ?? 0) > 0 ? (
             <div class="border-t border-gray-100 pt-3 space-y-2 max-h-48 overflow-y-auto">
-              <p class="text-[10px] font-bold uppercase text-gray-400">Messages session</p>
+              <p class="text-[10px] font-bold uppercase text-gray-400">Journal d'activité</p>
               {oc!.messages.slice(-12).map((m, i) => (
                 <div key={`${m.at}-${i}`} class="rounded border border-gray-50 bg-gray-50/80 px-2 py-1.5">
                   <div class="flex justify-between gap-2 text-[10px] text-gray-400 font-mono">
@@ -268,7 +254,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
         <div class="rounded-[1.5rem] border border-[#175B37]/20 bg-[#f6faf7] p-5 shadow-sm space-y-3">
           <h2 class="text-sm font-bold text-gray-900">Mettre au travail</h2>
           <p class="text-[11px] text-gray-600">
-            Crée une entrée dans le journal Forge et, si possible, pousse la consigne vers ZimaOS tout de suite.
+            Crée une mission dans le journal Forge et lance l'exécution immédiate via l'orchestrateur.
           </p>
           <label class="block">
             <span class="text-[10px] font-bold uppercase text-gray-400">Titre</span>
@@ -297,7 +283,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
               onChange={(e) => setSendNow((e.target as HTMLInputElement).checked)}
               disabled={busy}
             />
-            Envoyer tout de suite à ZimaOS (via relance mission)
+            Démarrer l'exécution immédiatement
           </label>
           {banner ? (
             <div
@@ -320,7 +306,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
           </button>
           {buckets.pending.length > 0 ? (
             <p class="text-[10px] text-amber-800">
-              {buckets.pending.length} mission(s) en attente en base — ouvrez le journal pour relancer ou éditer.
+              {buckets.pending.length} mission(s) en attente — ouvrez le journal pour relancer.
             </p>
           ) : null}
         </div>

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
   FORGE_AGENT_INSTRUCTION_ROWS,
-  readInstructionMdFromRepo,
+  getInitialSystemPrompt,
 } from '../../lib/agent-instruction-defaults';
 import { SWARM_WORK_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
 import { provisionAgentInZimaOS } from '../../lib/zimaos-agent-provision';
@@ -32,8 +32,8 @@ export const GET: APIRoute = async ({ url }) => {
       FORGE_AGENT_INSTRUCTION_ROWS.map((r) => ({
         agentId: r.agentId,
         model: r.model,
-        filePath: r.filePath,
-        systemPrompt: readInstructionMdFromRepo(r.filePath),
+        filePath: `db://${r.agentId}`,
+        systemPrompt: getInitialSystemPrompt(r.agentId),
         enabled: 1,
         updatedAt: now,
       })),

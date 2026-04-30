@@ -59,7 +59,6 @@ type WakePreRepair = {
 };
 
 function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>, teamProfiles: Record<string, AgentTeamProfile>) {
-  /** Palette alignée Forge (vert marque + variantes lisibles sur fond blanc) */
   const CHART_COLORS = [
     '#175B37', '#3BAE61', '#2d8a4a', '#5ec986', '#134a2d', '#6b7280', '#9ca3af', '#374151',
   ];
@@ -166,8 +165,7 @@ export default function AgentsGrid() {
           setAgents(Array.isArray(data.agents) ? data.agents : Array.isArray(data) ? data : []);
           setTaskStats(data.taskStats ?? {});
           setActivationAdvice(data.activationAdvice && typeof data.activationAdvice === 'object' ? data.activationAdvice : null);
-          const gwErr = typeof data.gatewayError === 'string' && data.gatewayError ? data.gatewayError : null;
-          setError(gwErr);
+          
           if (pr?.profiles && typeof pr.profiles === 'object') {
             const next: Record<string, ZimaOSAgentProfileRow> = {};
             for (const [k, v] of Object.entries(pr.profiles as Record<string, unknown>)) {
@@ -176,7 +174,7 @@ export default function AgentsGrid() {
             setOcProfiles(next);
           }
         })
-        .catch(() => setError('Impossible de contacter le gateway ZimaOS.'))
+        .catch(() => setError('Erreur de communication avec le coordinateur Forge.'))
         .finally(() => setLoading(false));
     };
     const loadAppVersion = () => {
@@ -234,13 +232,8 @@ export default function AgentsGrid() {
         setCreateMsg(typeof data.error === 'string' ? data.error : 'Création impossible.');
         return;
       }
-      setCreateMsg(
-        data?.provision?.ok
-          ? `Agent ${agentId} ajouté et provisionné ZimaOS.`
-          : `Agent ${agentId} ajouté (provision ZimaOS à vérifier).`,
-      );
+      setCreateMsg(`Agent ${agentId} ajouté avec succès.`);
       setNewAgentId('');
-      // rafraîchit immédiatement la liste réelle affichée
       const refreshed = await fetch('/api/agents').then((x) => x.json());
       setAgents(Array.isArray(refreshed.agents) ? refreshed.agents : []);
       setTaskStats(refreshed.taskStats ?? {});
@@ -254,14 +247,7 @@ export default function AgentsGrid() {
   const sendSwarmCommand = async (agentId: string, command: SwarmWorkCommand) => {
     const target = agents.find((a) => a.id === agentId);
     if (target?.raw?.disabledInDb) {
-      setCommandMsgByAgent((prev) => ({ ...prev, [agentId]: 'Agent désactivé dans Forge' }));
-      return;
-    }
-    if (target?.raw?.offline) {
-      setCommandMsgByAgent((prev) => ({
-        ...prev,
-        [agentId]: 'Session hors ligne (aucune session active côté ZimaOS)',
-      }));
+      setCommandMsgByAgent((prev) => ({ ...prev, [agentId]: 'Agent désactivé' }));
       return;
     }
     setCommandBusyByAgent((prev) => ({ ...prev, [agentId]: true }));
@@ -279,25 +265,13 @@ export default function AgentsGrid() {
         }),
       });
       const data = await r.json().catch(() => ({}));
-      const preRepair =
-        data?.preRepair && typeof data.preRepair === 'object'
-          ? (data.preRepair as WakePreRepair)
-          : null;
       if (!r.ok || data.ok === false) {
-        const preRepairHint = preRepair?.attempted
-          ? preRepair.ok
-            ? ' (auto-reparation ZimaOS appliquee)'
-            : ` (auto-reparation echouee: ${preRepair.error || 'inconnue'})`
-          : '';
         setCommandMsgByAgent((prev) => ({
           ...prev,
-          [agentId]:
-            (typeof data.error === 'string' && data.error ? data.error : 'Commande refusée') +
-            preRepairHint,
+          [agentId]: (typeof data.error === 'string' && data.error ? data.error : 'Commande refusée'),
         }));
         return;
       }
-      const via = typeof data.via === 'string' ? data.via : 'gateway';
       const reply =
         data?.result && typeof data.result === 'object' && typeof data.result.reply === 'string'
           ? data.result.reply.trim()
@@ -305,13 +279,9 @@ export default function AgentsGrid() {
       setCommandMsgByAgent((prev) => ({
         ...prev,
         [agentId]: reply
-          ? `Réponse reçue (${via})`
-          : `Commande envoyée (${command.replace('_', ' ')}, via ${via})${
-              preRepair?.attempted ? (preRepair.ok ? ' · auto-repair' : ' · auto-repair KO') : ''
-            }`,
+          ? `Réponse reçue`
+          : `Commande envoyée (${command.replace('_', ' ')})`,
       }));
-      // Feedback immédiat sur la carte : le statut affiché se base sur sessions_list,
-      // qui peut avoir quelques secondes de retard.
       setAgents((prev) =>
         prev.map((a) =>
           a.id === agentId
@@ -345,33 +315,25 @@ export default function AgentsGrid() {
 
   const wakeZimaOSAgents = async () => {
     setWakeBusy(true);
-    setWakeMsg('Reveil des agents en cours...');
+    setWakeMsg('Lancement du swarm en cours...');
     try {
       const r = await fetch('/api/zimaos-wake-agents', { method: 'POST' });
       const data = await r.json().catch(() => ({}));
       const sentCount = Array.isArray(data?.sent) ? data.sent.length : 0;
       const failedCount = Array.isArray(data?.failed) ? data.failed.length : 0;
-      const preRepair = (data?.preRepair && typeof data.preRepair === 'object'
-        ? (data.preRepair as WakePreRepair)
-        : null);
       if (!r.ok && r.status !== 207) {
-        setWakeMsg(typeof data?.error === 'string' ? data.error : 'Reveil impossible');
+        setWakeMsg(typeof data?.error === 'string' ? data.error : 'Lancement impossible');
         return;
       }
-      const repairSuffix = preRepair?.attempted
-        ? preRepair.ok
-          ? ' · auto-reparation ZimaOS appliquee'
-          : ` · auto-reparation echouee (${preRepair.error || 'inconnue'})`
-        : '';
       if (failedCount > 0) {
-        setWakeMsg(`Reveil partiel: ${sentCount} ok, ${failedCount} en echec${repairSuffix}`);
+        setWakeMsg(`Lancement partiel: ${sentCount} ok, ${failedCount} en echec`);
       } else {
-        setWakeMsg(`Reveil lance pour ${sentCount} agent(s)${repairSuffix}`);
+        setWakeMsg(`Swarm lancé pour ${sentCount} agent(s)`);
       }
       await refreshAgentsNow();
       window.setTimeout(() => void refreshAgentsNow(), 2200);
     } catch {
-      setWakeMsg('Erreur reseau pendant le reveil des agents');
+      setWakeMsg('Erreur réseau pendant le lancement du swarm');
     } finally {
       setWakeBusy(false);
     }
@@ -380,20 +342,15 @@ export default function AgentsGrid() {
   const getWakeStatusLabel = (agent: Agent): string => {
     const busy = Boolean(commandBusyByAgent[agent.id]);
     const commandMsg = String(commandMsgByAgent[agent.id] || '').trim();
-    if (busy) return 'Reveil: envoi de directive...';
+    if (busy) return 'Statut: envoi de directive...';
     if (commandMsg) {
-      if (/réponse reçue/i.test(commandMsg)) return 'Reveil: agent répond';
-      if (/commande envoyée/i.test(commandMsg)) return 'Reveil: directive envoyée';
-      if (/erreur|refus|impossible|hors ligne|désactivé/i.test(commandMsg)) {
-        return `Reveil: ${commandMsg}`;
-      }
-      return `Reveil: ${commandMsg}`;
+      if (/réponse reçue/i.test(commandMsg)) return 'Statut: agent répond';
+      if (/commande envoyée/i.test(commandMsg)) return 'Statut: directive envoyée';
+      return `Statut: ${commandMsg}`;
     }
-    if (agent.status === 'actif') return 'Reveil: session active';
-    if (agent.raw?.disabledInDb) return 'Reveil: desactive dans Forge';
-    if (agent.raw?.offline) return 'Reveil: aucune session active';
-    if (agent.raw?.registryOnly) return 'Reveil: present dans ZimaOS, non reveille';
-    return 'Reveil: en veille';
+    if (agent.status === 'actif') return 'Statut: opérationnel';
+    if (agent.raw?.disabledInDb) return 'Statut: désactivé';
+    return 'Statut: en veille';
   };
 
   const teamProfiles = useMemo(() => {
@@ -471,11 +428,11 @@ export default function AgentsGrid() {
 
       <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <span class="text-sm text-gray-500">
-          <span class="font-semibold text-gray-900">{agents.length}</span> session(s) ZimaOS —{' '}
+          <span class="font-semibold text-gray-900">{agents.length}</span> agent(s) configuré(s) —{' '}
           <span class="font-semibold" style={{ color: '#3BAE61' }}>
             {activeCount}
           </span>{' '}
-          actif(s)
+          opérationnel(s)
         </span>
         <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           <button
@@ -484,7 +441,7 @@ export default function AgentsGrid() {
             disabled={wakeBusy}
             class="rounded-full border border-[#175B37]/20 bg-[#175B37] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {wakeBusy ? 'Reveil…' : 'Reveiller les agents'}
+            {wakeBusy ? 'Activation…' : 'Lancer le swarm'}
           </button>
           <label class="relative block w-full sm:w-52">
             <span class="sr-only">Filtrer les agents</span>
@@ -500,7 +457,7 @@ export default function AgentsGrid() {
             <input
               type="search"
               class="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-xs text-gray-800 outline-none transition focus:border-[#175B37]/50 focus:bg-white focus:ring-2 focus:ring-[#175B37]/15"
-              placeholder="Rechercher (nom, rôle, session…)"
+              placeholder="Rechercher (nom, rôle, id…)"
               value={query}
               onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
             />
@@ -521,6 +478,10 @@ export default function AgentsGrid() {
       {wakeMsg && (
         <div class="rounded-[1.5rem] border border-gray-100 bg-white px-4 py-3 text-xs text-gray-700 shadow-sm">
           {wakeMsg}
+        </div>
+      ) : error && (
+        <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {error}
         </div>
       )}
 
@@ -561,22 +522,6 @@ export default function AgentsGrid() {
         </div>
       </div>
 
-      {error && (
-        <div class="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          {error} — vérifiez le token ZimaOS dans les{' '}
-          <a href="/settings" class="font-medium underline" style={{ color: '#175B37' }}>
-            paramètres
-          </a>
-          .
-        </div>
-      )}
-
-      {activationAdvice?.message && (
-        <div class="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          {activationAdvice.message}
-        </div>
-      )}
-
       {filtered.length > 0 ? (
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((agent) => (
@@ -597,7 +542,13 @@ export default function AgentsGrid() {
           <p class="text-sm text-gray-500">
             {filter !== 'all' || query.trim()
               ? 'Aucun agent ne correspond à ce filtre ou à cette recherche.'
-              : 'Aucune session ZimaOS. Vérifiez que le gateway est démarré et le token configuré.'}
+              : 'Aucun agent configuré dans Forge Core.'}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}ré.'}
           </p>
         </div>
       )}

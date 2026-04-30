@@ -1,3 +1,5 @@
+import { loadAstroDb } from './load-astro-db';
+import { eq } from 'drizzle-orm';
 import { getConfig, setConfig } from './config-db';
 
 export type AgentRuleCategory =
@@ -77,13 +79,26 @@ export async function saveAgentRules(rules: AgentRule[]): Promise<void> {
   await setConfig({ agentPolicyRules: JSON.stringify(rules) });
 }
 
-export async function buildAgentPolicyContext(projectId?: number): Promise<{
+export async function buildAgentPolicyContext(projectId?: number, agentId?: string): Promise<{
   preferredLanguage: string;
   instructionText: string;
   globalRules: AgentRule[];
   scopedRules: AgentRule[];
   strictMode: 'off' | 'warn' | 'enforce';
+  agentPrompt?: string;
 }> {
+  const { db, AgentInstruction } = await loadAstroDb();
+  let agentPrompt = '';
+  if (agentId) {
+    try {
+      const inst = await db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentId)).limit(1);
+      if (inst.length > 0) {
+        agentPrompt = inst[0].systemPrompt || '';
+      }
+    } catch (e) {
+      console.warn(`[agent-rules] Failed to fetch instruction for ${agentId}:`, e);
+    }
+  }
   const all = (await getAgentRules()).filter((r) => r.enabled);
   const globalRules = all.filter((r) => r.scope === 'global');
   const projectRules =
@@ -106,6 +121,7 @@ export async function buildAgentPolicyContext(projectId?: number): Promise<{
       `- [${r.scope}${r.projectId != null ? `#${r.projectId}` : ''}] ${r.category}.${r.field} ${r.operator} ${r.value}`,
   );
   const instructionText = [
+    agentPrompt,
     preferredLanguage === 'en'
       ? 'Always answer in English.'
       : preferredLanguage === 'fr_en'
@@ -121,6 +137,6 @@ export async function buildAgentPolicyContext(projectId?: number): Promise<{
     .filter(Boolean)
     .join('\n\n');
 
-  return { preferredLanguage, instructionText, globalRules, scopedRules, strictMode };
+  return { preferredLanguage, instructionText, globalRules, scopedRules, strictMode, agentPrompt };
 }
 

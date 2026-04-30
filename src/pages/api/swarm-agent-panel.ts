@@ -1,12 +1,6 @@
 // @ts-nocheck
 import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
-import {
-  fetchZimaOSSessionsPayload,
-  normalizeZimaOSSessions,
-  mapSessionToAgentRow,
-} from '../../lib/zimaos-gateway';
-import { findRawSessionForSwarmAgentKey } from '../../lib/swarm-agent-resolve';
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -15,51 +9,7 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function iso(d: unknown): string {
-  if (d instanceof Date) return d.toISOString();
-  if (d == null) return new Date(0).toISOString();
-  return String(d);
-}
-
-function contentPreview(msg: Record<string, unknown>): string {
-  const c = msg.content;
-  if (typeof c === 'string' && c.trim()) return c.trim();
-  if (Array.isArray(c)) {
-    const parts: string[] = [];
-    for (const block of c) {
-      if (!block || typeof block !== 'object') continue;
-      const b = block as Record<string, unknown>;
-      if (typeof b.text === 'string') parts.push(b.text);
-      else if (typeof b.content === 'string') parts.push(b.content);
-    }
-    const joined = parts.join('\n').trim();
-    if (joined) return joined;
-  }
-  if (typeof msg.text === 'string') return msg.text.trim();
-  return '';
-}
-
-function normalizeZimaOSMessages(raw: Record<string, unknown> | null, limit: number) {
-  if (!raw) return [];
-  const msgs = raw.messages;
-  if (!Array.isArray(msgs)) return [];
-  const slice = msgs.slice(-Math.max(1, Math.min(80, limit)));
-  return slice.map((m, idx) => {
-    if (!m || typeof m !== 'object') return null;
-    const o = m as Record<string, unknown>;
-    const role = String(o.role ?? o.type ?? 'message').toLowerCase();
-    const preview = contentPreview(o).slice(0, 2000);
-    const ts =
-      o.timestamp ?? o.createdAt ?? o.updatedAt ?? o.time ?? o.ts ?? idx;
-    return {
-      role,
-      preview: preview.length > 900 ? `${preview.slice(0, 900)}…` : preview,
-      at: iso(typeof ts === 'number' || typeof ts === 'string' ? new Date(Number(ts) || ts) : new Date()),
-    };
-  }).filter(Boolean);
-}
-
-/** GET ?agentId=CHEF_TECHNIQUE — agrège session ZimaOS (messages) + tâches Astro DB pour la fiche swarm. */
+/** GET ?agentId=CHEF_TECHNIQUE — agrège l'état de l'agent et ses missions depuis Astro DB. */
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user?.email) {
     return json({ error: 'Non authentifié' }, 401);
@@ -69,70 +19,64 @@ export const GET: APIRoute = async ({ locals, url }) => {
     return json({ error: 'agentId requis' }, 400);
   }
 
-  const email = locals.user.email as string | undefined;
-
-  let gatewayError: string | null = null;
-  let rawSessions: Record<string, unknown>[] = [];
-  const gw = await fetchZimaOSSessionsPayload(email, {
-    invokeOnly: true,
-    sessionsListArgs: { limit: 120, messageLimit: 48 },
-  });
-  if (gw.ok) {
-    rawSessions = normalizeZimaOSSessions(gw.data) as Record<string, unknown>[];
-  } else {
-    gatewayError = gw.error || 'Gateway indisponible';
-  }
-
-  const matchedRaw = findRawSessionForSwarmAgentKey(rawSessions, agentId);
-  const mapped = matchedRaw ? mapSessionToAgentRow(matchedRaw) : null;
-  const zimaos = mapped
-    ? {
-        matched: true,
-        sessionKey: mapped.id,
-        status: mapped.status,
-        model: mapped.model,
-        lastSeen: mapped.lastSeen,
-        lastSeenMs: mapped.lastSeenMs,
-        messages: normalizeZimaOSMessages(matchedRaw, 48),
-      }
-    : { matched: false, sessionKey: null as string | null, status: null, model: null, lastSeen: null, lastSeenMs: 0, messages: [] };
-
-  let dbTasks: unknown[] = [];
   try {
-    const { db, AgentTask, eq, desc } = await loadAstroDb();
-    dbTasks = await db
+    const { db, AgentTask, AgentInstruction, eq, desc } = await loadAstroDb();
+    
+    // 1. Infos de base de l'agent
+    const instruction = await db
+      .select()
+      .from(AgentInstruction)
+      .where(eq(AgentInstruction.agentId, agentId))
+      .then(rows => rows[0]);
+
+    // 2. Tâches / Missions
+    const dbTasks = await db
       .select()
       .from(AgentTask)
       .where(eq(AgentTask.agentId, agentId))
       .orderBy(desc(AgentTask.createdAt));
-  } catch {
-    dbTasks = [];
+
+    const missionTasks = dbTasks.map((t: any) => ({
+      id: t.id,
+      agentId: t.agentId,
+      task: t.task,
+      input: t.input ?? null,
+      output: t.output ?? null,
+      status: t.status,
+      createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
+      updatedAt: t.updatedAt instanceof Date ? t.updatedAt.toISOString() : String(t.updatedAt),
+    }));
+
+    const st = (s: string) => String(s ?? '').toLowerCase();
+    const running = missionTasks.filter((t) => ['running', 'in_progress'].includes(st(t.status)));
+    const pending = missionTasks.filter((t) => st(t.status) === 'pending');
+    const recentDone = missionTasks.filter((t) =>
+      ['completed', 'success', 'failed', 'bug', 'cancelled', 'resolved'].includes(st(t.status)),
+    );
+
+    return json({
+      ok: true,
+      agentId,
+      agent: instruction ? {
+        enabled: !!instruction.enabled,
+        model: instruction.model,
+        updatedAt: instruction.updatedAt.toISOString(),
+      } : null,
+      buckets: { 
+        running, 
+        pending, 
+        recentDone: recentDone.slice(0, 12) 
+      },
+      // Mock ZimaOS object for frontend compatibility (deprecated)
+      zimaos: {
+        matched: !!instruction,
+        status: instruction?.enabled ? 'actif' : 'en pause',
+        model: instruction?.model || '—',
+        messages: []
+      }
+    });
+  } catch (error: any) {
+    console.error('swarm-agent-panel error:', error);
+    return json({ error: 'Erreur base de données' }, 500);
   }
-
-  const missionTasks = dbTasks.map((t: any) => ({
-    id: t.id,
-    agentId: t.agentId,
-    task: t.task,
-    input: t.input ?? null,
-    output: t.output ?? null,
-    status: t.status,
-    createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : String(t.createdAt),
-    updatedAt: t.updatedAt instanceof Date ? t.updatedAt.toISOString() : String(t.updatedAt),
-  }));
-
-  const st = (s: string) => String(s ?? '').toLowerCase();
-  const running = missionTasks.filter((t) => ['running', 'in_progress'].includes(st(t.status)));
-  const pending = missionTasks.filter((t) => st(t.status) === 'pending');
-  const recentDone = missionTasks.filter((t) =>
-    ['completed', 'success', 'failed', 'bug', 'cancelled', 'resolved'].includes(st(t.status)),
-  );
-
-  return json({
-    ok: true,
-    agentId,
-    gatewayError,
-    zimaos,
-    dbTasks: missionTasks,
-    buckets: { running, pending, recentDone: recentDone.slice(0, 12) },
-  });
 };

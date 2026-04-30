@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ request }) => {
       let envString = '';
       if (env) {
         for (const [key, value] of Object.entries(env)) {
-          envString += `${key}=${value} `;
+          envString += `${key}="${value}" `;
         }
       }
       
@@ -49,9 +49,6 @@ export const POST: APIRoute = async ({ request }) => {
         console.error('Error reading package.json', e);
       }
       
-      // If we are starting prod and we have a build script, we might want to build first,
-      // but building might take too long for a synchronous request. We'll just run the script.
-      // E.g. `npm run build && pm2 start npm --name ... -- run start`
       if (action === 'start_prod') {
           // Check if build is required
           let hasBuild = false;
@@ -63,22 +60,19 @@ export const POST: APIRoute = async ({ request }) => {
           } catch(e) {}
           
           if (hasBuild) {
-              command = `cd ${scriptPath} && npm run build && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              command = `cd ${scriptPath} && npm run build && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
           } else {
-              command = `cd ${scriptPath} && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              command = `cd ${scriptPath} && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
           }
       } else {
-          command = `cd ${scriptPath} && ${envString} pm2 start npm --name "${appName}" -- run ${npmScript}`;
+          command = `cd ${scriptPath} && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
       }
-  
-      // Alternatively, check if ecosystem.config or entry.mjs exists.
-      // But let's assume `npm run dev` for dev environment for now, or build and run.
     } else if (action === 'stop') {
-      command = `pm2 stop "${appName}"`;
+      command = `npx -y pm2 stop "${appName}"`;
     } else if (action === 'delete') {
-      command = `pm2 delete "${appName}"`;
+      command = `npx -y pm2 delete "${appName}"`;
     } else if (action === 'restart') {
-      command = `pm2 restart "${appName}"`;
+      command = `npx -y pm2 restart "${appName}"`;
     } else {
       return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
     }
@@ -99,7 +93,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const GET: APIRoute = async () => {
   try {
-    const { stdout } = await execPromise('pm2 jlist');
+    const { stdout } = await execPromise('npx -y pm2 jlist');
     const list = JSON.parse(stdout);
     return new Response(JSON.stringify(list), {
       status: 200,

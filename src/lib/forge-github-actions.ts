@@ -150,7 +150,69 @@ export async function checkGithubActionsForProjects() {
 
     }
   } catch (error) {
+}
+
+export async function checkGithubPullRequestsForProjects() {
+  try {
+    const { db, Config, Project, AgentAppIssue } = await loadAstroDb();
+    let githubToken = '';
+    try {
+      const rows = await db.select().from(Config).where(eq(Config.key, 'githubToken'));
+      if (rows.length) githubToken = rows[0].value;
+    } catch {}
+    if (!githubToken) return;
+
+    const projects = await db.select().from(Project);
+
+    for (const project of projects) {
+      const projectPath = await resolveProjectPathFromDbProject(project);
+      if (!projectPath || !fs.existsSync(projectPath)) continue;
+
+      let meta;
+      try {
+        meta = summarizeGithubFolder(projectPath);
+      } catch { continue; }
+
+      if (!meta.present || !meta.remoteOriginUrl) continue;
+      const repoInfo = parseGithubRepo(meta.remoteOriginUrl);
+      if (!repoInfo) continue;
+
+      const { owner, repo } = repoInfo;
+
+      const pullsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?state=open`, {
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'ZimaDev'
+        }
+      });
+
+      if (!pullsRes.ok) continue;
+      const pullsData = await pullsRes.json();
+
+      for (const pr of pullsData) {
+        const existing = await db.select().from(AgentAppIssue).where(eq(AgentAppIssue.url, pr.html_url));
+        if (existing.length === 0) {
+          const author = pr.user?.login || 'inconnu';
+          // Type pr_review pour que l'agent sache qu'il doit reviewer
+          await db.insert(AgentAppIssue).values({
+            projectId: project.id,
+            url: pr.html_url,
+            errorType: 'pr_review',
+            title: `Revue de PR #${pr.number} par ${author}`,
+            detail: `Nouvelle Pull Request à examiner : "${pr.title}"\n\nDescription :\n${pr.body || 'Pas de description.'}\n\nAction attendue : Analyser les changements, vérifier la pertinence et appliquer les corrections si nécessaire.`,
+            status: 'open',
+            reportedByAgentId: 'SYSTEM_GITHUB',
+            assigneeAgentId: 'ARCHITECTE_LOGICIEL', // L'architecte est idéal pour les PR
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          console.log(`[github-pulls] Issue de revue créée pour la PR #${pr.number} de ${project.name}`);
+        }
+      }
+    }
+  } catch (error) {
     if (isViteModuleRunnerClosedError(error)) throw error;
-    console.error('[github-actions] Erreur lors de la vérification:', error);
+    console.error('[github-pulls] Erreur lors de la vérification des PR:', error);
   }
 }
