@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import { desc } from 'drizzle-orm';
-import { FORGE_SWARM_AGENT_COUNT } from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
 
 type TaskStats = {
@@ -72,8 +71,8 @@ export const GET: APIRoute = async () => {
     JSON.stringify({
       agents,
       taskStats: taskStatsDb,
-      forgeDefaultSwarmCount: FORGE_SWARM_AGENT_COUNT,
-      swarmDisplayedCount: dbInstructionRowCount,
+      forgeDefaultSwarmCount: agents.length,
+      swarmDisplayedCount: agents.length,
       dbInstructionRowCount,
       dbEnabledInstructionCount,
       swarmInstructionCount: dbEnabledInstructionCount,

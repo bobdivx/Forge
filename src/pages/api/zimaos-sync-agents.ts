@@ -10,7 +10,6 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { getConfig } from '../../lib/config-db';
-import { FORGE_AGENT_INSTRUCTION_ROWS } from '../../lib/agent-instruction-defaults';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { fetchZimaOSAgentsList, fetchZimaOSJson } from '../../lib/zimaos-gateway';
 
@@ -271,14 +270,9 @@ async function resolveSyncTargetAgentIds(autoEnableIfEmpty = false): Promise<{ i
   const { ids: baseIds, autoEnabled } = await getForgeAgentIds(autoEnableIfEmpty);
   if (baseIds.length > 0) return { ids: normalizeAgentIds(baseIds), autoEnabled, adoptedFromGateway: false };
 
-  const defaults = normalizeAgentIds(FORGE_AGENT_INSTRUCTION_ROWS.map((r) => r.agentId));
   const gw = await fetchZimaOSAgentsList(undefined);
   const fromGateway = gw.ok ? normalizeAgentIds(gw.agents.map((a) => String(a.id || '').trim())) : [];
-  const merged = normalizeAgentIds([...defaults, ...fromGateway]);
-  if (merged.length > 0) {
-    return { ids: merged, autoEnabled, adoptedFromGateway: fromGateway.length > 0 };
-  }
-  return { ids: [], autoEnabled, adoptedFromGateway: false };
+  return { ids: fromGateway, autoEnabled, adoptedFromGateway: fromGateway.length > 0 };
 }
 
 async function readVirtualAgentsFromForgeConfig(): Promise<string[]> {
@@ -454,7 +448,7 @@ export async function performZimaOSAgentsSync(containerNameOverride?: string): P
     const { getZimaOSInfraClient } = await import('../../lib/zimaos-infra-client');
     const infra = await getZimaOSInfraClient();
     const { path, candidates } = await resolveZimaOSJsonPath(infra);
-    const { db, ActivityLog } = await loadAstroDb();
+    const { db, ActivityLog, AgentInstruction } = await loadAstroDb();
     const now = new Date();
 
     const { ids: forgeAgentIds, autoEnabled, adoptedFromGateway } = await resolveSyncTargetAgentIds(true);

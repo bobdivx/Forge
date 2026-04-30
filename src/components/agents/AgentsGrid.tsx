@@ -549,10 +549,4 @@ export default function AgentsGrid() {
       )}
     </div>
   );
-}ré.'}
-          </p>
-        </div>
-      )}
-    </div>
-  );
 }

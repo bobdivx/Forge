@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import {
-  FORGE_AGENT_INSTRUCTION_ROWS,
   getInitialSystemPrompt,
 } from '../../lib/agent-instruction-defaults';
 import { SWARM_WORK_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
@@ -25,21 +24,7 @@ export const GET: APIRoute = async ({ url }) => {
     });
   }
 
-  let rows = await db.select().from(AgentInstruction);
-  if (rows.length === 0) {
-    const now = new Date();
-    await db.insert(AgentInstruction).values(
-      FORGE_AGENT_INSTRUCTION_ROWS.map((r) => ({
-        agentId: r.agentId,
-        model: r.model,
-        filePath: `db://${r.agentId}`,
-        systemPrompt: getInitialSystemPrompt(r.agentId),
-        enabled: 1,
-        updatedAt: now,
-      })),
-    );
-    rows = await db.select().from(AgentInstruction);
-  }
+  const rows = await db.select().from(AgentInstruction);
   return new Response(JSON.stringify(rows), {
     headers: { 'Content-Type': 'application/json' },
   });
@@ -92,8 +77,7 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(JSON.stringify({ ok: false, error: `Agent ${agentId} existe déjà` }), { status: 409 });
   }
 
-  const defaultRow = FORGE_AGENT_INSTRUCTION_ROWS.find((r) => r.agentId === agentId);
-  const filePath = customPath || defaultRow?.filePath || `doc/agents/${agentId}.md`;
+  const filePath = customPath || `db://${agentId}`;
   const prompt =
     systemPrompt ||
     `# ${agentId}\n\nVous êtes l'agent ${agentId}. Répondez de manière concise, structurée et orientée action.\n\n${SWARM_WORK_PROTOCOL_SUMMARY}`;
@@ -101,7 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
   await db.insert(AgentInstruction).values({
     agentId,
     model,
-    filePath: `db://${agentId}`, // Placeholder path since we use DB now
+    filePath,
     systemPrompt: prompt,
     enabled,
     updatedAt: new Date(),

@@ -29,6 +29,8 @@ type Props = {
   teamProfile: AgentTeamProfile;
   onSwarmCommand?: (agentId: string, command: SwarmWorkCommand) => void;
   commandBusy?: boolean;
+  commandMessage?: string | null;
+  wakeStatusLabel?: string;
 };
 
 export default function AgentCard({
@@ -37,22 +39,24 @@ export default function AgentCard({
   teamProfile,
   onSwarmCommand,
   commandBusy = false,
+  commandMessage = null,
+  wakeStatusLabel,
 }: Props) {
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   const isWorking = stats.running > 0 || agent.status === 'actif';
   const isHealthy = agent.sanity?.ok;
   
-  let statusLabel = "ACTIF";
+  let statusLabel = wakeStatusLabel || "ACTIF";
   let statusCls = "bg-emerald-50 text-emerald-700 border-emerald-100";
   let dotCls = "bg-emerald-500";
 
   if (isWorking) {
-    statusLabel = "EN TRAVAIL";
+    statusLabel = wakeStatusLabel || "EN TRAVAIL";
     statusCls = "bg-blue-50 text-blue-700 border-blue-100";
     dotCls = "bg-blue-500 animate-pulse";
   } else if (!isHealthy) {
-    statusLabel = "CRÉÉ";
+    statusLabel = wakeStatusLabel || "CRÉÉ";
     statusCls = "bg-amber-50 text-amber-700 border-amber-100";
     dotCls = "bg-amber-500";
   }
@@ -113,6 +117,12 @@ export default function AgentCard({
         ) : (
           <div class="h-10 flex items-center justify-center">
             <span class="text-[10px] font-bold text-gray-300 uppercase tracking-widest">En attente de mission</span>
+          </div>
+        )}
+
+        {commandMessage && (
+          <div class="mt-4 rounded-xl bg-blue-50/50 p-2 text-center text-[10px] font-medium text-blue-600 border border-blue-100/50 animate-pulse">
+            {commandMessage}
           </div>
         )}
       </a>
