@@ -11,6 +11,8 @@ interface Props {
   setHeaderMenuOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
   headerMenuOpen: boolean;
   copyToClipboard: (text: string) => Promise<void>;
+  /** Clic sur la zone « Sélectionnez un membre » (liste agents / scroll vers la colonne). */
+  onEmptyMemberClick?: () => void;
   policyBadge?: {
     mode: 'off' | 'warn' | 'enforce';
     state: 'idle' | 'compliant' | 'non_compliant';
@@ -19,7 +21,7 @@ interface Props {
 
 export default function DiscussionHeader({
   selectedTeamProfile, selectedAgentId, selectedProject, selectedRequest,
-  setHeaderMenuOpen, headerMenuOpen, copyToClipboard, policyBadge
+  setHeaderMenuOpen, headerMenuOpen, copyToClipboard, onEmptyMemberClick, policyBadge
 }: Props) {
   const badgeClass =
     policyBadge?.state === 'compliant'
@@ -41,21 +43,41 @@ export default function DiscussionHeader({
           </div>
         )}
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="truncate text-base font-semibold text-gray-900 sm:text-lg">
-              {selectedTeamProfile?.displayName ?? 'Sélectionnez un membre'}
-            </h2>
-            {selectedTeamProfile ? (
-              <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                {selectedTeamProfile.role}
-              </span>
-            ) : null}
-          </div>
-          <p class="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
-            {selectedTeamProfile
-              ? `Agent ZimaOS · ${selectedTeamProfile.presenceLabel} · modèle ${selectedTeamProfile.modelShort}`
-              : 'Choisissez un membre dans la liste.'}
-          </p>
+          {!selectedTeamProfile && onEmptyMemberClick ? (
+            <button
+              type="button"
+              onClick={() => onEmptyMemberClick()}
+              class="group w-full min-w-0 rounded-xl px-1 py-0.5 text-left transition hover:bg-gray-50 focus-visible:outline focus-visible:ring-2 focus-visible:ring-[#175B37]/25"
+              aria-label="Ouvrir la liste des agents"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="truncate text-base font-semibold text-[#175B37] underline decoration-[#175B37]/30 underline-offset-2 group-hover:decoration-[#175B37] sm:text-lg">
+                  Sélectionnez un membre
+                </h2>
+              </div>
+              <p class="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
+                Touchez ou cliquez pour afficher la liste des agents.
+              </p>
+            </button>
+          ) : (
+            <>
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="truncate text-base font-semibold text-gray-900 sm:text-lg">
+                  {selectedTeamProfile?.displayName ?? 'Sélectionnez un membre'}
+                </h2>
+                {selectedTeamProfile ? (
+                  <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                    {selectedTeamProfile.role}
+                  </span>
+                ) : null}
+              </div>
+              <p class="mt-0.5 truncate text-xs text-gray-500 sm:text-sm">
+                {selectedTeamProfile
+                  ? `Agent ZimaOS · ${selectedTeamProfile.presenceLabel} · modèle ${selectedTeamProfile.modelShort}`
+                  : 'Choisissez un membre dans la liste.'}
+              </p>
+            </>
+          )}
           {(selectedProject || selectedRequest) && (
             <div class="mt-2 flex flex-wrap gap-1.5">
               {selectedProject ? (

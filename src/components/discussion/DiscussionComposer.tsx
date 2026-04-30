@@ -37,6 +37,7 @@ export default function DiscussionComposer() {
   const [routingDebug, setRoutingDebug] = useState<RoutingDebugState | null>(null);
   const [sessionQuery, setSessionQuery] = useState('');
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
   const [ocProfiles, setOcProfiles] = useState<Record<string, ZimaOSAgentProfileRow>>({});
   const [profileDraft, setProfileDraft] = useState({ displayName: '', roleTitle: '', bio: '', avatarUrl: '', avatarEmoji: '' });
   const [profileSaving, setProfileSaving] = useState(false);
@@ -101,6 +102,7 @@ export default function DiscussionComposer() {
     setChat([]);
     setRoutingDebug(null);
     setError(null);
+    setTeamPickerOpen(false);
     const p = teamProfiles[id];
     if (p) {
       setProfileDraft({
@@ -112,6 +114,14 @@ export default function DiscussionComposer() {
       });
     }
     loadHistory(id);
+  };
+
+  const onEmptyMemberClick = () => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+      document.getElementById('discussion-team-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    setTeamPickerOpen(true);
   };
 
   const loadHistory = async (id: string) => {
@@ -259,7 +269,10 @@ export default function DiscussionComposer() {
 
   return (
     <div class="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#ECEFF1] shadow-sm lg:flex-row lg:max-h-[min(85vh,820px)]">
-      <aside class="z-40 flex max-h-[100dvh] w-full flex-col border-gray-200 bg-white shadow-xl lg:w-[min(100%,300px)] lg:shrink-0 lg:border-r lg:shadow-none hidden lg:flex">
+      <aside
+        id="discussion-team-sidebar"
+        class="z-40 flex max-h-[100dvh] w-full flex-col border-gray-200 bg-white shadow-xl lg:w-[min(100%,300px)] lg:shrink-0 lg:border-r lg:shadow-none hidden lg:flex"
+      >
         <AgentSidebar 
           agents={agents} teamProfiles={teamProfiles} agentId={agentId} pickSession={pickSession}
           projects={projects} projectId={projectId} setProjectId={setProjectId}
@@ -275,7 +288,9 @@ export default function DiscussionComposer() {
       <div class="flex min-h-[min(100dvh,680px)] min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
         <DiscussionHeader 
            selectedTeamProfile={selectedTeamProfile} selectedAgentId={agentId} selectedProject={selectedProject} selectedRequest={selectedRequest}
-           setHeaderMenuOpen={setHeaderMenuOpen} headerMenuOpen={headerMenuOpen} copyToClipboard={copyToClipboard} policyBadge={policyBadge}
+           setHeaderMenuOpen={setHeaderMenuOpen} headerMenuOpen={headerMenuOpen} copyToClipboard={copyToClipboard}
+           onEmptyMemberClick={onEmptyMemberClick}
+           policyBadge={policyBadge}
         />
         <ChatThread 
            chat={chat} historyLoading={historyLoading} agentId={agentId} selectedTeamProfile={selectedTeamProfile}
@@ -286,6 +301,52 @@ export default function DiscussionComposer() {
            send={send} applySwarmCommand={applySwarmCommand} swarmCommandMode={swarmCommandMode} setSwarmCommandMode={setSwarmCommandMode}
         />
       </div>
+
+      {teamPickerOpen ? (
+        <div class="fixed inset-0 z-[100] flex items-stretch lg:hidden" role="dialog" aria-modal="true" aria-labelledby="discussion-team-picker-title">
+          <button
+            type="button"
+            class="absolute inset-0 z-0 bg-black/40"
+            aria-label="Fermer"
+            onClick={() => setTeamPickerOpen(false)}
+          />
+          <div class="relative z-10 flex h-full w-[min(100%,340px)] min-h-0 flex-col overflow-hidden bg-white shadow-2xl">
+            <div class="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
+              <h2 id="discussion-team-picker-title" class="text-lg font-semibold text-gray-900">
+                L'équipe
+              </h2>
+              <button
+                type="button"
+                class="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                onClick={() => setTeamPickerOpen(false)}
+                aria-label="Fermer la liste"
+              >
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <AgentSidebar
+                agents={agents}
+                teamProfiles={teamProfiles}
+                agentId={agentId}
+                pickSession={pickSession}
+                projects={projects}
+                projectId={projectId}
+                setProjectId={setProjectId}
+                requests={requests}
+                requestId={requestId}
+                setRequestId={setRequestId}
+                sessionQuery={sessionQuery}
+                setSessionQuery={setSessionQuery}
+                offlineCount={offlineCount}
+                onModelChange={onModelChange}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
