@@ -356,8 +356,6 @@ export default function SettingsForm() {
             onSave={save}
             saving={saving}
             message={message}
-            reposHealth={reposHealth}
-            onRefreshHealth={refreshReposHealth}
           />
         )}
         {activeTab === 'zimaos' && (
@@ -399,6 +397,9 @@ export default function SettingsForm() {
                 /* ignore */
               }
             }}
+            settings={settings}
+            reposHealth={reposHealth}
+            onRefreshHealth={refreshReposHealth}
           />
         )}
       </div>

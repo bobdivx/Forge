@@ -21,7 +21,6 @@ export default function AgentModelMatrix() {
   const [loading, setLoading] = useState(true);
   const [pings, setPings] = useState<Record<string, PingResult>>({});
   const [pinging, setPinging] = useState<Record<string, boolean>>({});
-  const [syncing, setSyncing] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -55,40 +54,7 @@ export default function AgentModelMatrix() {
     }
   }
 
-  async function repairAgent(agentId: string) {
-    setSyncing(agentId);
-    try {
-      const res = await fetch('/api/zimaos-sync-agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId, restart: true }),
-      });
-      const d = await res.json();
-      if (d.ok) {
-        load();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSyncing(null);
-    }
-  }
 
-  async function syncAll() {
-    setSyncing('all');
-    try {
-      const res = await fetch('/api/zimaos-sync-agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restart: true }),
-      });
-      if (res.ok) load();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSyncing(null);
-    }
-  }
 
   if (loading) return <div class="p-12 text-center text-gray-400 animate-pulse font-medium">Synchronisation avec ZimaOS...</div>;
   if (!data) return null;
@@ -99,17 +65,8 @@ export default function AgentModelMatrix() {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
           <StatCard label="Total Agents" value={data.rows.length} color="blue" />
-          <StatCard label="Opérationnels" value={data.rows.filter((r: any) => r.inGatewayRegistry && r.sanity?.ok).length} color="green" />
-          <StatCard label="À Synchroniser" value={data.rows.filter((r: any) => !r.sanity?.ok).length} color="amber" />
+          <StatCard label="Opérationnels" value={data.rows.filter((r: any) => r.backendModel).length} color="green" />
         </div>
-        <button
-          onClick={syncAll}
-          disabled={syncing === 'all'}
-          class="shrink-0 px-6 py-3 rounded-2xl bg-gray-900 text-white font-black text-xs hover:bg-black transition-all shadow-lg shadow-gray-200 disabled:opacity-50 flex items-center gap-2"
-        >
-          {syncing === 'all' ? <span class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
-          SYNCHRONISER TOUT
-        </button>
       </div>
 
       {/* Galerie de Cartes */}
@@ -117,18 +74,10 @@ export default function AgentModelMatrix() {
         {data.rows.map((row: ModelRow) => {
           const ping = pings[row.agentId];
           const isPinging = pinging[row.agentId];
-          const isRepairing = syncing === row.agentId;
-          
-          // Détermination de l'état
           let state = "ACTIF";
           let stateCls = "bg-emerald-50 text-emerald-700 border-emerald-100";
           let dotCls = "bg-emerald-500";
 
-          if (!row.inGatewayRegistry || !row.sanity?.ok) {
-            state = "À SYNCHRONISER";
-            stateCls = "bg-amber-50 text-amber-700 border-amber-100";
-            dotCls = "bg-amber-500 animate-pulse";
-          }
           if (!row.backendModel) {
             state = "INCOMPLET";
             stateCls = "bg-rose-50 text-rose-700 border-rose-100";
@@ -171,13 +120,7 @@ export default function AgentModelMatrix() {
                   </div>
                   
                   {state !== "ACTIF" ? (
-                    <button
-                      onClick={() => repairAgent(row.agentId)}
-                      disabled={isRepairing || syncing === 'all'}
-                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-gray-900 text-white hover:bg-black transition-colors disabled:opacity-50"
-                    >
-                      {isRepairing ? "..." : "SYNCHRONISER"}
-                    </button>
+                    <span class="text-[10px] font-bold text-rose-300">MODÈLE MANQUANT</span>
                   ) : (
                     <span class="text-[10px] font-bold text-gray-300">OPÉRATIONNEL</span>
                   )}

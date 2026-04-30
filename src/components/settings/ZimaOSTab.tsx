@@ -32,10 +32,7 @@ type Props = {
   message: string;
 };
 
-type ProbePayload = {
-  ok?: boolean;
-  checks?: Record<string, { ok: boolean; detail: string }>;
-};
+
 type SshPreflight = {
   ok?: boolean;
   platform?: string;
@@ -47,9 +44,6 @@ const inputCls =
   'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition font-mono';
 
 export default function ZimaOSTab({ settings, setSettings, onSave, saving, message }: Props) {
-  const [testing, setTesting] = useState(false);
-  const [probe, setProbe] = useState<ProbePayload | null>(null);
-  const [probeError, setProbeError] = useState('');
   const [sshTesting, setSshTesting] = useState(false);
   const [sshResult, setSshResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [provisioningKey, setProvisioningKey] = useState(false);
@@ -58,42 +52,7 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
 
   const mode = settings.zimaosAccessMode === 'remote_ssh' ? 'remote_ssh' : 'local_docker';
 
-  const runProbe = async () => {
-    setTesting(true);
-    setProbe(null);
-    setProbeError('');
-    try {
-      const res = await fetch('/api/setup-wizard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'validate',
-          zimaosAccessMode: mode,
-          zimaosRuntimeUrl: settings.zimaosRuntimeUrl,
-          zimaosContainerName: settings.zimaosContainerName,
-          zimaosHost: settings.zimaosHost,
-          zimaosSshPort: settings.zimaosSshPort,
-          zimaosSshUser: settings.zimaosSshUser,
-          zimaosSshAuth: settings.zimaosSshAuth,
-          zimaosSshKeyPath: settings.zimaosSshKeyPath,
-          ollamaUrl: settings.ollamaUrl,
-          forgeReposRoot: settings.forgeReposRoot,
-          dockerYamlDir: settings.dockerYamlDir,
-          dockerAppDataDir: settings.dockerAppDataDir,
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as ProbePayload;
-      if (!res.ok) {
-        setProbeError('Échec du diagnostic ZimaOS.');
-        return;
-      }
-      setProbe(data);
-    } catch {
-      setProbeError('Erreur réseau pendant le diagnostic.');
-    } finally {
-      setTesting(false);
-    }
-  };
+
 
   const testSSH = async () => {
     setSshTesting(true);
@@ -414,27 +373,7 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
         </div>
       )}
 
-      <div class="flex items-center gap-3 flex-wrap">
-        <button
-          type="button"
-          onClick={runProbe}
-          class="text-sm font-medium px-4 py-2 rounded-full border border-gray-200 hover:bg-gray-50"
-          disabled={testing}
-        >
-          {testing ? 'Diagnostic…' : 'Tester communication ZimaOS'}
-        </button>
-        {probeError && <span class="text-xs text-red-700">{probeError}</span>}
-      </div>
 
-      {probe?.checks && (
-        <ul class="space-y-2 text-xs rounded-xl border border-gray-200 bg-white p-4">
-          {Object.entries(probe.checks).map(([k, v]) => (
-            <li key={k} class={v.ok ? 'text-green-700' : 'text-amber-700'}>
-              <span class="font-semibold">{k}</span> - {v.detail}
-            </li>
-          ))}
-        </ul>
-      )}
 
       <SaveRow message={message} saving={saving} onSave={onSave} label="Sauvegarder ZimaOS" />
     </div>

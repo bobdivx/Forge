@@ -1,15 +1,6 @@
 {
 	"folders": [
 		{
-			"path": "../../Docker/AppData/ollama-nvidia"
-		},
-		{
-			"path": "../../Docker/AppData/open-webui"
-		},
-		{
-			"path": "X:/AppData/zimaos"
-		},
-		{
 			"path": "."
 		}
 	],

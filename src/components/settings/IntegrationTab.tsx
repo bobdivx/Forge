@@ -1,6 +1,5 @@
-import FormField from '../ui/FormField';
+import { useState, useEffect } from 'preact/hooks';
 import SaveRow from '../ui/SaveRow';
-import { useState } from 'preact/hooks';
 
 type Config = {
   forgePublicUrl: string;
@@ -28,36 +27,6 @@ type ZimaOSProbe = {
 };
 
 type BindSuggestion = { hostPath: string; containerPath: string };
-type ValueSource = 'env' | 'database' | 'fallback';
-type NetworkMatrixPayload = {
-  forge?: {
-    resolvedBaseUrl?: string;
-    source?: ValueSource;
-    envValue?: string | null;
-    dbValue?: string | null;
-  };
-  zimaosRuntime?: {
-    resolvedBaseUrl?: string;
-    source?: ValueSource | string;
-    envValue?: string | null;
-    dbValue?: string | null;
-    candidates?: string[];
-  };
-  ollama?: {
-    resolvedBaseUrl?: string | null;
-    source?: ValueSource;
-    envHost?: string | null;
-    envOrigin?: string | null;
-    dbValue?: string | null;
-    endpointTags?: string | null;
-  };
-  probes?: {
-    forgeLogin?: { ok?: boolean; status?: number; error?: string };
-    zimaosHealth?: { ok?: boolean; status?: number; error?: string };
-    ollamaTags?: { ok?: boolean; status?: number; error?: string };
-  };
-  timestamp?: string;
-};
 
 type ReposHealth = {
   status?: string;
@@ -75,22 +44,58 @@ type Props = {
   onSave: () => void;
   saving: boolean;
   message: string;
-  reposHealth?: ReposHealth | null;
-  onRefreshHealth?: () => void;
 };
 
 const inputCls =
-  'w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-[#175B37] focus:ring-1 focus:ring-[#175B37]/20 outline-none transition font-mono';
+  'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:bg-white focus:border-[#175B37] focus:ring-4 focus:ring-[#175B37]/10 outline-none transition-all font-mono shadow-inner';
 
-function SectionTitle({ n, title, subtitle }: { n: string; title: string; subtitle?: string }) {
+function Card({ children, icon, title, description }: { children: any; icon: any; title: string; description: string }) {
   return (
-    <div class="border-b border-gray-100 pb-4 mb-6">
-      <p class="text-[10px] font-bold text-[#175B37] uppercase tracking-widest mb-1">{n}</p>
-      <h2 class="text-lg font-bold text-gray-900">{title}</h2>
-      {subtitle && <p class="text-xs text-gray-500 mt-1.5 max-w-3xl">{subtitle}</p>}
+    <div class="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-300 relative overflow-hidden group">
+      <div class="absolute -right-12 -top-12 w-32 h-32 bg-gray-50 rounded-full blur-3xl opacity-50 group-hover:bg-[#175B37]/5 transition-colors duration-500" />
+      <div class="relative z-10 flex gap-4 mb-6">
+        <div class="shrink-0 w-12 h-12 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-[#175B37] group-hover:bg-[#175B37]/10 group-hover:border-[#175B37]/20 transition-colors">
+          {icon}
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-gray-900">{title}</h3>
+          <p class="text-xs text-gray-500 mt-1 leading-relaxed">{description}</p>
+        </div>
+      </div>
+      <div class="relative z-10 space-y-5">
+        {children}
+      </div>
     </div>
   );
 }
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: any }) {
+  return (
+    <div class="space-y-1.5">
+      <label class="block text-sm font-semibold text-gray-800">{label}</label>
+      {children}
+      {hint && <p class="text-[11px] text-gray-500 font-medium leading-tight">{hint}</p>}
+    </div>
+  );
+}
+
+const IconNetwork = () => (
+  <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+  </svg>
+);
+
+const IconFolder = () => (
+  <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+  </svg>
+);
+
+const IconDocker = () => (
+  <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+  </svg>
+);
 
 export default function IntegrationTab({
   settings,
@@ -98,400 +103,179 @@ export default function IntegrationTab({
   onSave,
   saving,
   message,
-  reposHealth,
-  onRefreshHealth,
 }: Props) {
-  const [networkMatrix, setNetworkMatrix] = useState<NetworkMatrixPayload | null>(null);
-  const [networkLoading, setNetworkLoading] = useState(false);
-  const [networkError, setNetworkError] = useState('');
-  const [copyMessage, setCopyMessage] = useState('');
+  const [reposHealth, setReposHealth] = useState<ReposHealth | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadNetworkMatrix = async () => {
-    setNetworkLoading(true);
-    setNetworkError('');
+  const fetchHealth = async () => {
+    setIsRefreshing(true);
     try {
-      const res = await fetch('/api/network-matrix');
-      const data = (await res.json().catch(() => ({}))) as NetworkMatrixPayload;
-      if (!res.ok) {
-        setNetworkError('Diagnostic réseau indisponible.');
-        setNetworkMatrix(null);
-        return;
-      }
-      setNetworkMatrix(data);
+      const r = await fetch('/api/forge-repos-health');
+      const h = await r.json();
+      setReposHealth(typeof h === 'object' && h ? h : null);
     } catch {
-      setNetworkError('Erreur réseau pendant le diagnostic.');
-      setNetworkMatrix(null);
+      setReposHealth(null);
     } finally {
-      setNetworkLoading(false);
+      setTimeout(() => setIsRefreshing(false), 500);
     }
   };
 
-  const sourceBadgeClass = (source?: string) => {
-    if (source === 'env') return 'bg-blue-50 text-blue-700 border-blue-200';
-    if (source === 'database') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    return 'bg-amber-50 text-amber-700 border-amber-200';
-  };
-  const probeBadgeClass = (ok?: boolean) =>
-    ok ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200';
+  useEffect(() => {
+    fetchHealth();
+    const t = setInterval(fetchHealth, 15000);
+    return () => clearInterval(t);
+  }, []);
 
-  const copyNetworkMatrix = async () => {
-    if (!networkMatrix) return;
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-      setCopyMessage('Copie non disponible dans ce navigateur.');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(networkMatrix, null, 2));
-      setCopyMessage('Diagnostic copié dans le presse-papiers.');
-    } catch {
-      setCopyMessage('Échec de copie.');
-    }
-    setTimeout(() => setCopyMessage(''), 2200);
-  };
-
-  const st = reposHealth?.status ?? '';
-  const healthyRepos = st === 'ok';
-  const probe = reposHealth?.zimaosProbe;
-  const bindMounts = (probe?.mounts ?? []).filter((m) => m.type === 'bind' && m.destination);
-  const dockerUnavailable = Boolean(probe?.dockerError && /docker.*(enoent|inaccessible)/i.test(probe.dockerError));
   const suggestions: BindSuggestion[] = Array.isArray(reposHealth?.zimaosBindSuggestions)
     ? (reposHealth.zimaosBindSuggestions as BindSuggestion[])
     : [];
   const datalistId = 'forge-repos-root-suggestions';
 
   return (
-    <div class="p-6 space-y-10">
-      <p class="text-xs text-gray-500 -mt-1">
-        Tout ce qui lie <strong>Forge</strong> (ce serveur) à <strong>ZimaOS</strong> (agents) et au <strong>disque</strong>{' '}
-        des dépôts Git. Une seule sauvegarde en bas de page.
-      </p>
-
-      {/* ── ZimaOS / réseau ───────────────────────────────────────────── */}
-      <section>
-        <SectionTitle
-          n="Étape 1"
-          title="ZimaOS — runtime & conteneur"
-          subtitle="Communication Docker-first: URL runtime + montages volumes. Les URLs sont résolues côté serveur Forge, pas dans le navigateur."
-        />
-        <div class="space-y-4 max-w-3xl">
-          <div class="rounded-xl border border-gray-200 bg-gray-50/70 p-3">
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-              <p class="text-xs text-gray-600">
-                Diagnostic live des URLs réellement résolues par le serveur Forge.
-              </p>
-              <button
-                type="button"
-                onClick={loadNetworkMatrix}
-                class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
-                disabled={networkLoading}
-              >
-                {networkLoading ? 'Diagnostic…' : 'Diagnostic réseau'}
-              </button>
-            </div>
-            {networkError && <p class="text-[11px] text-red-600 mt-2">{networkError}</p>}
-            {networkMatrix && (
-              <div class="mt-3 space-y-2 text-[11px]">
-                {(networkMatrix.forge?.source === 'env' && networkMatrix.forge?.dbValue) ||
-                (networkMatrix.zimaosRuntime?.source === 'env' && networkMatrix.zimaosRuntime?.dbValue) ? (
-                  <p class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-2 py-1.5">
-                    Une variable d’environnement écrase une valeur enregistrée en base. C’est normal, mais la valeur UI peut sembler ignorée tant que l’env est définie.
-                  </p>
-                ) : null}
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <div class="rounded-lg border border-gray-200 bg-white p-2">
-                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Forge</p>
-                    <p class="font-mono break-all text-gray-800">{networkMatrix.forge?.resolvedBaseUrl || '—'}</p>
-                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.forge?.source)}`}>
-                      source: {networkMatrix.forge?.source || '—'}
-                    </span>
-                  </div>
-                  <div class="rounded-lg border border-gray-200 bg-white p-2">
-                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">ZimaOS</p>
-                    <p class="font-mono break-all text-gray-800">{networkMatrix.zimaosRuntime?.resolvedBaseUrl || '—'}</p>
-                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.zimaosRuntime?.source)}`}>
-                      source: {networkMatrix.zimaosRuntime?.source || '—'}
-                    </span>
-                  </div>
-                  <div class="rounded-lg border border-gray-200 bg-white p-2">
-                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Ollama</p>
-                    <p class="font-mono break-all text-gray-800">{networkMatrix.ollama?.resolvedBaseUrl || '—'}</p>
-                    <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.ollama?.source)}`}>
-                      source: {networkMatrix.ollama?.source || '—'}
-                    </span>
-                  </div>
-                </div>
-                <div class="rounded-lg border border-gray-200 bg-white p-2">
-                  <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Probes serveur</p>
-                  <div class="flex flex-wrap gap-2">
-                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.forgeLogin?.ok)}`}>
-                      Forge /login: {networkMatrix.probes?.forgeLogin?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.forgeLogin?.status ?? 0})
-                    </span>
-                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.zimaosHealth?.ok)}`}>
-                      Runtime ZimaOS /health: {networkMatrix.probes?.zimaosHealth?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.zimaosHealth?.status ?? 0})
-                    </span>
-                    <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.ollamaTags?.ok)}`}>
-                      Ollama /api/tags: {networkMatrix.probes?.ollamaTags?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.ollamaTags?.status ?? 0})
-                    </span>
-                  </div>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={copyNetworkMatrix}
-                    class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-                  >
-                    Copier diagnostic
-                  </button>
-                  {copyMessage && <p class="text-[11px] text-gray-600">{copyMessage}</p>}
-                </div>
-                <details class="rounded-lg border border-gray-200 bg-white p-2">
-                  <summary class="cursor-pointer text-gray-700 font-medium">
-                    Détails techniques (env/base/fallback)
-                  </summary>
-                  <pre class="mt-2 text-[10px] leading-relaxed whitespace-pre-wrap break-all text-gray-700">
-                    {JSON.stringify(networkMatrix, null, 2)}
-                  </pre>
-                </details>
-              </div>
-            )}
-          </div>
-
-          <FormField
-            label="Nom du conteneur ZimaOS (Docker)"
-            hint="Vide = auto (docker ps, nom contenant « zimaos »). Sert à lister les volumes et à vérifier que le répertoire des apps existe dans le conteneur."
-          >
-            <input
-              type="text"
-              placeholder="zimaos"
-              value={settings.zimaosContainerName}
-              onInput={(e) =>
-                setSettings({ ...settings, zimaosContainerName: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
-          <FormField
-            label="URL Forge joignable par les agents (hooks)"
-            hint="Vue depuis ZimaOS/agents. Production Docker: http://forge-host:4331. Dev hôte: http://forge-host:4321. Exemple LAN: http://<ip-nas>:4331."
-          >
-            <input
-              type="url"
-              placeholder="http://forge-host:4331 ou http://192.168.x.x:4331"
-              value={settings.forgePublicUrl}
-              onInput={(e) =>
-                setSettings({ ...settings, forgePublicUrl: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
-          <FormField label="URL runtime ZimaOS" hint="URL joignable depuis Forge. Production Docker: http://host.docker.internal:24190. Dev hôte: http://127.0.0.1:24190. En interne ZimaOS: 18789.">
-            <input
-              type="url"
-              placeholder="http://host.docker.internal:24190"
-              value={settings.zimaosRuntimeUrl}
-              onInput={(e) =>
-                setSettings({ ...settings, zimaosRuntimeUrl: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
+    <div class="p-6 space-y-6 bg-gray-50/30">
+      
+      {/* Header */}
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h2 class="text-2xl font-black text-gray-900 tracking-tight">Docker & Chemins</h2>
+          <p class="text-sm text-gray-500 mt-1 max-w-2xl">
+            Configuration physique des chemins et de l'intégration système. 
+            Définissez comment Forge accède aux dépôts Git sur l'hôte et dans les conteneurs.
+          </p>
         </div>
-      </section>
+      </div>
 
-      {/* ── Santé + chemins ─────────────────────────────────────────────── */}
-      <section>
-        <SectionTitle
-          n="Étape 2"
-          title="Disque — applications & Docker"
-          subtitle="Le répertoire des applications doit être le même chemin absolu que les agents voient dans ZimaOS (bind mount identique hôte → conteneur, ex. /media/GitHub:/media/GitHub)."
-        />
-        <p class="text-[11px] text-gray-500 max-w-3xl mb-4 leading-relaxed">
-          Forge et ZimaOS sont bien <strong>deux conteneurs différents</strong>, mais ils tournent en général sous le{' '}
-          <strong>même moteur Docker</strong> sur le NAS : le démon sur l’hôte connaît <em>tous</em> les conteneurs. Quand
-          le conteneur Forge exécute <code class="font-mono text-gray-600">docker inspect zimaos</code>, c’est via le
-          socket <code class="font-mono text-gray-600">/var/run/docker.sock</code> (ou équivalent) vers cet hôte — ce
-          n’est pas Forge qui « entre » dans le conteneur ZimaOS par le réseau applicatif. Sur Vercel / sans accès au
-          démon Docker, la sonde échoue : saisie manuelle ou{' '}
-          <code class="font-mono text-gray-600">FORGE_DISABLE_ZIMAOS_PATH_PROBE=1</code>.
-        </p>
-
-        {reposHealth && (
-          <div
-            class={`text-xs rounded-xl px-4 py-3 mb-6 space-y-2 border ${
-              healthyRepos
-                ? 'bg-emerald-50/90 border-emerald-100 text-emerald-900'
-                : 'bg-amber-50/90 border-amber-100 text-amber-950'
-            }`}
-            role="status"
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-6">
+          <Card 
+            title="Connectivité Serveur" 
+            description="Exposition de Forge pour permettre aux agents de communiquer via des webhooks."
+            icon={<IconNetwork />}
           >
-            <div class="flex items-start justify-between gap-2 flex-wrap">
-              <p class="font-semibold">
-                Vérification Forge + conteneur{' '}
-                <span class="font-normal opacity-80">{reposHealth.path ? `→ ${reposHealth.path}` : ''}</span>
-              </p>
-              {onRefreshHealth && (
-                <button
-                  type="button"
-                  onClick={() => onRefreshHealth()}
-                  class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-lg border border-current/20 hover:opacity-80"
-                >
-                  Actualiser
-                </button>
+            <Field label="URL Forge (Vue par les agents)" hint="Ex: http://forge-host:4331 ou http://192.168.x.x:4331">
+              <input
+                type="url"
+                placeholder="http://192.168.1.100:4331"
+                value={settings.forgePublicUrl}
+                onInput={(e) => setSettings({ ...settings, forgePublicUrl: (e.target as HTMLInputElement).value })}
+                class={inputCls}
+              />
+            </Field>
+          </Card>
+
+          <Card 
+            title="Configuration Docker" 
+            description="Emplacements physiques des stacks et données d'application sur le NAS."
+            icon={<IconDocker />}
+          >
+            <Field label="Dossier des stacks (Docker YAML)" hint="Chemin où se trouvent les fichiers docker-compose.yml">
+              <input
+                type="text"
+                value={settings.dockerYamlDir}
+                onInput={(e) => setSettings({ ...settings, dockerYamlDir: (e.target as HTMLInputElement).value })}
+                class={inputCls}
+              />
+            </Field>
+            <Field label="Dossier AppData (Volumes)" hint="Chemin racine pour les données persistantes des conteneurs">
+              <input
+                type="text"
+                value={settings.dockerAppDataDir}
+                onInput={(e) => setSettings({ ...settings, dockerAppDataDir: (e.target as HTMLInputElement).value })}
+                class={inputCls}
+              />
+            </Field>
+          </Card>
+        </div>
+
+        <div class="space-y-6">
+          <Card 
+            title="Racine des Applications" 
+            description="Le point de montage partagé (bind mount) contenant tous les dépôts Git."
+            icon={<IconFolder />}
+          >
+            <Field label="Chemin Hôte (NAS / Machine Physique)" hint="Le dossier source (ex: /mnt/GitHub) vu par le moteur Docker.">
+              <input
+                type="text"
+                list={suggestions.length ? datalistId : undefined}
+                value={settings.forgeReposRoot}
+                onInput={(e) => setSettings({ ...settings, forgeReposRoot: (e.target as HTMLInputElement).value })}
+                class={inputCls}
+              />
+              {suggestions.length > 0 && (
+                <datalist id={datalistId}>
+                  {suggestions.map((s) => (
+                    <option key={s.hostPath} value={s.hostPath}>
+                      {`ZimaOS : ${s.containerPath}`}
+                    </option>
+                  ))}
+                </datalist>
               )}
-            </div>
-            <p>{reposHealth.summary}</p>
-            {typeof reposHealth.gitReposFound === 'number' && (
-              <p class="font-mono text-[11px] opacity-90">Dépôts Git (racine) : {reposHealth.gitReposFound}</p>
-            )}
-            {reposHealth.zimaosNote && (
-              <p class="text-[11px] opacity-90 border-t border-current/10 pt-2 mt-2">{reposHealth.zimaosNote}</p>
-            )}
-            {probe?.attempted && !dockerUnavailable && (
-              <div class="border-t border-current/10 pt-3 mt-2 space-y-2">
-                <p class="font-semibold">
-                  ZimaOS (Docker){' '}
-                  {probe.containerName ? <span class="font-mono font-normal">· {probe.containerName}</span> : null}
-                </p>
-                {probe.dockerError && (
-                  <p class="text-[11px] text-red-700 bg-red-50/80 rounded px-2 py-1">{probe.dockerError}</p>
-                )}
-                {probe.skipReason && !probe.dockerError && (
-                  <p class="text-[11px] opacity-90">{probe.skipReason}</p>
-                )}
-                {probe.pathTested && (
-                  <p class="text-[11px] font-mono break-all">
-                    Test <code class="text-[10px]">test -d</code> dans le conteneur : <strong>{probe.pathTested}</strong> →{' '}
-                    {probe.pathExistsInContainer ? (
-                      <span class="text-emerald-700">présent</span>
-                    ) : (
-                      <span class="text-red-700">absent</span>
-                    )}
-                    {probe.likelyMountMatch ? ' · bind couvrant ce chemin' : ''}
-                  </p>
-                )}
-                {bindMounts.length > 0 && (
-                  <details class="text-[11px]">
-                    <summary class="cursor-pointer font-medium opacity-90">
-                      Volumes bind ({bindMounts.length}) — chemins dans le conteneur
-                    </summary>
-                    <ul class="mt-2 space-y-1 font-mono max-h-40 overflow-y-auto pl-3 list-disc">
-                      {bindMounts.slice(0, 24).map((m) => (
-                        <li key={m.destination}>
-                          <span class="text-emerald-800">{m.destination}</span>
-                          <span class="opacity-60"> ← </span>
-                          <span class="break-all">{m.source}</span>
-                        </li>
-                      ))}
-                      {bindMounts.length > 24 && <li>… {bindMounts.length - 24} autre(s)</li>}
-                    </ul>
-                  </details>
-                )}
-                {!probe.pathExistsInContainer && probe.attempted && probe.containerName && (
-                  <p class="text-[11px]">
-                    Ajustez le compose ZimaOS ou le « Répertoire des applications » pour qu’il corresponde à une{' '}
-                    <span class="font-mono">Destination</span> listée ci-dessus.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div class="space-y-4 max-w-3xl">
-          <FormField
-            label="Répertoire des applications"
-            hint="Chemin sur la machine où tourne Forge (= hôte du bind, colonne Source). Un sous-dossier = une app. Cliquez une suggestion ci-dessous ou saisissez à la main après « Actualiser » si Docker est joignable."
-          >
-            <input
-              type="text"
-              list={suggestions.length ? datalistId : undefined}
-              value={settings.forgeReposRoot}
-              onInput={(e) =>
-                setSettings({ ...settings, forgeReposRoot: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
+            </Field>
+            
             {suggestions.length > 0 && (
-              <datalist id={datalistId}>
-                {suggestions.map((s) => (
-                  <option key={s.hostPath} value={s.hostPath}>
-                    {`ZimaOS : ${s.containerPath}`}
-                  </option>
-                ))}
-              </datalist>
-            )}
-          </FormField>
-          {suggestions.length > 0 && (
-            <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-3">
-              <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
-                Dossiers montés (bind) — même chemin hôte que dans ZimaOS
-              </p>
-              <ul class="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
-                {suggestions.map((s) => (
-                  <li key={`${s.hostPath}:${s.containerPath}`}>
+              <div class="bg-gray-50 rounded-2xl border border-gray-100 p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class={`flex w-2 h-2 rounded-full ${isRefreshing ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-500'}`} />
+                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Montages détectés</span>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={fetchHealth}
+                    class={`p-1 rounded hover:bg-gray-200 transition-colors ${isRefreshing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isRefreshing}
+                  >
+                    <svg class={`w-3.5 h-3.5 text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                  {suggestions.map((s) => (
                     <button
                       type="button"
                       onClick={() => setSettings({ ...settings, forgeReposRoot: s.hostPath })}
-                      class={`w-full text-left text-xs font-mono rounded-lg px-3 py-2 border transition-colors ${
+                      class={`w-full flex flex-col items-start px-4 py-3 rounded-xl border transition-all ${
                         settings.forgeReposRoot.trim() === s.hostPath
-                          ? 'border-[#175B37] bg-[#E9F3EB] text-[#0B2717]'
-                          : 'border-gray-200 bg-white hover:border-gray-300 text-gray-800'
+                          ? 'bg-white border-[#175B37] shadow-sm ring-1 ring-[#175B37]/20'
+                          : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm text-gray-600'
                       }`}
                     >
-                      <span class="block text-[11px] text-gray-500 mb-0.5">Hôte (Forge) — à enregistrer</span>
-                      <span class="text-emerald-900">{s.hostPath}</span>
-                      <span class="block text-[10px] text-gray-500 mt-1">
-                        dans ZimaOS : <span class="text-gray-700">{s.containerPath}</span>
-                      </span>
+                      <div class="flex items-center gap-2 w-full">
+                        <span class="text-[10px] uppercase font-bold text-gray-400 w-12 text-left">Hôte</span>
+                        <span class={`font-mono text-xs font-semibold truncate ${settings.forgeReposRoot.trim() === s.hostPath ? 'text-[#175B37]' : 'text-gray-900'}`}>
+                          {s.hostPath}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2 w-full mt-1.5 pt-1.5 border-t border-gray-50">
+                        <span class="text-[10px] uppercase font-bold text-gray-400 w-12 text-left">Agent</span>
+                        <span class="font-mono text-[11px] truncate text-gray-500">
+                          {s.containerPath}
+                        </span>
+                      </div>
                     </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {probe?.attempted && suggestions.length === 0 && !probe.dockerError && (
-            <p class="text-[11px] text-gray-500">
-              Aucun bind mount listé (conteneur sans volumes typiques ou inspect incomplet). Saisie manuelle ou
-              vérifiez le nom du conteneur.
-            </p>
-          )}
-          <FormField
-            label="Racine des projets vue par les agents (NAS)"
-            hint="Chemin dans le conteneur / sur le NAS (ex. /mnt/GitHub). Utilisée pour traduire les chemins dans les instructions agents. Souvent le Destination du bind des apps."
-          >
-            <input
-              type="text"
-              value={settings.forgeReposRootAgent}
-              onInput={(e) =>
-                setSettings({ ...settings, forgeReposRootAgent: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
-          <FormField label="Dossier Docker YAML" hint="Repère pour vos stacks sur le NAS.">
-            <input
-              type="text"
-              value={settings.dockerYamlDir}
-              onInput={(e) =>
-                setSettings({ ...settings, dockerYamlDir: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
-          <FormField label="Dossier AppData Docker">
-            <input
-              type="text"
-              value={settings.dockerAppDataDir}
-              onInput={(e) =>
-                setSettings({ ...settings, dockerAppDataDir: (e.target as HTMLInputElement).value })
-              }
-              class={inputCls}
-            />
-          </FormField>
-        </div>
-      </section>
+                  ))}
+                </div>
+              </div>
+            )}
 
-      <SaveRow message={message} saving={saving} onSave={onSave} label="Sauvegarder l’intégration" />
+            <div class="pt-2">
+              <Field label="Chemin Agent (Intérieur du conteneur)" hint="Le chemin de destination utilisé par les LLMs dans leur environnement. Souvent identique à l'hôte.">
+                <input
+                  type="text"
+                  value={settings.forgeReposRootAgent}
+                  onInput={(e) => setSettings({ ...settings, forgeReposRootAgent: (e.target as HTMLInputElement).value })}
+                  class={inputCls}
+                />
+              </Field>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <div class="pt-4">
+        <SaveRow message={message} saving={saving} onSave={onSave} label="Sauvegarder l'intégration" />
+      </div>
     </div>
   );
 }
