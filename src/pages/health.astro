@@ -2,418 +2,260 @@
 // src/pages/health.astro
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import { loadAstroDb } from '../lib/load-astro-db';
-import {
-  getZimaOSGatewayBaseUrl,
-  fetchZimaOSSessionsPayload,
-  normalizeZimaOSSessions,
-  fetchZimaOSAgentsList,
-  fetchZimaOSModelCatalog,
-  fetchZimaOSJson,
-  getZimaOSClientDebugMeta,
-} from '../lib/zimaos-gateway';
 import { getAllConfig, getConfig } from '../lib/config-db';
 
 const config = await getAllConfig();
 const { db, AgentInstruction, ActivityLog, AgentBudget, Heartbeat, sql, desc } = await loadAstroDb();
-const ocDebug = await getZimaOSClientDebugMeta();
 
-// 1. Gateway Health & Auth
-const gatewayUrl = await getZimaOSGatewayBaseUrl();
-const gatewayToken = (await getConfig('zimaosToken')) || 'casaos';
-
-// 2. Sessions & Agents
-const userEmail = Astro.locals.user?.email;
-const gatewayRes = await fetchZimaOSSessionsPayload(userEmail);
-const sessions = gatewayRes.ok ? normalizeZimaOSSessions(gatewayRes.data) : [];
-const gatewayError = !gatewayRes.ok ? gatewayRes.error : null;
-const gatewayAttempts = gatewayRes.attempts ?? [];
-
+// 1. Forge Agents
 const forgeAgents = await db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`);
-const forgeIds = forgeAgents.map(a => a.agentId.toLowerCase());
-const activeSessionIds = sessions.map((s: any) => (s.id || s.key || s.sessionKey || '').toLowerCase());
+const forgeIds = forgeAgents.map(a => a.agentId);
 
-// On considère "Connecté" si l'agent a une session active
-const connectedAgentsCount = forgeIds.filter(id => activeSessionIds.includes(id)).length;
-
-// 3. Ollama Status & Model Catalog
-let availableModels: string[] = [];
-let agentRegistryOk = false;
-let catalogOk = false;
-try {
-    // a. Discovery par les agents (traditionnel)
-    const agentsRes = await fetchZimaOSAgentsList(userEmail);
-    if (agentsRes.ok) {
-        agentRegistryOk = true;
-        agentsRes.agents.forEach(a => availableModels.push(`zimaos/${a.id}`));
-    }
-    
-    // b. Discovery par le catalogue global (Ollama NAS / Windows)
-    const { fetchZimaOSModelCatalog } = await import('../lib/zimaos-gateway');
-    const catalogRes = await fetchZimaOSModelCatalog(userEmail);
-    if (catalogRes.ok) {
-        catalogOk = true;
-        catalogRes.models.forEach(m => {
-            const id = `zimaos/${m.id}`;
-            if (!availableModels.includes(id)) availableModels.push(id);
-        });
-    }
-
-    if (!agentsRes.ok && !catalogRes.ok) {
-        console.warn('[Health] Discovery error:', agentsRes.error || catalogRes.error);
-    }
-} catch (e) {
-    console.error('[Health] Failed to sync models:', e);
-}
-
-// 3-bis. Outils gateway (diagnostic complet, read-only)
-const toolsProbePayloads = [
-  { key: 'sessions_list', body: { tool: 'sessions_list', action: 'json', args: { limit: 1, messageLimit: 0 } } },
-  { key: 'agents_list', body: { tool: 'agents_list', action: 'json', args: {} } },
-  { key: 'models_list', body: { tool: 'models_list', action: 'json', args: {} } },
-] as const;
-
-const toolChecks = await Promise.all(
-  toolsProbePayloads.map(async (probe) => {
-    const res = await fetchZimaOSJson(userEmail, '/tools/invoke', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(probe.body),
-    });
-    const dataObj = (res.data && typeof res.data === 'object') ? (res.data as Record<string, unknown>) : {};
-    const errMsg =
-      (dataObj.error && typeof dataObj.error === 'object'
-        ? String((dataObj.error as Record<string, unknown>).message ?? '')
-        : typeof dataObj.error === 'string'
-          ? dataObj.error
-          : '') || res.error || '';
-    const unavailable = /tool not available/i.test(errMsg);
-    return {
-      tool: probe.key,
-      ok: res.ok && !unavailable,
-      status: res.status,
-      message: unavailable ? errMsg : (res.ok ? 'OK' : (errMsg || `HTTP ${res.status}`)),
-    };
-  }),
-);
-
-const v1ModelsCheck = await fetchZimaOSJson(userEmail, '/v1/models');
-const healthCheck = await fetchZimaOSJson(userEmail, '/health');
-const resolvedSessionAttempt = gatewayAttempts.find((a) => a.ok && a.parsedCount > 0) ?? null;
-const noisySessionAttempts = gatewayAttempts.filter(
-  (a) => !resolvedSessionAttempt || a.via !== resolvedSessionAttempt.via,
-);
-
-const zimaosBlockers: string[] = [];
-const zimaosWarnings: string[] = [];
-if (!gatewayRes.ok) {
-  zimaosBlockers.push(`Gateway sessions indisponible: ${gatewayError || 'erreur inconnue'}`);
-}
-if (sessions.length === 0) {
-  zimaosBlockers.push('Aucune session active détectée (Discussion sera vide).');
-}
-for (const tc of toolChecks) {
-  if (!tc.ok) {
-    if (tc.tool === 'models_list') {
-      zimaosWarnings.push(`Tool ${tc.tool} indisponible: ${tc.message} (non bloquant si modèles détectés via /v1/models ou fallback).`);
-    } else {
-      zimaosBlockers.push(`Tool ${tc.tool} indisponible: ${tc.message}`);
-    }
-  }
-}
-if (!v1ModelsCheck.ok && availableModels.length === 0) {
-  zimaosBlockers.push(`Catalogue modèles indisponible: ${v1ModelsCheck.error || `HTTP ${v1ModelsCheck.status}`}`);
-}
-if (!agentRegistryOk) {
-  zimaosBlockers.push('agents_list non fonctionnel: Forge ne peut pas confirmer le registre d’agents ZimaOS.');
-}
-if (!catalogOk && availableModels.length === 0) {
-  zimaosBlockers.push('Aucun modèle détecté via ZimaOS/Ollama.');
-}
-if (v1ModelsCheck.ok && availableModels.length > 0) {
-  zimaosWarnings.push('/v1/models répond 200 mais format/liste non exploitable par Forge ; fallback catalogue actif.');
-}
-
-// 4. Budget Status & Auto-Seeding (Robust approach)
+// 2. Budgets
 let budgets = await db.select().from(AgentBudget);
-if (budgets.length === 0 && forgeAgents.length > 0) {
-    const seed = forgeAgents.map(a => ({
-        agentId: a.agentId,
-        monthlyCents: 500,
-        alertThreshold: 80,
-        enabled: 1,
-        updatedAt: new Date()
-    }));
-    try {
-        await db.insert(AgentBudget).values(seed);
-        budgets = await db.select().from(AgentBudget);
-    } catch(e) { console.error('[Health] Seeding failed', e); }
-}
-// Protection contre console columns missing ou mismatch runtime
 const activeBudgetsCount = budgets.filter(b => b.enabled === 1 || (b as any).enabled === undefined || (b as any).enabled === null).length;
 const totalMonthSpent = budgets.reduce((acc, b) => acc + (Number(b.spentThisMonth) || 0), 0);
 
-// 5. Recent Activity
-const recentLogs = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(10);
-const rawPulse = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(100);
+// 3. Modèles (Ollama Tags direct si possible)
+let availableModels: string[] = [];
+let ollamaError = '';
+try {
+  const ollamaUrl = (await getConfig('ollamaUrl')) || 'http://127.0.0.1:11434';
+  const res = await fetch(`${ollamaUrl}/api/tags`);
+  if (res.ok) {
+    const data = await res.json();
+    availableModels = (data.models || []).map((m: any) => m.name);
+  } else {
+    ollamaError = `HTTP ${res.status}`;
+  }
+} catch (e: any) {
+  ollamaError = 'Serveur injoignable';
+}
+
+// 4. Activity Logs
+const recentLogs = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(8);
+const rawPulse = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(50);
 const recentPulse = rawPulse.filter(p => p.action.startsWith('scheduler.') || p.action.startsWith('work_cycle.'));
 
 const recentHeartbeats = (recentPulse.length > 0) 
-    ? recentPulse.slice(0, 10).map(p => ({ 
+    ? recentPulse.slice(0, 8).map(p => ({ 
         timestamp: p.createdAt, 
         level: p.action.includes('.') ? (p.action.split('.')[1] === 'started' ? 'info' : p.action.split('.')[1]) : 'info', 
         message: p.action.startsWith('work_cycle') ? `Cycle: ${p.details}` : p.details 
       })) 
-    : await db.select().from(Heartbeat).orderBy(desc(Heartbeat.timestamp)).limit(10);
+    : await db.select().from(Heartbeat).orderBy(desc(Heartbeat.timestamp)).limit(8);
 ---
 
-<DashboardLayout title="Santé du Pipeline" currentPath="/health">
-    <div class="max-w-6xl mx-auto space-y-8 p-4 py-8">
-        <header class="flex justify-between items-center">
-            <div>
-                <h1 class="text-3xl font-bold text-zinc-900 mb-2">Santé du Pipeline</h1>
-                <p class="text-zinc-500 font-medium small-caps tracking-wide">Monitoring Infrastructure Forge &times; ZimaOS</p>
-            </div>
-            <div class="flex gap-2">
-                <button 
-                  onclick="window.location.reload()" 
-                  class="px-6 py-2.5 bg-[#175B37] hover:bg-[#1a663e] text-white rounded-full font-semibold transition-all shadow-lg shadow-emerald-900/10 flex items-center gap-2"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>
-                    Actualiser
-                </button>
-            </div>
-        </header>
+<DashboardLayout title="Santé de l'Application" currentPath="/health">
+  <div class="max-w-6xl mx-auto space-y-8 p-4 py-8">
+    <header class="flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-bold text-zinc-900 mb-2">Santé de l'Application</h1>
+        <p class="text-zinc-500 font-medium tracking-wide">Monitoring de l'infrastructure Forge</p>
+      </div>
+      <div class="flex gap-2">
+        <button 
+          onclick="window.location.reload()" 
+          class="px-6 py-2.5 bg-[#175B37] hover:bg-[#1a663e] text-white rounded-full font-semibold transition-all shadow-lg shadow-[#175B37]/20 flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+            <path d="M3 3v5h5"></path>
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+            <path d="M16 16h5v5"></path>
+          </svg>
+          Actualiser
+        </button>
+      </div>
+    </header>
 
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <!-- Gateway Status -->
-            <div class={gatewayRes.ok ? "p-6 bg-white border-l-4 border-l-emerald-500 border border-zinc-100 rounded-3xl shadow-sm" : "p-6 bg-rose-50 border-l-4 border-l-rose-500 border border-rose-100 rounded-3xl shadow-sm"}>
-                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">{gatewayRes.ok ? "ZimaOS Gateway" : "Gateway Hors-Ligne"}</p>
-                <div class="flex items-center gap-2">
-                    <span class={gatewayRes.ok ? "text-2xl font-black text-zinc-900" : "text-2xl font-black text-rose-600"}>
-                        {gatewayRes.ok ? "Actif" : "Erreur"}
-                    </span>
-                    {gatewayRes.ok && <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>}
-                </div>
-                <p class="text-[10px] text-zinc-400 mt-2 truncate font-mono">{gatewayUrl}</p>
-            </div>
-
-            <!-- Agents Status -->
-            <div class="p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm">
-                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">Agents Connectés</p>
-                <div class="flex items-baseline gap-2">
-                    <span class={connectedAgentsCount > 0 ? "text-2xl font-black text-emerald-600" : "text-2xl font-black text-zinc-400"}>
-                        {connectedAgentsCount}
-                    </span>
-                    <span class="text-zinc-400 text-xs font-bold">/ {forgeIds.length} sessions</span>
-                </div>
-                <p class="text-[10px] text-zinc-400 mt-2">Présence dans le swarm</p>
-            </div>
-
-            <!-- Ollama Status -->
-            <div class="p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm">
-                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">Modèles LLM</p>
-                <div class="flex items-baseline gap-2">
-                    <span class={availableModels.length > 0 ? "text-2xl font-black text-emerald-600" : "text-2xl font-black text-rose-600"}>
-                        {availableModels.length}
-                    </span>
-                    <span class="text-zinc-400 text-xs font-bold">visibles</span>
-                </div>
-                <p class="text-[10px] text-zinc-400 mt-2 truncate">
-                    {availableModels.length > 0 ? availableModels[0] : (gatewayRes.error || 'Aucun modèle détecté')}
-                </p>
-            </div>
-
-            <!-- Budget Status -->
-            <div class="p-6 bg-white border border-zinc-100 rounded-3xl shadow-sm">
-                <p class="text-zinc-500 text-[10px] font-bold mb-1 uppercase tracking-[0.2em]">Budget Mensuel</p>
-                <div class="flex items-baseline gap-2">
-                    <span class="text-2xl font-black text-zinc-900">{activeBudgetsCount}</span>
-                    <span class="text-zinc-400 text-xs font-bold">profils</span>
-                </div>
-                <p class="text-[10px] text-emerald-600 mt-2 font-bold tracking-tight">
-                  {(totalMonthSpent/100).toFixed(2)}€ dépensés
-                </p>
-            </div>
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Forge Agents -->
+      <div class="p-6 bg-white border border-gray-100 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-emerald-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="relative z-10">
+          <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <p class="text-gray-500 text-[10px] font-bold mb-1 uppercase tracking-widest">Agents Forge</p>
+          <div class="flex items-baseline gap-2">
+            <span class="text-3xl font-black text-gray-900">{forgeIds.length}</span>
+            <span class="text-gray-400 text-sm font-bold">activés</span>
+          </div>
         </div>
+      </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- ZimaOS Deep Diagnostics -->
-            <div class="bg-white border border-zinc-100 rounded-[2rem] p-8 shadow-sm h-full flex flex-col">
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-xl font-bold text-zinc-900 px-2 border-l-4 border-emerald-500">Diagnostic ZimaOS complet</h2>
-                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">gateway + tools + sessions</span>
-                </div>
-
-                <div class="space-y-4 text-xs">
-                    <div class="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-1">
-                        <p><strong>URL gateway :</strong> <span class="font-mono">{gatewayUrl}</span></p>
-                        <p><strong>Source URL :</strong> {ocDebug.urlSource}</p>
-                        <p><strong>Token configuré :</strong> {ocDebug.tokenConfigured ? 'oui' : 'non'} ({ocDebug.tokenSource})</p>
-                        <p><strong>/health :</strong> {healthCheck.ok ? 'OK' : `KO (${healthCheck.status || 0})`}</p>
-                    </div>
-
-                    <div class="rounded-2xl border border-zinc-200 bg-white p-4">
-                        <p class="font-bold mb-2">Chemins API testés (sessions)</p>
-                        {resolvedSessionAttempt ? (
-                          <div class="space-y-2">
-                            <p class="text-[11px] text-emerald-700 font-mono">
-                              Endpoint retenu : {resolvedSessionAttempt.via} — HTTP {resolvedSessionAttempt.status} — ok ({resolvedSessionAttempt.parsedCount})
-                            </p>
-                            {noisySessionAttempts.length > 0 && (
-                              <details class="text-[11px]">
-                                <summary class="cursor-pointer text-zinc-500">
-                                  Détails techniques ({noisySessionAttempts.length} autres tentatives)
-                                </summary>
-                                <ul class="mt-2 space-y-1 font-mono">
-                                  {noisySessionAttempts.map((a) => (
-                                    <li class={a.ok ? 'text-emerald-700' : 'text-zinc-500'}>
-                                      {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </details>
-                            )}
-                          </div>
-                        ) : (
-                          <ul class="space-y-1 font-mono text-[11px]">
-                            {gatewayAttempts.map((a) => (
-                              <li class={a.ok ? 'text-emerald-700' : 'text-rose-700'}>
-                                {a.via} — HTTP {a.status} — {a.ok ? `ok (${a.parsedCount})` : `ko (${a.parsedCount})`}
-                              </li>
-                            ))}
-                            {gatewayAttempts.length === 0 && <li class="text-zinc-400">Aucun essai enregistré.</li>}
-                          </ul>
-                        )}
-                    </div>
-
-                    <div class="rounded-2xl border border-zinc-200 bg-white p-4">
-                        <p class="font-bold mb-2">Tools gateway</p>
-                        <ul class="space-y-1 font-mono text-[11px]">
-                            {toolChecks.map((tc) => (
-                                <li class={tc.ok ? 'text-emerald-700' : 'text-rose-700'}>
-                                    {tc.tool} — HTTP {tc.status} — {tc.ok ? 'OK' : tc.message}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <div class="rounded-2xl border border-zinc-200 bg-white p-4">
-                        <p class="font-bold mb-2">Synthèse exécution</p>
-                        <ul class="space-y-1">
-                            <li>Sessions détectées : <strong>{sessions.length}</strong></li>
-                            <li>Agents Forge activés : <strong>{forgeIds.length}</strong></li>
-                            <li>Modèles détectés : <strong>{availableModels.length}</strong></li>
-                            <li>/v1/models : <strong>{v1ModelsCheck.ok ? (availableModels.length > 0 ? 'Avertissement (200 + fallback actif)' : 'OK') : `KO (${v1ModelsCheck.status || 0})`}</strong></li>
-                        </ul>
-                    </div>
-
-                    <div class={`rounded-2xl border p-4 ${zimaosBlockers.length ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                        <p class="font-bold mb-2">{zimaosBlockers.length ? 'Blocages détectés' : 'Aucun blocage ZimaOS détecté'}</p>
-                        {zimaosBlockers.length > 0 ? (
-                          <ul class="list-disc pl-5 space-y-1 text-[11px]">
-                            {zimaosBlockers.map((b) => <li>{b}</li>)}
-                          </ul>
-                        ) : (
-                          <p class="text-[11px]">Le pipeline ZimaOS semble cohérent côté Forge.</p>
-                        )}
-                    </div>
-                    {zimaosWarnings.length > 0 && (
-                      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                        <p class="font-bold mb-2">Avertissements (non bloquants)</p>
-                        <ul class="list-disc pl-5 space-y-1 text-[11px]">
-                          {zimaosWarnings.map((w) => <li>{w}</li>)}
-                        </ul>
-                      </div>
-                    )}
-                </div>
-            </div>
-
-            <!-- Activity Log -->
-            <div class="bg-white border border-zinc-100 rounded-[2rem] p-8 shadow-sm h-full flex flex-col">
-                <div class="flex items-center justify-between mb-8">
-                    <h2 class="text-xl font-bold text-zinc-900 px-2 border-l-4 border-emerald-500">Journal d'Audit</h2>
-                    <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Temps réel</span>
-                </div>
-                <div class="space-y-4 flex-1">
-                    {recentLogs.map(log => (
-                        <div class="p-4 bg-zinc-50/50 rounded-2xl border border-zinc-100 hover:bg-zinc-50 transition-all group">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-xs font-black text-zinc-900 uppercase tracking-tight">{log.action}</span>
-                                <span class="text-[10px] font-bold text-zinc-400">{new Date(log.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                            </div>
-                            <p class="text-[11px] text-zinc-500 font-medium leading-relaxed truncate opacity-80">{log.details || 'Pas de détails'}</p>
-                        </div>
-                    ))}
-                    {recentLogs.length === 0 && <p class="text-center py-12 text-zinc-300 italic text-sm">Aucun événement d'audit récent.</p>}
-                </div>
-            </div>
-
-            <!-- Heartbeats / Scheduler -->
-            <div class="bg-zinc-900 rounded-[2rem] p-8 shadow-2xl h-full flex flex-col text-white">
-                <div class="flex items-center justify-between mb-8">
-                    <h2 class="text-xl font-bold px-2 border-l-4 border-emerald-400">Scheduler Core</h2>
-                    <div class="flex items-center gap-3">
-                        <button 
-                            id="force-start-btn"
-                            class="text-[10px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                            Démarrer le Swarm
-                        </button>
-                        <div class="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20">
-                            <div class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
-                            <span class="text-[9px] font-black uppercase tracking-widest text-emerald-400">Engine Online</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="space-y-3 font-mono text-[10px]">
-                    {recentHeartbeats.map(hb => (
-                        <div class="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
-                            <span class={hb.level === 'warn' ? "text-amber-400 font-bold" : hb.level === 'error' ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
-                                [{hb.level.toUpperCase()}]
-                            </span>
-                            <span class="text-zinc-300 flex-1">{hb.message}</span>
-                            <span class="text-zinc-500 tabular-nums">{new Date(hb.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
-                        </div>
-                    ))}
-                    {recentHeartbeats.length === 0 && <p class="text-center py-12 text-zinc-600 uppercase tracking-widest">En attente du prochain tick...</p>}
-                </div>
-            </div>
+      <!-- Modèles LLM -->
+      <div class="p-6 bg-white border border-gray-100 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="relative z-10">
+          <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-4">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+          </div>
+          <p class="text-gray-500 text-[10px] font-bold mb-1 uppercase tracking-widest">Ollama / Modèles</p>
+          <div class="flex items-baseline gap-2">
+            <span class={ollamaError ? "text-3xl font-black text-rose-500" : "text-3xl font-black text-gray-900"}>
+              {ollamaError ? "Erreur" : availableModels.length}
+            </span>
+            <span class="text-gray-400 text-sm font-bold">{ollamaError ? "" : "disponibles"}</span>
+          </div>
+          <p class="text-[10px] text-gray-400 mt-2 truncate font-mono">
+            {ollamaError ? ollamaError : (availableModels.length > 0 ? availableModels[0] : 'Aucun modèle')}
+          </p>
         </div>
+      </div>
+
+      <!-- Budget Status -->
+      <div class="p-6 bg-white border border-gray-100 rounded-[2rem] shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-amber-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="relative z-10">
+          <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p class="text-gray-500 text-[10px] font-bold mb-1 uppercase tracking-widest">Budget Consommé</p>
+          <div class="flex items-baseline gap-2">
+            <span class="text-3xl font-black text-gray-900">{(totalMonthSpent/100).toFixed(2)}€</span>
+          </div>
+          <p class="text-[10px] text-emerald-600 mt-2 font-bold tracking-tight">
+            Sur {activeBudgetsCount} profils actifs
+          </p>
+        </div>
+      </div>
     </div>
+
+    <!-- Logs & Scheduler Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Activity Log -->
+      <div class="bg-white border border-gray-100 rounded-[2rem] p-8 shadow-sm flex flex-col h-[500px]">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-xl font-bold text-gray-900 flex items-center gap-3">
+            <span class="w-1 h-6 rounded-full bg-[#175B37]"></span>
+            Journal d'Audit
+          </h2>
+          <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Dernières Actions</span>
+        </div>
+        <div class="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          {recentLogs.map(log => (
+            <div class="p-4 bg-gray-50/50 rounded-2xl border border-gray-100 hover:bg-gray-50 transition-all group">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[11px] font-black text-gray-800 uppercase tracking-tight">{log.action}</span>
+                <span class="text-[10px] font-bold text-gray-400">{new Date(log.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+              </div>
+              <p class="text-[11px] text-gray-500 font-medium leading-relaxed opacity-80">{log.details || 'Pas de détails'}</p>
+            </div>
+          ))}
+          {recentLogs.length === 0 && (
+            <div class="flex flex-col items-center justify-center h-full text-gray-400 space-y-3">
+              <svg class="w-8 h-8 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p class="text-sm italic">Aucun événement d'audit récent.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Heartbeats / Scheduler -->
+      <div class="bg-zinc-900 rounded-[2rem] p-8 shadow-2xl flex flex-col h-[500px] text-white relative overflow-hidden">
+        <div class="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+          <svg class="w-32 h-32" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        
+        <div class="relative z-10 flex items-center justify-between mb-6">
+          <h2 class="text-xl font-bold flex items-center gap-3 text-white">
+            <span class="w-1 h-6 rounded-full bg-emerald-400"></span>
+            Orchestrateur Core
+          </h2>
+          <div class="flex items-center gap-3">
+            <button 
+              id="force-start-btn"
+              class="text-[10px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-full transition-all active:scale-95 flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Démarrer Cycle
+            </button>
+            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">
+              <div class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span class="text-[9px] font-black uppercase tracking-widest text-emerald-400">En Ligne</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="space-y-3 font-mono text-[11px] flex-1 overflow-y-auto pr-2 custom-scrollbar relative z-10">
+          {recentHeartbeats.map(hb => (
+            <div class="flex items-start gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+              <span class={hb.level === 'warn' ? "text-amber-400 font-bold" : hb.level === 'error' ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
+                [{hb.level.toUpperCase()}]
+              </span>
+              <span class="text-zinc-300 flex-1 leading-relaxed break-words">{hb.message}</span>
+              <span class="text-zinc-500 tabular-nums shrink-0 mt-0.5">{new Date(hb.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}</span>
+            </div>
+          ))}
+          {recentHeartbeats.length === 0 && (
+             <div class="flex flex-col items-center justify-center h-full text-zinc-600 space-y-3">
+              <p class="uppercase tracking-widest text-[10px] font-bold">En attente du prochain tick...</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
 </DashboardLayout>
 
 <script>
-    const forceBtn = document.getElementById('force-start-btn');
-    forceBtn?.addEventListener('click', async () => {
-        const originalText = forceBtn.innerHTML;
-        forceBtn.innerHTML = 'Activation...';
-        forceBtn.style.opacity = '0.5';
-        forceBtn.style.pointerEvents = 'none';
+  const forceBtn = document.getElementById('force-start-btn');
+  if (forceBtn) {
+    forceBtn.addEventListener('click', async () => {
+      const originalText = forceBtn.innerHTML;
+      forceBtn.innerHTML = 'Activation...';
+      forceBtn.style.opacity = '0.5';
+      forceBtn.style.pointerEvents = 'none';
 
-        try {
-            const res = await fetch('/api/debug-scheduler', { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                alert('Hive activé ! Le swarm va s’éveiller d’ici quelques secondes.');
-                window.location.reload();
-            } else {
-                alert('Erreur: ' + data.error);
-                forceBtn.innerHTML = originalText;
-                forceBtn.style.opacity = '1';
-                forceBtn.style.pointerEvents = 'auto';
-            }
-        } catch (e) {
-            alert('Erreur réseau');
-            forceBtn.innerHTML = originalText;
-            forceBtn.style.opacity = '1';
-            forceBtn.style.pointerEvents = 'auto';
+      try {
+        const res = await fetch('/api/debug-scheduler', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert('Orchestrateur activé ! Le cycle va s’éveiller d’ici quelques secondes.');
+          window.location.reload();
+        } else {
+          alert('Erreur: ' + data.error);
+          forceBtn.innerHTML = originalText;
+          forceBtn.style.opacity = '1';
+          forceBtn.style.pointerEvents = 'auto';
         }
+      } catch (e) {
+        alert('Erreur réseau');
+        forceBtn.innerHTML = originalText;
+        forceBtn.style.opacity = '1';
+        forceBtn.style.pointerEvents = 'auto';
+      }
     });
+  }
 </script>
 
 <style>
-    .small-caps { font-variant: small-caps; }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.3);
+    border-radius: 20px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.5);
+  }
 </style>

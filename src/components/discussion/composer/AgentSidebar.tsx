@@ -1,9 +1,8 @@
+import { useState, useEffect } from 'preact/hooks';
 import type { AgentRow, Project, RequestItem, isSessionUsable } from './types';
 import TeamAvatar from '../../agents/TeamAvatar';
 import type { AgentTeamProfile } from '../../../lib/agent-profile';
 import { truncateText } from './types';
-
-const AVAILABLE_MODELS = ['llama3.2:latest', 'qwen3-coder:30b', 'qwen2.5:7b', 'gemma4:latest'];
 
 interface Props {
   agents: AgentRow[];
@@ -28,6 +27,22 @@ export default function AgentSidebar({
   requests, requestId, setRequestId,
   sessionQuery, setSessionQuery, offlineCount, onModelChange
 }: Props) {
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/models')
+      .then(res => res.json())
+      .then((data: any[]) => {
+        if (Array.isArray(data)) {
+          const names = data.map(m => m.name || m.id).filter(Boolean);
+          const unique = Array.from(new Set(names));
+          if (unique.length > 0) {
+            setAvailableModels(unique);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
   const inputCls = 'w-full rounded-2xl border border-gray-200 bg-gray-50/80 px-3.5 py-2.5 text-sm text-gray-900 shadow-inner shadow-white/40 outline-none transition focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20';
 
   const isUsable = (a: AgentRow) => {
@@ -87,8 +102,8 @@ export default function AgentSidebar({
                       onChange={(e) => onModelChange(a.id, (e.target as HTMLSelectElement).value)}
                     >
                       <option value="">Sélectionner modèle...</option>
-                      {AVAILABLE_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
-                      {!AVAILABLE_MODELS.includes(a.model) && a.model && <option value={a.model}>{a.model}</option>}
+                      {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+                      {!availableModels.includes(a.model) && a.model && <option value={a.model}>{a.model}</option>}
                     </select>
                   </div>
                 </div>

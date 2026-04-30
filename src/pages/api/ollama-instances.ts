@@ -7,6 +7,7 @@ type OllamaHealthProbe = {
   status: number;
   endpoint: string;
   error?: string;
+  models?: string[];
 };
 
 type OllamaInstanceRow = {
@@ -33,7 +34,12 @@ async function probeOllamaBase(base: string): Promise<OllamaHealthProbe> {
         headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(2200),
       });
-      if (res.ok) return { ok: true, status: res.status, endpoint };
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const modelsArr = Array.isArray(data.models) ? data.models : Array.isArray(data.data) ? data.data : [];
+        const models = modelsArr.map((m: any) => String(m.name || m.model || m.id || '').trim()).filter(Boolean);
+        return { ok: true, status: res.status, endpoint, models };
+      }
       if (res.status !== 404) {
         return { ok: false, status: res.status, endpoint, error: `HTTP ${res.status}` };
       }

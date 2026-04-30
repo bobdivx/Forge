@@ -219,11 +219,22 @@ export default function OllamaTab() {
                       </div>
                       <p class="text-xs font-mono text-gray-500">{inst.normalizedUrl || inst.url}</p>
                       {inst.enabled ? (
-                        <p class={`text-[10px] ${inst.health?.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          {inst.health?.ok
-                            ? `OK via ${inst.health.endpoint} (HTTP ${inst.health.status})`
-                            : inst.health?.error || 'Indisponible'}
-                        </p>
+                        <>
+                          <p class={`text-[10px] ${inst.health?.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {inst.health?.ok
+                              ? `OK via ${inst.health.endpoint} (HTTP ${inst.health.status})`
+                              : inst.health?.error || 'Indisponible'}
+                          </p>
+                          {inst.health?.ok && inst.health.models && inst.health.models.length > 0 && (
+                            <div class="flex flex-wrap gap-1 mt-2">
+                              {inst.health.models.map((m) => (
+                                <span key={m} class="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[9px] font-semibold border border-gray-200">
+                                  {m}
+                               </span>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <p class="text-[10px] text-gray-500">Instance désactivée</p>
                       )}

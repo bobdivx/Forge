@@ -389,14 +389,6 @@ export default function SettingsForm() {
             onSync={syncProjects}
             syncing={syncing}
             message={message}
-            onZimaOSRepaired={async () => {
-              try {
-                const s = await fetch('/api/settings').then((r) => r.json());
-                mergeSettingsFromServer(s);
-              } catch {
-                /* ignore */
-              }
-            }}
             settings={settings}
             reposHealth={reposHealth}
             onRefreshHealth={refreshReposHealth}

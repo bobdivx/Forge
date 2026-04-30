@@ -1,11 +1,9 @@
 import type { APIRoute } from 'astro';
-import { fetchZimaOSAgentsList, fetchZimaOSModelCatalog } from '../../lib/zimaos-gateway';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { FORGE_DEFAULT_AGENT_MODELS } from '../../lib/agent-model-defaults';
 
 export const GET: APIRoute = async ({ locals }) => {
   try {
-    const email = locals.user?.email as string | undefined;
     const { db, AgentModel, AgentInstruction } = await loadAstroDb();
     const now = new Date();
 
@@ -61,34 +59,21 @@ export const GET: APIRoute = async ({ locals }) => {
       .filter(Boolean)
       .map((id) => ({ id: id, name: id, ownedBy: 'forge-instruction' }));
     
-    // 1. Récupérer les agents (sessions/capabilities)
-    const agentsRes = await fetchZimaOSAgentsList(email);
-    const agentModels = agentsRes.ok ? agentsRes.agents.map(a => ({
-        id: a.id,
-        name: a.name || a.id,
-        ownedBy: 'zimaos-agent',
-    })) : [];
+    // 1. Récupérer le catalogue global (Ollama)
+    let extraOllamaModels: { id: string; name: string; ownedBy: string }[] = [];
+    try {
+        const ollamaRes = await import('../../lib/zimaos-openai-surface').then(m => m.fetchOllamaTagNames());
+        extraOllamaModels = ollamaRes.names.map(name => ({
+            id: name,
+            name: name,
+            ownedBy: 'ollama-instances',
+        }));
+    } catch {
+        // ignore if Ollama is unreachable
+    }
 
-    // 2. Récupérer le catalogue global (Ollama, etc)
-    const [catalogRes, ollamaRes] = await Promise.all([
-      fetchZimaOSModelCatalog(email),
-      import('../../lib/zimaos-openai-surface').then(m => m.fetchOllamaTagNames())
-    ]);
-
-    const catalogModels = catalogRes.ok ? catalogRes.models.map(m => ({
-        id: m.id,
-        name: m.name || m.id,
-        ownedBy: m.ownedBy || 'zimaos',
-    })) : [];
-
-    const extraOllamaModels = ollamaRes.names.map(name => ({
-        id: name,
-        name: name,
-        ownedBy: 'ollama-instances',
-    }));
-
-    // 3. Fusion unique (par ID)
-    const allModels = [...dbEnabled, ...instructionModels, ...agentModels, ...catalogModels, ...extraOllamaModels];
+    // 2. Fusion unique (par ID)
+    const allModels = [...dbEnabled, ...instructionModels, ...extraOllamaModels];
     const uniqueModels = Array.from(new Map(allModels.map(m => [m.id, m])).values());
 
     return new Response(JSON.stringify(uniqueModels), {

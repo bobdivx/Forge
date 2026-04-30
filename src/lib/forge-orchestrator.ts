@@ -23,24 +23,58 @@ type RuleAudit = {
   notes?: string;
 };
 
-async function resolveAvailableModel(origin: string, preferred: string): Promise<string> {
+import { loadAstroDb } from './load-astro-db';
+
+async function resolveAvailableModel(preferred: string): Promise<{ origin: string, model: string }> {
+  const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
+  let instances: any[] = [];
   try {
-    const res = await fetch(`${origin}/api/tags`, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) return preferred;
-    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    const models = Array.isArray(data.models) ? (data.models as Array<Record<string, unknown>>) : [];
-    const names = models
-      .map((m) => String(m.name || m.model || '').trim())
-      .filter(Boolean);
-    if (!names.length) return preferred;
-    if (names.includes(preferred)) return preferred;
-    for (const candidate of ['qwen3-coder:30b', 'llama3.2:latest', 'qwen2.5:7b', 'gemma4:latest']) {
-      if (names.includes(candidate)) return candidate;
+    const { db, OllamaInstance, eq } = await loadAstroDb();
+    if (OllamaInstance) {
+      instances = await db.select().from(OllamaInstance).where(eq(OllamaInstance.enabled, 1));
     }
-    return names[0];
-  } catch {
-    return preferred;
+  } catch {}
+  
+  const candidateOrigins = [defaultOrigin];
+  for (const inst of instances) {
+    const url = String(inst.url || '').trim().replace(/\/$/, '');
+    if (url && !candidateOrigins.includes(url)) candidateOrigins.push(url);
   }
+
+  const allFound: Array<{ origin: string, models: string[] }> = [];
+
+  for (const origin of candidateOrigins) {
+    try {
+      const res = await fetch(`${origin}/api/tags`, { signal: AbortSignal.timeout(5_000) });
+      if (!res.ok) continue;
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      const models = Array.isArray(data.models) ? (data.models as Array<Record<string, unknown>>) : [];
+      const names = models.map((m) => String(m.name || m.model || '').trim()).filter(Boolean);
+      if (names.includes(preferred)) {
+        return { origin, model: preferred };
+      }
+      if (names.length > 0) {
+        allFound.push({ origin, models: names });
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const fallbacks = ['qwen3-coder:30b', 'llama3.2:latest', 'qwen2.5:7b', 'gemma4:latest'];
+  for (const candidate of fallbacks) {
+    for (const found of allFound) {
+      if (found.models.includes(candidate)) {
+        return { origin: found.origin, model: candidate };
+      }
+    }
+  }
+
+  if (allFound.length > 0) {
+    return { origin: allFound[0].origin, model: allFound[0].models[0] };
+  }
+
+  return { origin: defaultOrigin, model: preferred };
 }
 
 function parseInlineToolDirective(message: string): { command?: string } {
@@ -78,7 +112,9 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     });
   }
 
-  const origin = (await getOllamaOriginResolved()).replace(/\/$/, '');
+  const preferredModel = String(input.modelHint || '').trim() || process.env.OLLAMA_MODEL?.trim() || 'llama3.2:latest';
+  const { origin, model } = await resolveAvailableModel(preferredModel);
+
   const policy = await buildAgentPolicyContext(input.projectId);
   steps.push({
     type: 'policy',
@@ -86,8 +122,6 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     payload: policy.strictMode,
     status: policy.strictMode === 'off' ? 'completed' : 'running',
   });
-  const preferredModel = String(input.modelHint || '').trim() || process.env.OLLAMA_MODEL?.trim() || 'llama3.2:latest';
-  const model = await resolveAvailableModel(origin, preferredModel);
   const content = toolResult?.ok
     ? `${input.message}\n\n[TOOL_RESULT]\n${String(toolResult.output || '').slice(0, 5000)}`
     : input.message;
