@@ -60,7 +60,16 @@ export default function AgentSidebar({
     const ub = isUsable(b);
     if (ua && !ub) return -1;
     if (!ua && ub) return 1;
-    return 0;
+    
+    // Si même état, on trie par nom
+    const profileA = teamProfiles[a.id];
+    const profileB = teamProfiles[b.id];
+    
+    // Les agents principaux d'abord, puis les sous-agents
+    if (!profileA?.isSubAgent && profileB?.isSubAgent) return -1;
+    if (profileA?.isSubAgent && !profileB?.isSubAgent) return 1;
+    
+    return a.id.localeCompare(b.id);
   });
 
   return (
@@ -82,17 +91,22 @@ export default function AgentSidebar({
             const presenceDot = profile?.presence === 'online' ? 'bg-emerald-500' : profile?.presence === 'offline' ? 'bg-gray-300' : 'bg-amber-400';
             
             return (
-              <li key={a.id} class={`p-3 ${active ? 'bg-gray-100/90' : 'hover:bg-gray-50'}`}>
-                <div class="flex items-center gap-3">
+              <li key={a.id} class={`p-3 ${active ? 'bg-gray-100/90' : 'hover:bg-gray-50'} ${profile?.isSubAgent ? 'bg-gray-50/30' : ''}`}>
+                <div class={`flex items-center gap-3 ${profile?.isSubAgent ? 'pl-4 opacity-90' : ''}`}>
                   <div class="relative shrink-0">
                     <button onClick={() => pickSession(a.id)}>
-                        {profile ? <TeamAvatar profile={profile} size="md" /> : <div class="w-10 h-10 rounded-full bg-gray-200" />}
+                        {profile ? <TeamAvatar profile={profile} size={profile.isSubAgent ? "sm" : "md"} /> : <div class={`${profile?.isSubAgent ? 'w-8 h-8' : 'w-10 h-10'} rounded-full bg-gray-200`} />}
                     </button>
-                    <span class={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white ${presenceDot}`} />
+                    <span class={`absolute bottom-0 right-0 ${profile?.isSubAgent ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5'} rounded-full border-2 border-white ${presenceDot}`} />
                   </div>
                   <div class="flex-1 min-w-0">
                     <button onClick={() => pickSession(a.id)} class="text-left w-full">
-                      <div class="font-semibold text-sm truncate">{profile?.displayName || a.name}</div>
+                      <div class="flex items-center gap-1.5">
+                        <div class={`font-semibold truncate ${profile?.isSubAgent ? 'text-[13px]' : 'text-sm'}`}>{profile?.displayName || a.name}</div>
+                        {profile?.isSubAgent && (
+                          <span class="shrink-0 px-1 py-0.5 rounded text-[8px] font-bold bg-blue-100 text-blue-600 uppercase tracking-wider">Sub</span>
+                        )}
+                      </div>
                       <div class="text-[11px] text-gray-500 truncate">{profile?.role || 'Agent'}</div>
                       <div class="text-[10px] font-bold mt-0.5 text-gray-600">{a.status}</div>
                     </button>

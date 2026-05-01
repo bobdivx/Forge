@@ -4,6 +4,7 @@ export type ForgeToolCall =
   | { tool: 'read_file'; path: string }
   | { tool: 'write_file'; path: string; content: string }
   | { tool: 'exec'; command: string }
+  | { tool: 'update_request_status'; requestId: number; status: 'pending' | 'in_progress' | 'completed' | 'rejected' }
   | { tool: 'restart_gateway'; containerName?: string };
 
 export type ForgeToolResult = {
@@ -25,6 +26,11 @@ export async function runForgeTool(call: ForgeToolCall): Promise<ForgeToolResult
     }
     if (call.tool === 'exec') {
       return { ok: true, tool: call.tool, output: infra.exec(call.command) };
+    }
+    if (call.tool === 'update_request_status') {
+      const { db, Request, eq } = await loadAstroDb();
+      await db.update(Request).set({ status: call.status, updatedAt: new Date() }).where(eq(Request.id, call.requestId));
+      return { ok: true, tool: call.tool, output: `Statut de la demande #${call.requestId} mis à jour : ${call.status}` };
     }
     const out = call.containerName ? infra.exec(`docker restart ${call.containerName}`) : infra.restartContainer();
     return { ok: true, tool: call.tool, output: out };

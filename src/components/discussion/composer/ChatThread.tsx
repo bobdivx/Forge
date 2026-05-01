@@ -2,6 +2,8 @@ import type { ChatMessage, RoutingDebugState } from './types';
 import type { AgentTeamProfile } from '../../../lib/agent-profile';
 import TeamAvatar from '../../agents/TeamAvatar';
 import RemediationGuide from './RemediationGuide';
+import Markdown from '../../ui/Markdown';
+import { useState } from 'preact/hooks';
 
 interface Props {
   chat: ChatMessage[];
@@ -15,87 +17,150 @@ interface Props {
   copyToClipboard: (text: string) => Promise<void>;
 }
 
+function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
+  const [open, setOpen] = useState(false);
+  if (!steps || steps.length === 0) return null;
+
+  const getIcon = (s: any) => {
+    if (s.label?.toLowerCase().includes('explor')) return 'Explored';
+    if (s.label?.toLowerCase().includes('modif') || s.label?.toLowerCase().includes('edit')) return 'Edited';
+    if (s.label?.toLowerCase().includes('command') || s.label?.toLowerCase().includes('ran')) return 'Ran';
+    if (s.label?.toLowerCase().includes('thought') || s.label?.toLowerCase().includes('réfléchi')) return 'Thought';
+    if (s.type === 'llm') return 'LLM';
+    if (s.label?.toLowerCase().includes('plan')) return 'Plan';
+    return 'Action';
+  };
+
+  const getLabel = (s: any) => {
+    if (s.label?.toLowerCase().includes('plan_detected')) return 'Plan de travail détecté';
+    if (s.label?.toLowerCase().includes('ollama_chat')) return 'Génération de la réponse';
+    return s.label;
+  };
+
+  return (
+    <div class="mt-4 space-y-2 border-l-2 border-gray-100 pl-3">
+      {steps.filter(s => s.type !== 'policy' || s.label === 'plan_detected').map((s, idx) => (
+        <div key={idx} class="group flex items-center gap-2 text-[12px] text-gray-500 transition-colors hover:text-gray-800">
+          <span class="font-medium">{getIcon(s)}</span>
+          <span class="flex-1 truncate font-mono text-gray-400 group-hover:text-gray-600">
+            {getLabel(s)}
+            {s.payload && s.payload !== 'ok' && s.payload !== 'running' && (
+              <span class="ml-2 opacity-60">({s.payload.slice(0, 50)})</span>
+            )}
+          </span>
+          <svg class="h-3 w-3 opacity-0 group-hover:opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ChatThread({
   chat, historyLoading, agentId, selectedTeamProfile,
   sending, pollingReply, routingDebug, chatEndRef, copyToClipboard
 }: Props) {
   return (
-    <div class="relative flex min-h-0 flex-1 flex-col bg-[#ECEFF1]">
+    <div class="relative flex min-h-0 flex-1 flex-col bg-[#F8FAFB]">
       {historyLoading && agentId ? (
-        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#ECEFF1]/85 backdrop-blur-[1px]">
+        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/60 backdrop-blur-[2px]">
           <span class="loading loading-spinner loading-md text-[#175B37]" />
-          <p class="text-xs text-gray-500">Chargement...</p>
+          <p class="text-xs font-medium text-gray-500">Chargement de la session...</p>
         </div>
       ) : null}
 
-      <div class="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth px-3 py-4 sm:px-5">
+      <div class="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth px-3 py-6 sm:px-6">
         {chat.length === 0 && !historyLoading && (
-          <div class="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center animate-fade-in">
-             <div class="max-w-sm space-y-2">
-                <p class="text-base font-semibold text-gray-800">{agentId ? 'Session vide' : 'Prêt'}</p>
+          <div class="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-20 text-center animate-fade-in opacity-60">
+             <div class="h-16 w-16 rounded-3xl bg-white shadow-sm flex items-center justify-center border border-gray-100">
+                <svg class="h-8 w-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+             </div>
+             <div class="max-w-xs space-y-1">
+                <p class="text-sm font-semibold text-gray-800">{agentId ? 'Début de la conversation' : 'Sélectionnez un agent'}</p>
+                <p class="text-xs text-gray-500">Envoyez votre directive pour commencer le travail.</p>
              </div>
           </div>
         )}
 
-        <div class="mx-auto w-full max-w-3xl space-y-4">
+        <div class="mx-auto w-full max-w-3xl space-y-8">
           {chat.map((m, i) => {
             const prev = i > 0 ? chat[i - 1] : null;
-            const showAvatar = (m.role === 'assistant' || m.role === 'system') && (!prev || prev.role === 'user');
+            const isFirstInGroup = !prev || prev.role !== m.role;
             const isUser = m.role === 'user';
 
             if (isUser) {
               return (
-                <div key={m.id} class="animate-fade-up flex justify-end">
-                  <div class="max-w-[85%]">
-                    <div class="rounded-2xl rounded-br-md bg-white px-4 py-2.5 text-sm shadow-sm">
-                      <p class="whitespace-pre-wrap">{m.text}</p>
-                    </div>
-                    <p class="mt-1 pr-1 text-right text-[11px] text-gray-400">Vous · {m.at}</p>
+                <div key={m.id} class="animate-fade-up flex flex-col items-end gap-1.5">
+                  <div class="group relative max-w-[85%] rounded-2xl rounded-tr-sm bg-white px-4 py-3 text-[14px] leading-relaxed text-gray-800 shadow-sm border border-gray-100">
+                    <Markdown content={m.text} />
+                  </div>
+                  <div class="flex items-center gap-2 pr-1">
+                    <span class="text-[10px] font-medium uppercase tracking-wider text-gray-400">{m.at}</span>
                   </div>
                 </div>
               );
             }
 
-            const bubbleBase = m.role === 'system'
-              ? 'rounded-2xl rounded-bl-md bg-amber-50 px-4 py-2.5 text-sm text-amber-950'
-              : m.isAck ? 'rounded-2xl rounded-bl-md bg-sky-50 px-4 py-2.5 text-sm text-sky-950'
-              : 'rounded-2xl rounded-bl-md bg-gray-100 px-4 py-2.5 text-sm text-gray-800';
-            const policyClass =
-              m.policy?.state === 'compliant'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : m.policy?.state === 'non_compliant'
-                  ? 'border-rose-200 bg-rose-50 text-rose-700'
-                  : 'border-amber-200 bg-amber-50 text-amber-700';
-
             return (
-              <div key={m.id} class="animate-fade-up flex justify-start gap-2">
-                <div class="w-9 shrink-0 pt-1">
-                  {showAvatar && selectedTeamProfile && <TeamAvatar profile={selectedTeamProfile} size="sm" />}
-                </div>
-                <div class="min-w-0 max-w-[85%] flex-1">
-                  <div class={bubbleBase}>
-                    <p class="whitespace-pre-wrap">{m.text}</p>
+              <div key={m.id} class={`animate-fade-up flex flex-col gap-3 ${isFirstInGroup ? 'mt-4' : 'mt-1'}`}>
+                {isFirstInGroup && (
+                  <div class="flex items-center gap-2.5 mb-1">
+                    <div class="h-6 w-6 shrink-0">
+                      {selectedTeamProfile && <TeamAvatar profile={selectedTeamProfile} size="xs" />}
+                    </div>
+                    <span class="text-xs font-bold text-gray-900 tracking-tight">
+                      {selectedTeamProfile?.displayName || 'Assistant'}
+                    </span>
+                    <span class="h-1 w-1 rounded-full bg-gray-300" />
+                    <span class="text-[10px] font-medium text-gray-400 uppercase tracking-widest">{m.at}</span>
+                  </div>
+                )}
+                
+                <div class="flex flex-col gap-3 pl-8">
+                  <div class={`relative max-w-[95%] rounded-2xl rounded-tl-sm border px-5 py-4 text-[14px] leading-relaxed shadow-sm transition-all
+                    ${m.role === 'system' ? 'border-amber-100 bg-amber-50/30 text-amber-900' : 
+                      m.isAck ? 'border-sky-100 bg-sky-50/30 text-sky-900' : 
+                      'border-gray-200 bg-white text-gray-800'}`}>
+                    
+                    <Markdown content={m.text} />
+                    
+                    {m.steps && <StepLog steps={m.steps} />}
+                    
                     {m.role === 'assistant' && m.policy && m.policy.mode !== 'off' ? (
-                      <div class="mt-2">
-                        <span class={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${policyClass}`}>
-                          policy {m.policy.mode} · {m.policy.state === 'compliant' ? 'conforme' : m.policy.state === 'non_compliant' ? 'non conforme' : 'en attente'}
+                      <div class="mt-4 flex items-center gap-2">
+                        <div class={`h-1.5 w-1.5 rounded-full ${m.policy.state === 'compliant' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                        <span class="text-[11px] font-bold uppercase tracking-widest text-gray-400">
+                          Mode {m.policy.mode} · {m.policy.state === 'compliant' ? 'conforme' : 'audit requis'}
                         </span>
                       </div>
                     ) : null}
+                    
                     {m.remediation && <RemediationGuide remediation={m.remediation} copyToClipboard={copyToClipboard} />}
                   </div>
-                  <p class="mt-1 pl-0.5 text-[11px] text-gray-400">{m.at}</p>
                 </div>
               </div>
             );
           })}
           {(sending || pollingReply) && (
-            <div class="animate-fade-up flex justify-start gap-2">
-              <div class="rounded-2xl rounded-bl-md bg-gray-100 px-4 py-3 shadow-sm">...</div>
+            <div class="animate-fade-up flex flex-col gap-3">
+              <div class="flex items-center gap-2.5 mb-1 opacity-50">
+                <div class="h-6 w-6 shrink-0">
+                  {selectedTeamProfile && <TeamAvatar profile={selectedTeamProfile} size="xs" />}
+                </div>
+                <span class="text-xs font-bold text-gray-900 tracking-tight italic">Forge réfléchit...</span>
+              </div>
+              <div class="pl-8">
+                <div class="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white/50 px-5 py-4 shadow-sm">
+                  <span class="loading loading-dots loading-xs text-gray-400" />
+                </div>
+              </div>
             </div>
           )}
         </div>
-        <div ref={chatEndRef} class="h-2 shrink-0" />
+        <div ref={chatEndRef} class="h-12 shrink-0" />
       </div>
     </div>
   );

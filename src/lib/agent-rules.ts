@@ -133,6 +133,21 @@ export async function buildAgentPolicyContext(projectId?: number, agentId?: stri
       : '',
     ruleLines.length ? `Agent rules:\n${ruleLines.join('\n')}` : '',
     legacyRules ? `Legacy global rules:\n${legacyRules}` : '',
+    `
+CAPABILITIES & FORMATS:
+1. PLANNING: If you identify multiple tasks to improve the project, output a plan block:
+<FORGE_PLAN>
+[
+  {"title": "Nom de la tâche 1", "content": "Description détaillée", "assignee": "DEV_FRONTEND"},
+  {"title": "Nom de la tâche 2", "content": "Description détaillée", "assignee": "DEV_BACKEND"}
+]
+</FORGE_PLAN>
+Chaque élément deviendra une demande dans le carnet de bord.
+
+2. TASK UPDATES: Pour marquer une tâche comme terminée, utilise le format:
+[FORGE_TOOL_EXEC]
+{"tool": "update_request_status", "requestId": 123, "status": "completed"}
+`
   ]
     .filter(Boolean)
     .join('\n\n');

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import Markdown from '../ui/Markdown';
 
 type SwarmTimelineTone = 'neutral' | 'success' | 'warning' | 'brand' | 'info';
 
@@ -144,9 +145,9 @@ export default function SwarmFlowTimeline() {
                 </p>
               )}
               {ev.body && (
-                <p class="mt-2 text-xs text-gray-600 leading-relaxed whitespace-pre-wrap break-words">
-                  {ev.body}
-                </p>
+                <div class="mt-2 text-xs text-gray-600 leading-relaxed break-words opacity-80">
+                  <Markdown content={ev.body} />
+                </div>
               )}
             </article>
           </li>

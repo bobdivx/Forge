@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
+import Markdown from '../ui/Markdown';
 
 type ProjectOption = { id: number; name: string };
 type ModalType = 'request' | 'issue' | 'dep' | null;
@@ -186,8 +187,10 @@ function DetailModal({ item, projects, onClose, onDeleted, onUpdated }: {
         <h3 class="text-sm font-bold text-gray-900 leading-snug">
           {item._type === 'dep' ? item.packageName + (item.versionSpec ? `@${item.versionSpec}` : '') : item.title}
         </h3>
-        {item._type !== 'dep' && item.title && (
-          <p class="text-xs text-gray-500 mt-1 line-clamp-3">{item.content || item.detail || item.reason || ''}</p>
+        {item._type !== 'dep' && (item.content || item.detail || item.reason) && (
+          <div class="text-xs text-gray-500 mt-2 p-3 bg-gray-50/50 rounded-lg border border-gray-100/50">
+             <Markdown content={item.content || item.detail || item.reason || ''} />
+          </div>
         )}
       </div>
 

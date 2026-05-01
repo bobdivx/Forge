@@ -25,6 +25,7 @@ export type ChatMessage = {
     mode: 'off' | 'warn' | 'enforce';
     state: 'idle' | 'compliant' | 'non_compliant';
   };
+  steps?: Array<{ type: string; label: string; payload?: string; status: string }>;
 };
 
 export type GatewayRemediation = {

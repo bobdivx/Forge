@@ -26,6 +26,7 @@ export type AgentTeamProfile = {
   bio: string | null;
   avatarUrl: string | null;
   avatarEmoji: string | null;
+  isSubAgent: boolean;
 };
 
 const AVATAR_COLORS = [
@@ -44,6 +45,11 @@ export function formatAgentName(name: string): string {
   if (safeName.includes('subagent:')) {
     const parts = safeName.split(':');
     return `Sous-agent (${(parts.pop() || '').slice(0, 8)})`;
+  }
+  if (safeName.includes('_app_')) {
+    const parts = safeName.split('_app_');
+    const appName = parts.pop() || '';
+    return `Sous-agent (${appName.replace(/_/g, ' ')})`;
   }
   return safeName
     .replace('telegram:g-agent-', '')
@@ -149,6 +155,7 @@ export function buildAgentTeamProfile(agent: AgentLike): AgentTeamProfile {
     bio: null,
     avatarUrl: null,
     avatarEmoji: null,
+    isSubAgent: safeId.includes('subagent:') || safeId.includes('_app_') || safeName.includes('subagent') || safeName.includes('_app_'),
   };
 }
 

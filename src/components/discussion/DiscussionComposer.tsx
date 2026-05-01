@@ -207,9 +207,18 @@ export default function DiscussionComposer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Réponse non-JSON du serveur (${res.status}): ${text.slice(0, 100)}...`);
+      }
+
       if (!res.ok) {
-        const errText = typeof data?.error === 'string' ? data.error : 'Erreur gateway';
+        const errText = typeof data?.error === 'string' ? data.error : `Erreur gateway (${res.status})`;
         setError(errText);
         setChat(c => [...c, {
           id: `${Date.now()}-err`,
@@ -236,7 +245,8 @@ export default function DiscussionComposer() {
         at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         remediation: data.remediation,
         isAck: false,
-        policy: { mode, state }
+        policy: { mode, state },
+        steps: data.steps,
       };
       setChat(c => [...c, ackMsg]);
       setPolicyBadge({ mode, state });

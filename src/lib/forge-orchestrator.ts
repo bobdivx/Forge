@@ -1,6 +1,5 @@
 import { getOllamaOriginResolved } from './config-db';
 import { buildAgentPolicyContext } from './agent-rules';
-import { runForgeTool, type ForgeToolResult } from './forge-tool-bus';
 
 export type ForgeOrchestratorInput = {
   agentId: string;
@@ -77,11 +76,17 @@ async function resolveAvailableModel(preferred: string): Promise<{ origin: strin
   return { origin: defaultOrigin, model: preferred };
 }
 
-function parseInlineToolDirective(message: string): { command?: string } {
+import { runForgeTool, type ForgeToolResult, type ForgeToolCall } from './forge-tool-bus';
+
+function parseInlineToolDirective(message: string): ForgeToolCall | null {
   const m = String(message || '').match(/\[FORGE_TOOL_EXEC\]([\s\S]*)$/i);
-  if (!m) return {};
-  const cmd = m[1].trim();
-  return cmd ? { command: cmd } : {};
+  if (!m) return null;
+  const raw = m[1].trim();
+  try {
+    return JSON.parse(raw) as ForgeToolCall;
+  } catch {
+    return { tool: 'exec', command: raw };
+  }
 }
 
 function extractRuleAudit(reply: string): { cleaned: string; audit: RuleAudit | null } {
@@ -96,17 +101,36 @@ function extractRuleAudit(reply: string): { cleaned: string; audit: RuleAudit | 
   }
 }
 
-export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promise<ForgeOrchestratorOutput> {
+export type ForgePlanItem = { title: string; content?: string; assignee?: string };
+
+function extractForgePlan(reply: string): { cleaned: string; plan: ForgePlanItem[] | null } {
+  const m = String(reply || '').match(/<FORGE_PLAN>([\s\S]*?)<\/FORGE_PLAN>/i);
+  if (!m) return { cleaned: String(reply || '').trim(), plan: null };
+  try {
+    const plan = JSON.parse(m[1]) as ForgePlanItem[];
+    const cleaned = String(reply || '').replace(m[0], '').trim();
+    return { cleaned, plan };
+  } catch {
+    // Fallback parsing simple markdown list if JSON fails
+    const cleaned = String(reply || '').replace(m[0], '').trim();
+    const lines = m[1].split('\n').filter(l => l.trim().startsWith('-'));
+    const plan = lines.map(l => ({ title: l.trim().slice(1).trim() }));
+    return { cleaned, plan: plan.length > 0 ? plan : null };
+  }
+}
+
+export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promise<ForgeOrchestratorOutput & { plan?: ForgePlanItem[] | null }> {
   const steps: ForgeOrchestratorOutput['steps'] = [];
-  const { command } = parseInlineToolDirective(input.message);
+  const toolCall = parseInlineToolDirective(input.message);
   let toolResult: ForgeToolResult | undefined;
 
-  if (command) {
-    steps.push({ type: 'tool', label: 'run_exec_tool', payload: command, status: 'running' });
-    toolResult = await runForgeTool({ tool: 'exec', command });
+  if (toolCall) {
+    const label = toolCall.tool === 'exec' ? `Commande: ${toolCall.command.slice(0, 40)}...` : `Tool: ${toolCall.tool}`;
+    steps.push({ type: 'tool', label, payload: JSON.stringify(toolCall), status: 'running' });
+    toolResult = await runForgeTool(toolCall);
     steps.push({
       type: 'tool',
-      label: 'run_exec_tool',
+      label: toolResult.ok ? 'Action terminée' : 'Échec de l\'action',
       payload: toolResult.ok ? 'ok' : toolResult.error || 'error',
       status: toolResult.ok ? 'completed' : 'failed',
     });
@@ -256,13 +280,18 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     });
   }
 
+  const { cleaned: finalReply, plan } = extractForgePlan(reply);
   steps.push({ type: 'llm', label: 'ollama_chat', payload: 'ok', status: 'completed' });
+  if (plan) {
+    steps.push({ type: 'system', label: 'plan_detected', payload: `${plan.length} tâches`, status: 'completed' });
+  }
   return {
-    reply: reply || 'Réponse vide.',
+    reply: finalReply || 'Réponse vide.',
     provider: 'ollama',
     model,
     steps,
     toolResult,
+    plan,
   };
 }
 
