@@ -19,7 +19,7 @@ export const POST: APIRoute = async ({ request }) => {
     for (const row of compatibilityRows) {
       try {
         const val = JSON.parse(row.value);
-        if (val.ok === false) {
+        if (val.ok === false || val.disabledManually === true) {
           koModels.push(row.key.replace('compatibility_ollama_', ''));
         }
       } catch (e) {}
@@ -33,6 +33,8 @@ export const POST: APIRoute = async ({ request }) => {
     // Note: Drizzle inArray peut être limité si la liste est vide, mais ici on a checké koModels.length > 0
     const agentsToUpdate = await db.select().from(AgentInstruction).where(inArray(AgentInstruction.model, koModels));
     
+    const { provisionAgentInZimaOS } = await import('../../lib/zimaos-agent-provision');
+    
     for (const agent of agentsToUpdate) {
       await db.update(AgentInstruction)
         .set({ 
@@ -40,6 +42,14 @@ export const POST: APIRoute = async ({ request }) => {
           updatedAt: new Date()
         })
         .where(eq(AgentInstruction.agentId, agent.agentId));
+      
+      // Sync ZimaOS
+      await provisionAgentInZimaOS({
+        agentId: agent.agentId,
+        model: effectiveFallback,
+        filePath: '',
+        systemPrompt: agent.systemPrompt
+      });
     }
 
     return new Response(JSON.stringify({ 

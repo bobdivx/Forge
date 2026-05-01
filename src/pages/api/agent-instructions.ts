@@ -48,6 +48,19 @@ export const PUT: APIRoute = async ({ request }) => {
     .set(updateData)
     .where(eq(AgentInstruction.agentId, agentId));
 
+  // Provisioning ZimaOS pour refléter le changement immédiatement
+  if (model !== undefined || systemPrompt !== undefined) {
+    const existing = await db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentId)).limit(1);
+    if (existing.length) {
+      await provisionAgentInZimaOS({
+        agentId: existing[0].agentId,
+        model: existing[0].model,
+        filePath: '',
+        systemPrompt: existing[0].systemPrompt,
+      });
+    }
+  }
+
   return new Response(JSON.stringify({ ok: true, agentId }), {
     headers: { 'Content-Type': 'application/json' },
   });

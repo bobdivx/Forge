@@ -1,10 +1,7 @@
 import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
 
-export const POST: APIRoute = async ({ request, locals }) => {
-  if (!locals.user?.email) {
-    return new Response(JSON.stringify({ error: 'Non authentifié' }), { status: 401 });
-  }
+export const POST: APIRoute = async ({ request }) => {
 
   const body = await request.json().catch(() => ({}));
   const { model, disabled } = body;
