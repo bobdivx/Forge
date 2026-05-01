@@ -110,7 +110,7 @@ export default function AgentModelMatrix() {
         </div>
 
         <div class="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
-          <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-2">Modèle par défaut :</span>
+          <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-2">Défaut :</span>
           <select
             value={defaultModel}
             onChange={(e) => updateDefault((e.target as HTMLSelectElement).value)}
@@ -119,6 +119,24 @@ export default function AgentModelMatrix() {
           >
             {allModels.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
+          <button
+            onClick={async () => {
+              if (!confirm(`Voulez-vous vraiment appliquer le modèle "${defaultModel}" à TOUS les agents ?`)) return;
+              setSavingDefault(true);
+              try {
+                const res = await fetch('/api/apply-default-model', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                load(); // Reload matrix
+              } finally {
+                setSavingDefault(false);
+              }
+            }}
+            disabled={savingDefault}
+            class="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            Appliquer à tous
+          </button>
           {savingDefault && <span class="w-3 h-3 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mr-2" />}
         </div>
       </div>

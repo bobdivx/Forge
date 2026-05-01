@@ -38,12 +38,13 @@ async function resolveAvailableModel(preferred: string): Promise<{ origin: strin
     if (OllamaInstance) {
       instances = await db.select().from(OllamaInstance).where(eq(OllamaInstance.enabled, 1));
     }
-    // Charger les modèles marqués comme compatibles
+    // Charger les modèles marqués comme compatibles (et non désactivés manuellement)
     const compatibilityConfigs = await db.select().from(Config).where(like(Config.key, 'compatibility_ollama_%'));
     compatibleModels = compatibilityConfigs
       .filter(c => {
         try {
-          return JSON.parse(c.value).ok === true;
+          const val = JSON.parse(c.value);
+          return val.ok === true && val.disabledManually !== true;
         } catch { return false; }
       })
       .map(c => c.key.replace('compatibility_ollama_', ''));

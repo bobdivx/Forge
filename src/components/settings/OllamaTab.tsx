@@ -30,8 +30,43 @@ export default function OllamaTab() {
   const [newApiKey, setNewApiKey] = useState('');
   const [adding, setAdding] = useState(false);
   const [batchTesting, setBatchTesting] = useState(false);
-  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, modelName: '' });
   const [fixingAgents, setFixingAgents] = useState(false);
+
+  const runTest = async (model: string, origin: string) => {
+    try {
+      const res = await fetch('/api/test-ollama-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, origin }),
+      });
+      const data = await res.json();
+      setCompatibility(prev => ({
+        ...prev,
+        [model]: { ok: data.ok, testedAt: new Date().toISOString() }
+      }));
+    } catch (e) {
+      console.error(`Error testing ${model}:`, e);
+    }
+  };
+
+  const toggleManualDisable = async (model: string, currentlyDisabled: boolean) => {
+    try {
+      const res = await fetch('/api/toggle-ollama-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, disabled: !currentlyDisabled }),
+      });
+      if (res.ok) {
+        setCompatibility(prev => ({
+          ...prev,
+          [model]: { ...prev[model], disabledManually: !currentlyDisabled }
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const testAllModels = async () => {
     const allModels: Array<{ model: string; origin: string }> = [];
@@ -46,11 +81,11 @@ export default function OllamaTab() {
     if (allModels.length === 0) return;
 
     setBatchTesting(true);
-    setBatchProgress({ current: 0, total: allModels.length });
+    setBatchProgress({ current: 0, total: allModels.length, modelName: '' });
 
     for (let i = 0; i < allModels.length; i++) {
-      setBatchProgress(p => ({ ...p, current: i + 1 }));
       const { model, origin } = allModels[i];
+      setBatchProgress({ current: i + 1, total: allModels.length, modelName: model });
       await runTest(model, origin);
     }
 
@@ -198,7 +233,7 @@ export default function OllamaTab() {
             Gérez vos différents serveurs Ollama. Forge agrégera les modèles de toutes les instances actives pour votre matrice d'agents.
           </p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center justify-between gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
           <button
             onClick={testAllModels}
             disabled={batchTesting || instances.length === 0}
@@ -207,7 +242,7 @@ export default function OllamaTab() {
             {batchTesting ? (
               <>
                 <span class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Test en cours ({batchProgress.current}/{batchProgress.total})
+                Test : {batchProgress.modelName} ({batchProgress.current}/{batchProgress.total})
               </>
             ) : (
               <>
@@ -346,31 +381,49 @@ export default function OllamaTab() {
                             <div class="flex flex-wrap gap-2 mt-3">
                               {inst.health.models.map((m) => {
                                 const comp = compatibility[m];
-                                const isTesting = testingModel === m;
+                                const isTesting = batchTesting && batchProgress.modelName === m;
+                                const isDisabled = comp?.disabledManually;
+
                                 return (
-                                  <div key={m} class="flex items-center gap-1.5 p-1.5 rounded-lg bg-gray-50 border border-gray-200">
-                                    <span class="text-[10px] font-mono font-bold text-gray-700">{m}</span>
-                                    {comp ? (
+                                  <div key={m} class={`flex items-center gap-1.5 p-1.5 rounded-lg border transition-all ${isDisabled ? 'bg-gray-100 border-gray-200 opacity-50' : 'bg-gray-50 border-gray-200'}`}>
+                                    <span class={`text-[10px] font-mono font-bold ${isDisabled ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{m}</span>
+                                    
+                                    {comp && !isDisabled && (
                                       <span 
                                         class={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${comp.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
                                         title={comp.testedAt ? `Testé le ${new Date(comp.testedAt).toLocaleString()}` : ''}
                                       >
                                         {comp.ok ? 'Forge OK' : 'Forge KO'}
                                       </span>
-                                    ) : (
-                                      <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 text-[9px] font-bold uppercase">Non testé</span>
                                     )}
-                                    <button 
-                                      onClick={() => testModel(m, inst.normalizedUrl || inst.url)}
-                                      disabled={isTesting}
-                                      class={`p-1 rounded hover:bg-gray-200 transition-colors ${isTesting ? 'animate-spin' : ''}`}
-                                      title="Tester la compatibilité Forge"
-                                    >
-                                      <svg class="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                      </svg>
-                                    </button>
+
+                                    {isDisabled && (
+                                      <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 text-[9px] font-bold uppercase">Désactivé</span>
+                                    )}
+
+                                    <div class="flex items-center gap-1 ml-1">
+                                      <button 
+                                        onClick={() => runTest(m, inst.normalizedUrl || inst.url)}
+                                        disabled={isTesting || batchTesting}
+                                        class={`p-1 rounded hover:bg-gray-200 transition-colors ${isTesting ? 'animate-spin text-blue-500' : 'text-gray-400'}`}
+                                        title="Lancer un test"
+                                      >
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                        </svg>
+                                      </button>
+                                      <button 
+                                        onClick={() => toggleManualDisable(m, !!isDisabled)}
+                                        class={`p-1 rounded transition-colors ${isDisabled ? 'text-emerald-500 hover:bg-emerald-50' : 'text-gray-300 hover:text-rose-500 hover:bg-rose-50'}`}
+                                        title={isDisabled ? 'Activer le modèle' : 'Désactiver le modèle'}
+                                      >
+                                        {isDisabled ? (
+                                          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                                        ) : (
+                                          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               })}
