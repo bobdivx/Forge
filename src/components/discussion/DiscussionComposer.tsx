@@ -43,8 +43,29 @@ export default function DiscussionComposer() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [swarmCommandMode, setSwarmCommandMode] = useState<'direct' | 'leader'>('direct');
   const [policyBadge, setPolicyBadge] = useState<PolicyBadgeState>({ mode: 'off', state: 'idle' });
+  const [currentSteps, setCurrentSteps] = useState<any[]>([]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const currentAgentRef = useRef<string>('');
+
+  useEffect(() => {
+    let interval: any;
+    if (sending && agentId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/discussion-steps?sessionId=${agentId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.steps)) setCurrentSteps(data.steps);
+          }
+        } catch (err) {
+          console.warn('Steps poll failed', err);
+        }
+      }, 2000);
+    } else {
+      setCurrentSteps([]);
+    }
+    return () => clearInterval(interval);
+  }, [sending, agentId]);
 
   useEffect(() => {
     Promise.all([
@@ -68,12 +89,12 @@ export default function DiscussionComposer() {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chat, sending, pollingReply]);
+  }, [chat, sending, pollingReply, currentSteps]);
 
   const teamProfiles = useMemo(() => {
     const map: Record<string, AgentTeamProfile> = {};
     for (const a of agents) {
-      map[a.id] = mergeZimaOSTeamProfile(buildAgentTeamProfile(a), ocProfiles[a.id]);
+      map[a.id] = mergeZimaOSTeamProfile(a, ocProfiles[a.id]);
     }
     return map;
   }, [agents, ocProfiles]);
@@ -305,6 +326,7 @@ export default function DiscussionComposer() {
         <ChatThread 
            chat={chat} historyLoading={historyLoading} agentId={agentId} selectedTeamProfile={selectedTeamProfile}
            sending={sending} pollingReply={pollingReply} routingDebug={routingDebug} chatEndRef={chatEndRef} copyToClipboard={copyToClipboard}
+           currentSteps={currentSteps}
         />
         <ComposerInput 
            message={message} setMessage={setMessage} sending={sending} historyLoading={historyLoading} sessionUnavailable={sessionUnavailable} agentId={agentId}

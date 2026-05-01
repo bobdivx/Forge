@@ -55,7 +55,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       createdAt: now,
     });
 
-    const orchestrated = await runForgeOrchestrator({ agentId, message, modelHint, projectId });
+    const orchestrated = await runForgeOrchestrator({ 
+      agentId, 
+      message, 
+      modelHint, 
+      projectId,
+      sessionId: sessionId 
+    });
     await db.insert(ForgeChatMessage).values({
       sessionId,
       role: 'assistant',
@@ -65,16 +71,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
       meta: orchestrated.toolResult ? JSON.stringify({ toolResult: orchestrated.toolResult }) : null,
       createdAt: new Date(),
     });
-    for (const step of orchestrated.steps) {
-      await db.insert(ForgeChatStep).values({
-        sessionId,
-        type: step.type,
-        label: step.label,
-        payload: step.payload || null,
-        status: step.status,
-        createdAt: new Date(),
-      });
-    }
 
     if (orchestrated.plan && orchestrated.plan.length > 0 && projectId) {
       const { Request } = await loadAstroDb();
@@ -105,6 +101,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   } catch (e) {
+    console.error('[forge-chat] Fatal error:', e);
     return new Response(JSON.stringify({ error: normalizeError(e) }), { status: 502 });
   }
 };

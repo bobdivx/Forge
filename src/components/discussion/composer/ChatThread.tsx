@@ -15,20 +15,33 @@ interface Props {
   routingDebug: RoutingDebugState | null;
   chatEndRef: preact.RefObject<HTMLDivElement>;
   copyToClipboard: (text: string) => Promise<void>;
+  currentSteps?: any[];
 }
 
 function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
-  const [open, setOpen] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   if (!steps || steps.length === 0) return null;
 
   const getIcon = (s: any) => {
-    if (s.label?.toLowerCase().includes('explor')) return 'Explored';
-    if (s.label?.toLowerCase().includes('modif') || s.label?.toLowerCase().includes('edit')) return 'Edited';
-    if (s.label?.toLowerCase().includes('command') || s.label?.toLowerCase().includes('ran')) return 'Ran';
-    if (s.label?.toLowerCase().includes('thought') || s.label?.toLowerCase().includes('réfléchi')) return 'Thought';
-    if (s.type === 'llm') return 'LLM';
-    if (s.label?.toLowerCase().includes('plan')) return 'Plan';
-    return 'Action';
+    const l = s.label?.toLowerCase() || '';
+    if (l.includes('explor')) return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+    );
+    if (l.includes('modif') || l.includes('edit')) return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+    );
+    if (l.includes('command') || l.includes('ran') || s.type === 'tool') return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+    );
+    if (l.includes('thought') || l.includes('réfléchi')) return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+    );
+    if (s.type === 'llm' || l.includes('plan')) return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+    );
+    return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    );
   };
 
   const getLabel = (s: any) => {
@@ -37,29 +50,54 @@ function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
     return s.label;
   };
 
+  const visibleSteps = steps.filter(s => s.type !== 'policy' || s.label === 'plan_detected');
+
   return (
-    <div class="mt-4 space-y-2 border-l-2 border-gray-100 pl-3">
-      {steps.filter(s => s.type !== 'policy' || s.label === 'plan_detected').map((s, idx) => (
-        <div key={idx} class="group flex items-center gap-2 text-[12px] text-gray-500 transition-colors hover:text-gray-800">
-          <span class="font-medium">{getIcon(s)}</span>
-          <span class="flex-1 truncate font-mono text-gray-400 group-hover:text-gray-600">
-            {getLabel(s)}
-            {s.payload && s.payload !== 'ok' && s.payload !== 'running' && (
-              <span class="ml-2 opacity-60">({s.payload.slice(0, 50)})</span>
+    <div class="mt-4 space-y-1.5 border-l-2 border-gray-100 pl-3">
+      {visibleSteps.map((s, idx) => {
+        const isExpanded = expandedIdx === idx;
+        const hasPayload = s.payload && s.payload !== 'ok' && s.payload !== 'running';
+        
+        return (
+          <div key={idx} class="group flex flex-col gap-1">
+            <div 
+              class={`flex cursor-pointer items-center gap-2 text-[12px] transition-colors ${isExpanded ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+              onClick={() => setExpandedIdx(isExpanded ? null : idx)}
+            >
+              <span class="flex h-4 w-4 items-center justify-center rounded bg-gray-50 group-hover:bg-gray-100">
+                {getIcon(s)}
+              </span>
+              <span class="flex-1 truncate font-mono">
+                {getLabel(s)}
+                {!isExpanded && hasPayload && (
+                  <span class="ml-2 text-gray-300 opacity-60">({s.payload.slice(0, 30)}...)</span>
+                )}
+              </span>
+              {hasPayload && (
+                <svg class={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                </svg>
+              )}
+            </div>
+            
+            {isExpanded && hasPayload && (
+              <div class="mb-2 ml-6 mt-1 overflow-hidden rounded-lg border border-gray-100 bg-gray-50/50 p-2 shadow-inner">
+                <pre class="max-h-60 overflow-y-auto font-mono text-[11px] leading-relaxed text-gray-600">
+                  {s.payload}
+                </pre>
+              </div>
             )}
-          </span>
-          <svg class="h-3 w-3 opacity-0 group-hover:opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export default function ChatThread({
   chat, historyLoading, agentId, selectedTeamProfile,
-  sending, pollingReply, routingDebug, chatEndRef, copyToClipboard
+  sending, pollingReply, routingDebug, chatEndRef, copyToClipboard,
+  currentSteps
 }: Props) {
   return (
     <div class="relative flex min-h-0 flex-1 flex-col bg-[#F8FAFB]">
@@ -152,10 +190,15 @@ export default function ChatThread({
                 </div>
                 <span class="text-xs font-bold text-gray-900 tracking-tight italic">Forge réfléchit...</span>
               </div>
-              <div class="pl-8">
+              <div class="pl-8 flex flex-col gap-2">
                 <div class="flex items-center gap-2 rounded-2xl border border-gray-100 bg-white/50 px-5 py-4 shadow-sm">
                   <span class="loading loading-dots loading-xs text-gray-400" />
                 </div>
+                {currentSteps && currentSteps.length > 0 && (
+                  <div class="animate-fade-in">
+                    <StepLog steps={currentSteps} />
+                  </div>
+                )}
               </div>
             </div>
           )}

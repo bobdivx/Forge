@@ -1,11 +1,14 @@
 import { getOllamaOriginResolved } from './config-db';
 import { buildAgentPolicyContext } from './agent-rules';
+import { runForgeTool, type ForgeToolResult, type ForgeToolCall } from './forge-tool-bus';
+import { loadAstroDb } from './load-astro-db';
 
 export type ForgeOrchestratorInput = {
   agentId: string;
   message: string;
   modelHint?: string;
   projectId?: number;
+  sessionId?: string;
 };
 
 export type ForgeOrchestratorOutput = {
@@ -76,8 +79,6 @@ async function resolveAvailableModel(preferred: string): Promise<{ origin: strin
   return { origin: defaultOrigin, model: preferred };
 }
 
-import { runForgeTool, type ForgeToolResult, type ForgeToolCall } from './forge-tool-bus';
-
 function parseInlineToolDirective(message: string): ForgeToolCall | null {
   const m = String(message || '').match(/\[FORGE_TOOL_EXEC\]([\s\S]*)$/i);
   if (!m) return null;
@@ -121,14 +122,34 @@ function extractForgePlan(reply: string): { cleaned: string; plan: ForgePlanItem
 
 export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promise<ForgeOrchestratorOutput & { plan?: ForgePlanItem[] | null }> {
   const steps: ForgeOrchestratorOutput['steps'] = [];
+  const { db, ForgeChatStep } = await loadAstroDb();
+
+  const persistStep = async (s: ForgeOrchestratorOutput['steps'][0]) => {
+    steps.push(s);
+    if (input.sessionId) {
+      try {
+        await db.insert(ForgeChatStep).values({
+          sessionId: input.sessionId,
+          type: s.type,
+          label: s.label,
+          payload: typeof s.payload === 'string' ? s.payload : JSON.stringify(s.payload),
+          status: s.status,
+          createdAt: new Date(),
+        });
+      } catch (e) {
+        console.warn('[orchestrator] step persist failed:', e);
+      }
+    }
+  };
+
   const toolCall = parseInlineToolDirective(input.message);
   let toolResult: ForgeToolResult | undefined;
 
   if (toolCall) {
-    const label = toolCall.tool === 'exec' ? `Commande: ${toolCall.command.slice(0, 40)}...` : `Tool: ${toolCall.tool}`;
-    steps.push({ type: 'tool', label, payload: JSON.stringify(toolCall), status: 'running' });
+    const label = toolCall.tool === 'exec' ? `Commande: ${(toolCall.command || '').slice(0, 40)}...` : `Tool: ${toolCall.tool}`;
+    await persistStep({ type: 'tool', label, payload: JSON.stringify(toolCall), status: 'running' });
     toolResult = await runForgeTool(toolCall);
-    steps.push({
+    await persistStep({
       type: 'tool',
       label: toolResult.ok ? 'Action terminée' : 'Échec de l\'action',
       payload: toolResult.ok ? 'ok' : toolResult.error || 'error',
@@ -140,7 +161,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
   const { origin, model } = await resolveAvailableModel(preferredModel);
 
   const policy = await buildAgentPolicyContext(input.projectId, input.agentId);
-  steps.push({
+  await persistStep({
     type: 'policy',
     label: 'strict_mode',
     payload: policy.strictMode,
@@ -150,7 +171,8 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     ? `${input.message}\n\n[TOOL_RESULT]\n${String(toolResult.output || '').slice(0, 5000)}`
     : input.message;
   const systemContent = policy.instructionText;
-  steps.push({ type: 'llm', label: 'ollama_chat', payload: model, status: 'running' });
+  await persistStep({ type: 'llm', label: 'ollama_chat', payload: model, status: 'running' });
+  const timeoutMs = 90_000;
   const res = await fetch(`${origin}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -162,7 +184,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
         { role: 'user', content },
       ],
     }),
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok && res.status === 404) {
@@ -175,18 +197,19 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
         stream: false,
         prompt,
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const genData = (await genRes.json().catch(() => ({}))) as Record<string, unknown>;
     if (genRes.ok) {
       const generated = typeof genData.response === 'string' ? genData.response.trim() : '';
-      steps.push({ type: 'llm', label: 'ollama_generate_fallback', payload: 'ok', status: 'completed' });
+      await persistStep({ type: 'llm', label: 'ollama_generate_fallback', payload: 'ok', status: 'completed' });
       return {
         reply: generated || 'Réponse vide.',
         provider: 'ollama',
         model,
         steps,
         toolResult,
+        plan: null,
       };
     }
     if (genRes.status === 404) {
@@ -197,7 +220,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
           model,
           messages: [{ role: 'user', content }],
         }),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       const v1Data = (await v1Res.json().catch(() => ({}))) as Record<string, unknown>;
       if (v1Res.ok) {
@@ -205,32 +228,34 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
         const text = typeof choices[0]?.message === 'object'
           ? String((choices[0].message as Record<string, unknown>).content || '').trim()
           : '';
-        steps.push({ type: 'llm', label: 'openai_chat_fallback', payload: 'ok', status: 'completed' });
+        await persistStep({ type: 'llm', label: 'openai_chat_fallback', payload: 'ok', status: 'completed' });
         return {
           reply: text || 'Réponse vide.',
           provider: 'ollama-openai',
           model,
           steps,
           toolResult,
+          plan: null,
         };
       }
-      steps.push({
+      await persistStep({
         type: 'llm',
         label: 'openai_chat_fallback',
         payload: `http_${v1Res.status}`,
         status: 'failed',
       });
     }
-    steps.push({ type: 'llm', label: 'ollama_generate_fallback', payload: `http_${genRes.status}`, status: 'failed' });
+    await persistStep({ type: 'llm', label: 'ollama_generate_fallback', payload: `http_${genRes.status}`, status: 'failed' });
   }
   if (!res.ok) {
-    steps.push({ type: 'llm', label: 'ollama_chat', payload: `http_${res.status}`, status: 'failed' });
+    await persistStep({ type: 'llm', label: 'ollama_chat', payload: `http_${res.status}`, status: 'failed' });
     return {
       reply: `Erreur Ollama HTTP ${res.status}`,
       provider: 'ollama',
       model,
       steps,
       toolResult,
+      plan: null,
     };
   }
   const rawReply =
@@ -240,7 +265,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
   let { cleaned: reply, audit } = extractRuleAudit(rawReply);
 
   if (policy.strictMode === 'enforce' && (!audit || !audit.rules_ok)) {
-    steps.push({ type: 'policy', label: 'strict_retry', payload: 'non_compliant_first_pass', status: 'running' });
+    await persistStep({ type: 'policy', label: 'strict_retry', payload: 'non_compliant_first_pass', status: 'running' });
     const retrySystem = `${systemContent}\n\nTu as retourne une reponse non conforme aux regles. Corrige et respecte strictement toutes les regles.`;
     const retryRes = await fetch(`${origin}/api/chat`, {
       method: 'POST',
@@ -253,7 +278,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
           { role: 'user', content },
         ],
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const retryData = (await retryRes.json().catch(() => ({}))) as Record<string, unknown>;
     const retryRaw =
@@ -263,7 +288,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     const retryParsed = extractRuleAudit(retryRaw);
     reply = retryParsed.cleaned || reply;
     audit = retryParsed.audit;
-    steps.push({
+    await persistStep({
       type: 'policy',
       label: 'strict_retry',
       payload: audit?.rules_ok ? 'compliant' : 'still_non_compliant',
@@ -272,7 +297,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
   }
 
   if (policy.strictMode !== 'off') {
-    steps.push({
+    await persistStep({
       type: 'policy',
       label: 'strict_audit',
       payload: audit?.rules_ok ? 'compliant' : 'non_compliant',
@@ -281,9 +306,9 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
   }
 
   const { cleaned: finalReply, plan } = extractForgePlan(reply);
-  steps.push({ type: 'llm', label: 'ollama_chat', payload: 'ok', status: 'completed' });
+  await persistStep({ type: 'llm', label: 'ollama_chat', payload: 'ok', status: 'completed' });
   if (plan) {
-    steps.push({ type: 'system', label: 'plan_detected', payload: `${plan.length} tâches`, status: 'completed' });
+    await persistStep({ type: 'system', label: 'plan_detected', payload: `${plan.length} tâches`, status: 'completed' });
   }
   return {
     reply: finalReply || 'Réponse vide.',
