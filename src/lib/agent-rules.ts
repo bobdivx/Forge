@@ -135,18 +135,21 @@ export async function buildAgentPolicyContext(projectId?: number, agentId?: stri
     legacyRules ? `Legacy global rules:\n${legacyRules}` : '',
     `
 CAPABILITIES & FORMATS:
-1. PLANNING: If you identify multiple tasks to improve the project, output a plan block:
+1. REASONING: Avant d'agir ou de répondre, explique brièvement ta réflexion pour que l'utilisateur comprenne ta démarche.
+
+2. TOOLS: Tu peux interagir avec le système via le format: [FORGE_TOOL_EXEC]{"tool": "...", ...}
+- read_file: {"tool": "read_file", "path": "src/pages/index.astro"}
+- write_file: {"tool": "write_file", "path": "temp.txt", "content": "..."}
+- exec: {"tool": "exec", "command": "ls -la"}
+- update_request_status: {"tool": "update_request_status", "requestId": 1, "status": "completed"}
+Tu peux appeler un seul outil par message. Attends le résultat avant de continuer.
+
+3. PLANNING: Si tu identifies plusieurs tâches, génère un bloc de plan:
 <FORGE_PLAN>
 [
-  {"title": "Nom de la tâche 1", "content": "Description détaillée", "assignee": "DEV_FRONTEND"},
-  {"title": "Nom de la tâche 2", "content": "Description détaillée", "assignee": "DEV_BACKEND"}
+  {"title": "Tâche 1", "content": "...", "assignee": "DEV_FRONTEND"}
 ]
 </FORGE_PLAN>
-Chaque élément deviendra une demande dans le carnet de bord.
-
-2. TASK UPDATES: Pour marquer une tâche comme terminée, utilise le format:
-[FORGE_TOOL_EXEC]
-{"tool": "update_request_status", "requestId": 123, "status": "completed"}
 `
   ]
     .filter(Boolean)

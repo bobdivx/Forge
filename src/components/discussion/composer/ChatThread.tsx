@@ -20,10 +20,14 @@ interface Props {
 
 function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [groupExpanded, setGroupExpanded] = useState(false);
   if (!steps || steps.length === 0) return null;
 
   const getIcon = (s: any) => {
     const l = s.label?.toLowerCase() || '';
+    if (s.type === 'thought' || l.includes('thought') || l.includes('réfléchi')) return (
+      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+    );
     if (l.includes('explor')) return (
       <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
     );
@@ -32,9 +36,6 @@ function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
     );
     if (l.includes('command') || l.includes('ran') || s.type === 'tool') return (
       <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-    );
-    if (l.includes('thought') || l.includes('réfléchi')) return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
     );
     if (s.type === 'llm' || l.includes('plan')) return (
       <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
@@ -51,26 +52,31 @@ function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
   };
 
   const visibleSteps = steps.filter(s => s.type !== 'policy' || s.label === 'plan_detected');
+  
+  // Groupement des outils consécutifs pour éviter le bruit
+  const toolSteps = visibleSteps.filter(s => s.type === 'tool');
+  const otherSteps = visibleSteps.filter(s => s.type !== 'tool');
 
   return (
-    <div class="mt-4 space-y-1.5 border-l-2 border-gray-100 pl-3">
-      {visibleSteps.map((s, idx) => {
+    <div class="mt-4 space-y-2 border-l-2 border-gray-100 pl-3">
+      {otherSteps.map((s, idx) => {
         const isExpanded = expandedIdx === idx;
+        const isThought = s.type === 'thought';
         const hasPayload = s.payload && s.payload !== 'ok' && s.payload !== 'running';
         
         return (
-          <div key={idx} class="group flex flex-col gap-1">
+          <div key={idx} class={`group flex flex-col gap-1 ${isThought ? 'bg-amber-50/50 rounded-lg p-2 border border-amber-100/50 mb-2' : ''}`}>
             <div 
-              class={`flex cursor-pointer items-center gap-2 text-[12px] transition-colors ${isExpanded ? 'text-blue-600' : 'text-gray-500 hover:text-gray-800'}`}
+              class={`flex cursor-pointer items-center gap-2 text-[12px] transition-colors ${isExpanded ? (isThought ? 'text-amber-700' : 'text-blue-600') : 'text-gray-500 hover:text-gray-800'}`}
               onClick={() => setExpandedIdx(isExpanded ? null : idx)}
             >
-              <span class="flex h-4 w-4 items-center justify-center rounded bg-gray-50 group-hover:bg-gray-100">
+              <span class={`flex h-4 w-4 items-center justify-center rounded ${isThought ? 'bg-amber-100 text-amber-600' : 'bg-gray-50 group-hover:bg-gray-100'}`}>
                 {getIcon(s)}
               </span>
-              <span class="flex-1 truncate font-mono">
+              <span class={`flex-1 truncate font-mono ${isThought ? 'font-semibold italic' : ''}`}>
                 {getLabel(s)}
                 {!isExpanded && hasPayload && (
-                  <span class="ml-2 text-gray-300 opacity-60">({s.payload.slice(0, 30)}...)</span>
+                  <span class="ml-2 text-gray-300 opacity-60">({(s.payload as string).slice(0, 40)}...)</span>
                 )}
               </span>
               {hasPayload && (
@@ -80,9 +86,9 @@ function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
               )}
             </div>
             
-            {isExpanded && hasPayload && (
-              <div class="mb-2 ml-6 mt-1 overflow-hidden rounded-lg border border-gray-100 bg-gray-50/50 p-2 shadow-inner">
-                <pre class="max-h-60 overflow-y-auto font-mono text-[11px] leading-relaxed text-gray-600">
+            {(isExpanded || isThought) && hasPayload && (
+              <div class={`mb-2 ml-6 mt-1 overflow-hidden rounded-lg border p-2 shadow-inner ${isThought ? 'bg-white border-amber-50' : 'bg-gray-50/50 border-gray-100'}`}>
+                <pre class={`max-h-60 overflow-y-auto font-mono text-[11px] leading-relaxed ${isThought ? 'text-amber-800/80 whitespace-pre-wrap' : 'text-gray-600'}`}>
                   {s.payload}
                 </pre>
               </div>
@@ -90,6 +96,37 @@ function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
           </div>
         );
       })}
+
+      {toolSteps.length > 0 && (
+        <div class="mt-2">
+          <button 
+            onClick={() => setGroupExpanded(!groupExpanded)}
+            class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <span class="flex h-4 w-4 items-center justify-center rounded bg-gray-100">
+               <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            </span>
+            {toolSteps.length} Action{toolSteps.length > 1 ? 's' : ''} technique{toolSteps.length > 1 ? 's' : ''}
+            <svg class={`h-3 w-3 transition-transform ${groupExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          
+          {groupExpanded && (
+            <div class="mt-2 space-y-1.5 ml-2 border-l border-gray-200 pl-3 animate-fade-in">
+              {toolSteps.map((s, idx) => (
+                <div key={idx} class="text-[11px] text-gray-500 font-mono flex items-center gap-2">
+                   <span class={`w-1.5 h-1.5 rounded-full ${s.status === 'completed' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                   {getLabel(s)}
+                   {s.payload && s.payload !== 'ok' && (
+                     <span class="text-gray-300 italic truncate">({(s.payload as string).slice(0, 50)})</span>
+                   )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

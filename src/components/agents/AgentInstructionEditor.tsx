@@ -117,8 +117,8 @@ export default function AgentInstructionEditor() {
         : [];
 
       const inferredModels = nextAgents.map((a) => String(a.model || '').trim()).filter(Boolean);
-      const mergedModels = [...new Set([...MODEL_FALLBACK, ...nextModelsRaw, ...inferredModels])].sort((a, b) =>
-        a.localeCompare(b),
+      const mergedModels = [...new Set(['Auto', ...MODEL_FALLBACK, ...nextModelsRaw, ...inferredModels])].sort((a, b) =>
+        a === 'Auto' ? -1 : b === 'Auto' ? 1 : a.localeCompare(b),
       );
 
       setAgents(nextAgents.sort((a, b) => a.agentId.localeCompare(b.agentId)));
@@ -338,7 +338,7 @@ export default function AgentInstructionEditor() {
             >
               {uiModels.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {m === 'Auto' ? 'Auto (Recommandé)' : m}
                 </option>
               ))}
             </select>
@@ -424,7 +424,8 @@ export default function AgentInstructionEditor() {
                   class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 outline-none focus:border-[#175B37]/50 focus:bg-white focus:ring-2 focus:ring-[#175B37]/15"
                 />
                 <datalist id="forge-agent-models">
-                  {uiModels.map((m) => (
+                  <option value="Auto" />
+                  {uiModels.filter(m => m !== 'Auto').map((m) => (
                     <option key={m} value={m} />
                   ))}
                 </datalist>

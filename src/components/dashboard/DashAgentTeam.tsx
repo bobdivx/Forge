@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { formatAgentName, getAgentRole } from '../agents/AgentCard';
+import { formatAgentName, getAgentRole } from '../../lib/agent-profile';
 
 type Agent = { id: string; name: string; status?: string; model?: string; lastSeen?: string };
 

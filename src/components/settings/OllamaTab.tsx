@@ -14,6 +14,7 @@ type OllamaInstance = {
     status: number;
     endpoint: string;
     error?: string;
+    models?: string[];
   } | null;
 };
 
@@ -21,6 +22,8 @@ export default function OllamaTab() {
   const [instances, setInstances] = useState<OllamaInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [compatibility, setCompatibility] = useState<Record<string, { ok: boolean; testedAt?: string }>>({});
+  const [testingModel, setTestingModel] = useState<string | null>(null);
   
   const [newName, setNewName] = useState('');
   const [newUrl, setNewUrl] = useState('');
@@ -35,10 +38,19 @@ export default function OllamaTab() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ollama-instances');
-      if (!res.ok) throw new Error('Échec du chargement');
-      const data = await res.json();
-      setInstances(data);
+      const [instRes, compRes] = await Promise.all([
+        fetch('/api/ollama-instances'),
+        fetch('/api/test-ollama-model')
+      ]);
+      
+      if (!instRes.ok) throw new Error('Échec du chargement des instances');
+      const instData = await instRes.json();
+      setInstances(instData);
+
+      if (compRes.ok) {
+        const compData = await compRes.json();
+        setCompatibility(compData);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -112,6 +124,26 @@ export default function OllamaTab() {
       load();
     } catch (e: any) {
       setError(e.message);
+    }
+  };
+
+  const testModel = async (model: string, origin: string) => {
+    setTestingModel(model);
+    try {
+      const res = await fetch('/api/test-ollama-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, origin }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        // Success
+      }
+      load(); // Refresh compatibility list
+    } catch (e: any) {
+      setError(`Erreur test ${model}: ${e.message}`);
+    } finally {
+      setTestingModel(null);
     }
   };
 
@@ -226,12 +258,37 @@ export default function OllamaTab() {
                               : inst.health?.error || 'Indisponible'}
                           </p>
                           {inst.health?.ok && inst.health.models && inst.health.models.length > 0 && (
-                            <div class="flex flex-wrap gap-1 mt-2">
-                              {inst.health.models.map((m) => (
-                                <span key={m} class="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[9px] font-semibold border border-gray-200">
-                                  {m}
-                               </span>
-                              ))}
+                            <div class="flex flex-wrap gap-2 mt-3">
+                              {inst.health.models.map((m) => {
+                                const comp = compatibility[m];
+                                const isTesting = testingModel === m;
+                                return (
+                                  <div key={m} class="flex items-center gap-1.5 p-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                                    <span class="text-[10px] font-mono font-bold text-gray-700">{m}</span>
+                                    {comp ? (
+                                      <span 
+                                        class={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${comp.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
+                                        title={comp.testedAt ? `Testé le ${new Date(comp.testedAt).toLocaleString()}` : ''}
+                                      >
+                                        {comp.ok ? 'Forge OK' : 'Forge KO'}
+                                      </span>
+                                    ) : (
+                                      <span class="px-1.5 py-0.5 rounded bg-gray-200 text-gray-500 text-[9px] font-bold uppercase">Non testé</span>
+                                    )}
+                                    <button 
+                                      onClick={() => testModel(m, inst.normalizedUrl || inst.url)}
+                                      disabled={isTesting}
+                                      class={`p-1 rounded hover:bg-gray-200 transition-colors ${isTesting ? 'animate-spin' : ''}`}
+                                      title="Tester la compatibilité Forge"
+                                    >
+                                      <svg class="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </>
