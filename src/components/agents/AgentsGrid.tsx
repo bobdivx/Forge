@@ -121,6 +121,32 @@ export default function AgentsGrid() {
   const [wakeBusy, setWakeBusy] = useState(false);
   const [wakeMsg, setWakeMsg] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<AppVersionCheck | null>(null);
+  const [globalDefaultModel, setGlobalDefaultModel] = useState('Auto');
+  const [savingGlobalDefault, setSavingGlobalDefault] = useState(false);
+
+  const loadGlobalDefault = async () => {
+    try {
+      const res = await fetch('/api/agent-default-model');
+      const json = await res.json();
+      if (json.model) setGlobalDefaultModel(json.model);
+    } catch {}
+  };
+
+  const updateGlobalDefault = async (m: string) => {
+    setGlobalDefaultModel(m);
+    setSavingGlobalDefault(true);
+    try {
+      await fetch('/api/agent-default-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: m }),
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingGlobalDefault(false);
+    }
+  };
 
   const buildVersionUpdateDirective = async (): Promise<string> => {
     try {
@@ -209,6 +235,7 @@ export default function AgentsGrid() {
     load();
     loadAppVersion();
     loadModels();
+    loadGlobalDefault();
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, []);
@@ -435,6 +462,18 @@ export default function AgentsGrid() {
           opérationnel(s)
         </span>
         <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          <div class="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm">
+            <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Défaut :</span>
+            <select
+              value={globalDefaultModel}
+              onChange={(e) => updateGlobalDefault((e.target as HTMLSelectElement).value)}
+              disabled={savingGlobalDefault}
+              class="bg-transparent text-[11px] font-bold text-gray-900 outline-none min-w-[120px]"
+            >
+              <option value="Auto">Auto (Recommandé)</option>
+              {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
           <button
             type="button"
             onClick={() => void wakeZimaOSAgents()}

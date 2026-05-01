@@ -70,6 +70,8 @@ export type ForgeConfig = {
   agentPreferredLanguage: string;
   /** Règles structurées agents (JSON string). */
   agentPolicyRules: string;
+  /** Modèle LLM par défaut pour l'équipe (ex: qwen2.5:7b, Auto). */
+  agentDefaultModel: string;
 };
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
@@ -109,6 +111,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
     'Respecter l architecture existante et eviter les regressions.',
   agentPreferredLanguage: 'fr',
   agentPolicyRules: '[]',
+  agentDefaultModel: 'Auto',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);

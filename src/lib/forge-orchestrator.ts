@@ -31,6 +31,7 @@ async function resolveAvailableModel(preferred: string): Promise<{ origin: strin
   const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
   let instances: any[] = [];
   let compatibleModels: string[] = [];
+  let globalDefault = 'qwen2.5:7b';
 
   try {
     const { db, OllamaInstance, Config, eq, like } = await loadAstroDb();
@@ -46,6 +47,12 @@ async function resolveAvailableModel(preferred: string): Promise<{ origin: strin
         } catch { return false; }
       })
       .map(c => c.key.replace('compatibility_ollama_', ''));
+    
+    // Charger le défaut global
+    const defRow = await db.select().from(Config).where(eq(Config.key, 'agentDefaultModel'));
+    if (defRow.length && defRow[0].value && defRow[0].value !== 'Auto') {
+      globalDefault = defRow[0].value;
+    }
   } catch {}
   
   const isAuto = !preferred || preferred.toLowerCase() === 'auto';
@@ -88,8 +95,8 @@ async function resolveAvailableModel(preferred: string): Promise<{ origin: strin
 
   // Fallback si pas de modèle compatible trouvé ou si preferred non trouvé
   const fallbacks = isAuto 
-    ? ['qwen2.5-coder:7b', 'qwen2.5-coder:32b', 'qwen2.5:7b', 'llama3.2:latest']
-    : [preferred, 'qwen2.5:7b', 'llama3.2:latest'];
+    ? [globalDefault, 'qwen2.5-coder:7b', 'qwen2.5-coder:32b', 'qwen2.5:7b', 'llama3.2:latest']
+    : [preferred, globalDefault, 'qwen2.5:7b', 'llama3.2:latest'];
 
   for (const candidate of fallbacks) {
     for (const found of allFound) {

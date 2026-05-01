@@ -22,6 +22,10 @@ export default function AgentModelMatrix() {
   const [pings, setPings] = useState<Record<string, PingResult>>({});
   const [pinging, setPinging] = useState<Record<string, boolean>>({});
 
+  const [defaultModel, setDefaultModel] = useState('Auto');
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [allModels, setAllModels] = useState<string[]>([]);
+
   async function load() {
     setLoading(true);
     try {
@@ -35,7 +39,40 @@ export default function AgentModelMatrix() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  async function loadDefault() {
+    try {
+      const res = await fetch('/api/agent-default-model');
+      const json = await res.json();
+      if (json.model) setDefaultModel(json.model);
+    } catch {}
+  }
+
+  async function loadModels() {
+    try {
+      const res = await fetch('/api/models');
+      const rows = await res.json();
+      const values = Array.isArray(rows)
+        ? rows.map((m: any) => String(m.id || m.name || '').replace(/^zimaos\//i, '').trim()).filter(Boolean)
+        : [];
+      setAllModels(['Auto', ...new Set(values)].sort());
+    } catch {}
+  }
+
+  async function updateDefault(m: string) {
+    setDefaultModel(m);
+    setSavingDefault(true);
+    try {
+      await fetch('/api/agent-default-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: m }),
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingDefault(false);
+    }
+  }
 
   async function pingAgent(row: ModelRow) {
     setPinging((p) => ({ ...p, [row.agentId]: true }));
@@ -54,7 +91,11 @@ export default function AgentModelMatrix() {
     }
   }
 
-
+  useEffect(() => { 
+    load(); 
+    loadDefault();
+    loadModels();
+  }, []);
 
   if (loading) return <div class="p-12 text-center text-gray-400 animate-pulse font-medium">Synchronisation avec ZimaOS...</div>;
   if (!data) return null;
@@ -62,10 +103,23 @@ export default function AgentModelMatrix() {
   return (
     <div class="space-y-8">
       {/* Header avec bouton global */}
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
           <StatCard label="Total Agents" value={data.rows.length} color="blue" />
           <StatCard label="Opérationnels" value={data.rows.filter((r: any) => r.backendModel).length} color="green" />
+        </div>
+
+        <div class="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+          <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-2">Modèle par défaut :</span>
+          <select
+            value={defaultModel}
+            onChange={(e) => updateDefault((e.target as HTMLSelectElement).value)}
+            disabled={savingDefault}
+            class="bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-blue-500 min-w-[160px]"
+          >
+            {allModels.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          {savingDefault && <span class="w-3 h-3 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mr-2" />}
         </div>
       </div>
 

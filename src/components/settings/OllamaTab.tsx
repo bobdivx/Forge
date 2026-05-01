@@ -29,6 +29,48 @@ export default function OllamaTab() {
   const [newUrl, setNewUrl] = useState('');
   const [newApiKey, setNewApiKey] = useState('');
   const [adding, setAdding] = useState(false);
+  const [batchTesting, setBatchTesting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [fixingAgents, setFixingAgents] = useState(false);
+
+  const testAllModels = async () => {
+    const allModels: Array<{ model: string; origin: string }> = [];
+    instances.forEach(inst => {
+      if (inst.enabled && inst.health?.ok && inst.health.models) {
+        inst.health.models.forEach(m => {
+          allModels.push({ model: m, origin: inst.normalizedUrl || inst.url });
+        });
+      }
+    });
+
+    if (allModels.length === 0) return;
+
+    setBatchTesting(true);
+    setBatchProgress({ current: 0, total: allModels.length });
+
+    for (let i = 0; i < allModels.length; i++) {
+      setBatchProgress(p => ({ ...p, current: i + 1 }));
+      const { model, origin } = allModels[i];
+      await runTest(model, origin);
+    }
+
+    setBatchTesting(false);
+  };
+
+  const fixAgentModels = async () => {
+    setFixingAgents(true);
+    try {
+      const res = await fetch('/api/fix-agent-models', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        alert(data.message);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFixingAgents(false);
+    }
+  };
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
@@ -149,12 +191,55 @@ export default function OllamaTab() {
 
   return (
     <div class="p-6 space-y-8">
-      <div>
-        <h2 class="text-lg font-bold text-gray-900 mb-1">Instances Ollama</h2>
-        <p class="text-xs text-gray-500">
-          Gérez vos différents serveurs Ollama. Forge agrégera les modèles de toutes les instances actives pour votre matrice d'agents.
-        </p>
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 class="text-lg font-bold text-gray-900 mb-1">Instances Ollama</h2>
+          <p class="text-xs text-gray-500">
+            Gérez vos différents serveurs Ollama. Forge agrégera les modèles de toutes les instances actives pour votre matrice d'agents.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            onClick={testAllModels}
+            disabled={batchTesting || instances.length === 0}
+            class="px-4 py-2 rounded-full bg-gray-900 text-white text-[11px] font-bold hover:bg-black transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {batchTesting ? (
+              <>
+                <span class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Test en cours ({batchProgress.current}/{batchProgress.total})
+              </>
+            ) : (
+              <>
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                Tester tous les modèles
+              </>
+            )}
+          </button>
+          <button
+            onClick={fixAgentModels}
+            disabled={fixingAgents || batchTesting}
+            class="px-4 py-2 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[11px] font-bold hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
+            title="Réassigne les agents utilisant un modèle KO vers le modèle par défaut"
+          >
+            {fixingAgents ? (
+              <span class="w-3 h-3 border-2 border-amber-300 border-t-amber-700 rounded-full animate-spin" />
+            ) : (
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            )}
+            Corriger l'équipe
+          </button>
+        </div>
       </div>
+
+      {batchTesting && (
+        <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-[-1rem]">
+          <div 
+            class="bg-blue-500 h-full transition-all duration-300" 
+            style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
+          />
+        </div>
+      )}
 
       <div class="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-4">
         <h3 class="text-xs font-bold text-gray-700 uppercase tracking-wider">Ajouter une instance</h3>
