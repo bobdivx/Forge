@@ -25,7 +25,7 @@ type RuleAudit = {
   notes?: string;
 };
 
-import { loadAstroDb } from './load-astro-db';
+
 
 async function resolveAvailableModel(preferred: string): Promise<{ origin: string, model: string }> {
   const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
