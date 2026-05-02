@@ -5,6 +5,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AgentsGrid from '../components/agents/AgentsGrid';
 import SwarmInteractionsBoard from '../components/agents/SwarmInteractionsBoard';
 import AgentTaskTable from '../components/agents/AgentTaskTable';
+import SwarmFlowTimeline from '../components/swarm/SwarmFlowTimeline';
 import { loadAstroDb } from '../lib/load-astro-db';
 
 let agentStats = { total: 0, withTasks: 0, totalTasks: 0, pendingIssues: 0 };
@@ -36,13 +37,13 @@ try {
       </div>
       <div class="flex flex-wrap gap-3">
         <a
-          href="/agents/flux"
+          href="#swarm-flux"
           class="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
         >
           <svg class="h-4 w-4 text-[#175B37]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          Flux Swarm
+          Fil d’activité
         </a>
         <a
           href="/discussion"
@@ -130,6 +131,68 @@ try {
       </div>
       <SwarmInteractionsBoard client:load />
     </section>
+
+    <!-- Flux chronologique unifié (ex-page /agents/flux) -->
+    <section id="swarm-flux" class="scroll-mt-6">
+      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-1 h-6 rounded-full" style="background:#175B37"></div>
+          <h3 class="text-base font-bold text-gray-900">Fil d’activité (tout-en-un)</h3>
+          <span class="text-[10px] uppercase tracking-widest text-gray-400" title="Rafraîchissement automatique">Mise à jour · 12 s</span>
+        </div>
+        <a
+          href="/work"
+          class="shrink-0 text-xs font-medium text-[#175B37] hover:underline"
+        >Ouvrir le carnet de bord →</a>
+      </div>
+      <p class="text-gray-500 text-sm max-w-3xl mb-4">
+        Ici, Forge regroupe par date les <strong class="text-gray-700 font-medium">événements système</strong> (synchronisation, carnet, planificateur), les <strong class="text-gray-700 font-medium">messages</strong> entre agents et l’<strong class="text-gray-700 font-medium">état des missions</strong>. Les sections du haut les affichent séparément ; ce fil sert à voir l’ordre réel des choses.
+      </p>
+
+      <details class="rounded-[1.5rem] border border-[#175B37]/20 bg-[#E9F3EB] px-5 py-4 text-sm text-gray-700 shadow-sm mb-5">
+        <summary class="cursor-pointer font-semibold text-[#175B37] list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+          <span aria-hidden="true">▸</span>
+          Lire ce fil (3 types de cartes)
+        </summary>
+        <ul class="mt-3 space-y-2.5 text-gray-600 leading-relaxed pl-0 list-none">
+          <li class="flex gap-2">
+            <span class="shrink-0 font-semibold text-gray-800 w-28">Système Forge</span>
+            <span>Actions automatiques ou depuis le tableau (sync ZimaOS, carnet, budget, planificateur…).</span>
+          </li>
+          <li class="flex gap-2">
+            <span class="shrink-0 font-semibold text-gray-800 w-28">Échange</span>
+            <span>Message d’un agent vers un autre (contenu affiché sur la carte).</span>
+          </li>
+          <li class="flex gap-2">
+            <span class="shrink-0 font-semibold text-gray-800 w-28">Mission</span>
+            <span>État d’une tâche agent (carnet, bug, exécution ZimaOS). Le statut est rappelé dans le titre.</span>
+          </li>
+        </ul>
+        <p class="text-xs text-gray-500 mt-3 pt-3 border-t border-[#175B37]/10">
+          Ordre type : idée ou demande au <a href="/work" class="font-medium text-[#175B37] underline decoration-[#175B37]/30">carnet</a> → tri / assignation → mission sur ZimaOS → clôture (détection de fin de sortie ou mise à jour manuelle).
+        </p>
+      </details>
+
+      <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
+        <SwarmFlowTimeline client:load />
+      </div>
+    </section>
+
+    <script is:inline>
+      (function () {
+        try {
+          var q = new URLSearchParams(window.location.search).get('chronologie');
+          if (q !== '1') return;
+          var el = document.getElementById('swarm-flux');
+          requestAnimationFrame(function () {
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          var u = new URL(window.location.href);
+          u.searchParams.delete('chronologie');
+          history.replaceState(null, '', u.pathname + u.search + '#swarm-flux');
+        } catch (_) {}
+      })();
+    </script>
 
   </div>
 </DashboardLayout>

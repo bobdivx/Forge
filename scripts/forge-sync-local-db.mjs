@@ -46,3 +46,10 @@ for (const [name, table] of Object.entries(tables)) {
 }
 await db.batch([db.run(sql`pragma defer_foreign_keys=true;`), ...setupQueries.map((q) => db.run(q))]);
 console.log('[forge-sync-local-db] Schéma synchronisé (IF NOT EXISTS) sur', dbHref);
+
+try {
+  const { migrateAstroDbColumns } = await import('./migrate-astro-db-columns.mjs');
+  await migrateAstroDbColumns(db);
+} catch (e) {
+  console.warn('[forge-sync-local-db] Migration colonnes (non bloquant):', e?.message ?? e);
+}

@@ -5,6 +5,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import ProjectDemandesForm from '../../components/apps/ProjectDemandesForm';
 import AppProjectOps from '../../components/apps/AppProjectOps';
+import AppGitPanel from '../../components/apps/AppGitPanel';
 import AuditLauncher from '../../components/apps/AuditLauncher';
 import GitHistoryCard from '../../components/apps/GitHistoryCard';
 import GithubFolderCard from '../../components/apps/GithubFolderCard';
@@ -147,6 +148,13 @@ const app = {
     </div>
 
     <AppProjectOps client:load appName={folderKey} forgeVirtualHost={app.url} />
+
+    <AppGitPanel
+      client:load
+      appName={folderKey}
+      initialGithubBranchDev={projectRow?.githubBranchDev ?? 'dev'}
+      initialGithubBranchProd={projectRow?.githubBranchProd ?? 'main'}
+    />
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
 

@@ -2,9 +2,8 @@ import type { APIRoute } from 'astro';
 import {
   createSessionToken,
   verifyCredentials,
-  isValidEmail,
-  isValidPassword,
   forgeSessionCookieSecure,
+  getCredentialsValidationError,
   getUser,
   hasUser,
 } from '../../../lib/auth';
@@ -15,8 +14,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const email = String(body?.email ?? '').trim().toLowerCase();
     const password = String(body?.password ?? '').trim();
 
-    if (!isValidEmail(email) || !isValidPassword(password)) {
-      return new Response(JSON.stringify({ error: 'Identifiants invalides' }), { status: 400 });
+    const validationErr = getCredentialsValidationError(email, password);
+    if (validationErr) {
+      return new Response(JSON.stringify({ error: validationErr }), { status: 400 });
     }
 
     if (!(await verifyCredentials(email, password))) {

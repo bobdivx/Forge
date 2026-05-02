@@ -12,8 +12,10 @@ let deps = [];
 let projects: Record<number, string> = {};
 let projectOptions: { id: number; name: string }[] = [];
 
+let issueTaskMap = new Map();
+
 try {
-  const { db, Request, AgentAppIssue, AgentDependencyRequest, Project, desc } = await loadAstroDb();
+  const { db, Request, AgentAppIssue, AgentDependencyRequest, AgentTask, Project, desc } = await loadAstroDb();
   const projectRows = await db.select().from(Project);
   for (const p of projectRows) {
     projects[p.id] = p.name;
@@ -22,7 +24,81 @@ try {
   requests = await db.select().from(Request).orderBy(desc(Request.createdAt));
   issues   = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt));
   deps     = await db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt));
+
+  const taskRows = await db.select().from(AgentTask).limit(800);
+  issueTaskMap = buildIssueTaskMap(taskRows);
 } catch(e) { console.error('WORK PAGE DB ERROR:', e); }
+
+/** Lie AgentTask → AppIssue via la mention `AppIssue #id` dans task/input (même logique que le scheduler). */
+function buildIssueTaskMap(tasks) {
+  const map = new Map();
+  const rank = (s) => {
+    const x = String(s || '').toLowerCase();
+    if (x === 'running') return 4;
+    if (x === 'pending' || x === 'bug') return 3;
+    if (x === 'completed' || x === 'done') return 2;
+    return 1;
+  };
+  const time = (t) =>
+    t.updatedAt instanceof Date ? t.updatedAt.getTime() : new Date(t.updatedAt || 0).getTime();
+  for (const t of tasks) {
+    const blob = `${t.task ?? ''}\n${t.input ?? ''}`;
+    const m = blob.match(/AppIssue\s*#(\d+)/i);
+    if (!m) continue;
+    const issueId = Number(m[1]);
+    if (!Number.isFinite(issueId)) continue;
+    const prev = map.get(issueId);
+    const r = rank(t.status);
+    const pr = prev ? rank(prev.status) : 0;
+    if (!prev || r > pr || (r === pr && time(t) > time(prev))) {
+      map.set(issueId, t);
+    }
+  }
+  return map;
+}
+
+function issueActivityLabel(issue, task) {
+  const ist = String(issue.status || '').toLowerCase();
+  if (ist === 'resolved' || ist === 'wont_fix') {
+    return { cls: 'text-gray-400', short: '—', title: 'Anomalie clôturée' };
+  }
+  if (!task) {
+    if (ist === 'in_progress') {
+      return {
+        cls: 'text-amber-800',
+        short: '⚠ Sans tâche liée',
+        title:
+          'Statut in_progress en base, mais aucune AgentTask trouvée avec AppIssue #id — pas de traitement actif suivi',
+      };
+    }
+    return {
+      cls: 'text-gray-500',
+      short: 'Pas encore dispatché',
+      title: 'Aucune tâche agent liée à cette anomalie pour l’instant',
+    };
+  }
+  const ts = String(task.status || '').toLowerCase();
+  const ag = String(task.agentId || '').trim() || '?';
+  if (ts === 'running') {
+    return {
+      cls: 'text-emerald-700 font-semibold',
+      short: `● En cours · ${ag}`,
+      title: 'Tâche agent à l’état running',
+    };
+  }
+  if (ts === 'pending' || ts === 'bug') {
+    return {
+      cls: 'text-amber-700',
+      short: `○ File · ${ag}`,
+      title: 'Tâche créée ; en attente d’envoi ou de prise en charge par l’agent',
+    };
+  }
+  return {
+    cls: 'text-gray-600',
+    short: `${task.status} · ${ag}`,
+    title: 'État de la tâche liée à cette anomalie',
+  };
+}
 
 const openIssues       = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
 const openDeps         = deps.filter(d => d.status === 'open' || d.status === 'in_progress');
@@ -112,9 +188,9 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
         <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{requests.length}</span>
         <div class="flex-1"></div>
         <a
-          href="/agents/flux"
+          href="/agents#swarm-flux"
           class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 mr-2"
-        >Flux Swarm</a>
+        >Chronologie Forge</a>
         <button
           type="button"
           onclick="window.__openWorkModal && window.__openWorkModal('request')"
@@ -205,11 +281,16 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
                   <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Titre</th>
                   <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
                   <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Rapporté par</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Assigné</th>
+                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Activité tâche</th>
                   <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {issues.map(i => (
+                {issues.map(i => {
+                  const ti = issueTaskMap.get(i.id);
+                  const act = issueActivityLabel(i, ti);
+                  return (
                   <tr
                     class="border-b border-gray-50 hover:bg-red-50/30 transition-colors cursor-pointer group"
                     onclick={`window.__openWorkDetail && window.__openWorkDetail('issue', ${i.id})`}
@@ -225,11 +306,21 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
                     </td>
                     <td class="px-5 py-3 text-[11px] font-mono text-gray-500">{i.errorType}</td>
                     <td class="px-5 py-3 text-[11px] font-mono" style="color:#175B37">{i.reportedByAgentId}</td>
+                    <td
+                      class={`px-5 py-3 text-[11px] font-mono max-w-[140px] truncate ${i.assigneeAgentId ? 'text-gray-800' : 'text-gray-400'}`}
+                      title={i.assigneeAgentId || 'Non renseigné'}
+                    >
+                      {i.assigneeAgentId || '—'}
+                    </td>
+                    <td class={`px-5 py-3 text-[11px] max-w-[200px] ${act.cls}`} title={act.title}>
+                      {act.short}
+                    </td>
                     <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
                       {i.createdAt ? new Date(i.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>

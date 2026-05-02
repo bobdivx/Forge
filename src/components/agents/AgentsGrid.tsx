@@ -21,6 +21,12 @@ type Agent = {
   runtimeMs?: number;
   lastSeen?: string;
   lastSeenMs?: number;
+  /** Dernière tâche running (agrégée depuis sous-agents projet si besoin) — voir GET /api/agents */
+  currentWork?: {
+    taskId: number;
+    title: string;
+    delegatedAgentId?: string;
+  } | null;
   raw?: {
     offline?: boolean;
     disabledInDb?: boolean;
@@ -340,6 +346,24 @@ export default function AgentsGrid() {
     }
   };
 
+  const handleModelChange = async (agentId: string, newModel: string) => {
+    try {
+      const r = await fetch('/api/agent-instructions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, model: newModel }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        console.error(typeof data.error === 'string' ? data.error : 'Mise à jour du modèle impossible');
+        return;
+      }
+      await refreshAgentsNow();
+    } catch {
+      console.error('Erreur réseau lors du changement de modèle');
+    }
+  };
+
   const wakeZimaOSAgents = async () => {
     setWakeBusy(true);
     setWakeMsg('Lancement du swarm en cours...');
@@ -369,11 +393,15 @@ export default function AgentsGrid() {
   const getWakeStatusLabel = (agent: Agent): string => {
     const busy = Boolean(commandBusyByAgent[agent.id]);
     const commandMsg = String(commandMsgByAgent[agent.id] || '').trim();
+    const st = taskStats[agent.id];
     if (busy) return 'Statut: envoi de directive...';
     if (commandMsg) {
       if (/réponse reçue/i.test(commandMsg)) return 'Statut: agent répond';
       if (/commande envoyée/i.test(commandMsg)) return 'Statut: directive envoyée';
       return `Statut: ${commandMsg}`;
+    }
+    if (st && st.running > 0) {
+      return `Statut: en travail · ${st.running} tâche(s) « running » en base`;
     }
     if (agent.status === 'actif') return 'Statut: opérationnel';
     if (agent.raw?.disabledInDb) return 'Statut: désactivé';

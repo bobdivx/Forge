@@ -30,7 +30,7 @@ export default function AgentSidebar({
   const [availableModels, setAvailableModels] = useState<string[]>([]);
 
   useEffect(() => {
-    fetch('/api/models')
+    fetch('/api/models?filter=active')
       .then(res => res.json())
       .then((data: any[]) => {
         if (Array.isArray(data)) {

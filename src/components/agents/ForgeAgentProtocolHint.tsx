@@ -51,7 +51,7 @@ Content-Type: application/json
 
         <p class="border-t border-gray-100 pt-3 text-gray-600">
           Côté humain, la chronologie des événements automatiques (dispatch, <span class="font-mono text-[#175B37]">FORGE_DONE</span>, sync carnet) est visible sur la page{' '}
-          <a href="/agents/flux" class="text-[#175B37] underline decoration-[#175B37]/40 hover:text-[#134a2d]">Flux Swarm</a>.
+          <a href="/agents#swarm-flux" class="text-[#175B37] underline decoration-[#175B37]/40 hover:text-[#134a2d]">Chronologie Forge</a> (page Équipe).
         </p>
 
         <p class="text-gray-500">

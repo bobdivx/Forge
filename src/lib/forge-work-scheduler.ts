@@ -31,9 +31,12 @@ import {
 } from './forge-request-routing';
 import { scanZimaOSForForgeDoneSignals } from './forge-zimaos-done-scan';
 import { insertForgeActivityLog } from './forge-activity-log';
-import { ensureProjectScopedSubagent } from './zimaos-app-subagents';
+import {
+  ensureForgeProjectScopedAgent,
+  cleanupIdleForgeProjectScopedAgents,
+  FORGE_PROJECT_CHILD_TOKEN,
+} from './forge-project-scoped-agents';
 import { checkGithubActionsForProjects } from './forge-github-actions';
-import { cleanupIdleProjectScopedSubagents } from './zimaos-app-subagents';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,7 +185,7 @@ function isAgentTargeted(agentId: string, targetIds: string[]): boolean {
   const agent = normalizeAgentTarget(agentId);
   return targetIds.some((targetId) => {
     const target = normalizeAgentTarget(targetId);
-    return agent === target || agent.startsWith(`${target}__APP_`);
+    return agent === target || agent.startsWith(`${target}${FORGE_PROJECT_CHILD_TOKEN}`);
   });
 }
 
@@ -236,7 +239,7 @@ async function logHeartbeat(level: 'info' | 'warn' | 'error', message: string) {
 // ── Cycle de travail ──────────────────────────────────────────────────────────
 
 /** Pour chaque AgentAppIssue encore `open`, crée une AgentTask (évite les doublons même texte AppIssue #id). */
-async function dispatchOpenAppIssues(agentIds: string[]) {
+async function dispatchOpenAppIssues(agentIds: string[], onlyProjectId?: number) {
   try {
     const { db, AgentAppIssue, AgentTask, Project } = await loadAstroDb();
     const activeProjects = await db.select({ id: Project.id }).from(Project).where(eq(Project.swarmEnabled, 1));
@@ -255,11 +258,14 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
     }
 
     for (const issue of open) {
+      if (onlyProjectId != null) {
+        if (issue.projectId == null || issue.projectId !== onlyProjectId) continue;
+      }
       if (issue.projectId != null && !activeIds.has(issue.projectId)) continue;
       const idStr = String(issue.id);
 
       const parentAssignee = String(issue.assigneeAgentId || 'CHEF_TECHNIQUE').trim() || 'CHEF_TECHNIQUE';
-      const scoped = await ensureProjectScopedSubagent({
+      const scoped = await ensureForgeProjectScopedAgent({
         parentAgentId: parentAssignee,
         projectId: issue.projectId,
       });
@@ -340,7 +346,7 @@ async function dispatchOpenAppIssues(agentIds: string[]) {
 }
 
 /** Demandes carnet (`Request` pending) → `AgentTask`, puis passage en `in_progress`. */
-async function dispatchPendingForgeRequests(agentIds: string[]) {
+async function dispatchPendingForgeRequests(agentIds: string[], onlyProjectId?: number) {
   try {
     const { db, Request, AgentTask, Project } = await loadAstroDb();
     const activeProjects = await db
@@ -364,10 +370,11 @@ async function dispatchPendingForgeRequests(agentIds: string[]) {
       });
 
     for (const req of pend) {
+      if (onlyProjectId != null && req.projectId !== onlyProjectId) continue;
       if (!activeIds.has(req.projectId)) continue;
 
       const parentAssignee = resolveAssigneeForForgeRequest(req);
-      const scoped = await ensureProjectScopedSubagent({
+      const scoped = await ensureForgeProjectScopedAgent({
         parentAgentId: parentAssignee,
         projectId: req.projectId,
       });
@@ -436,7 +443,7 @@ async function dispatchPendingForgeRequests(agentIds: string[]) {
   }
 }
 
-async function dispatchPendingTasks(agentIds: string[]) {
+async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) {
   try {
     const { db, AgentTask, Project } = await loadAstroDb();
 
@@ -448,6 +455,9 @@ async function dispatchPendingTasks(agentIds: string[]) {
     const pending = rows.filter((r) => {
       if (!['pending', 'bug'].includes(r.status)) return false;
       if (!isAgentTargeted(r.agentId, agentIds)) return false;
+      if (onlyProjectId != null) {
+        if (r.projectId !== onlyProjectId) return false;
+      }
       // Protection : on ne travaille que sur les projets activés (ou les tâches globales sans projet)
       if (r.projectId && !activeProjectIds.includes(r.projectId)) return false;
       return true;
@@ -556,7 +566,7 @@ async function maybeCleanupIdleSubagents(): Promise<void> {
   if (now - _lastSubagentCleanupAt < everyMs) return;
   _lastSubagentCleanupAt = now;
   try {
-    const res = await cleanupIdleProjectScopedSubagents();
+    const res = await cleanupIdleForgeProjectScopedAgents();
     if (res.removed.length > 0) {
       await logHeartbeat(
         'info',
@@ -609,8 +619,11 @@ async function verifyAgentSessions(agentIds: string[]): Promise<{ active: string
   }
 }
 
-/** Envoie la directive de début de session à **tous** les agents cibles avec retries. */
-async function sendWorkDirective(agentIds: string[]): Promise<{
+/** Envoie un texte de directive à tous les agents cibles (retries). */
+async function deliverWorkDirectiveMessage(
+  message: string,
+  agentIds: string[],
+): Promise<{
   errors: string[];
   awakened: string[];
   failed: { agentId: string; error: string }[];
@@ -618,33 +631,9 @@ async function sendWorkDirective(agentIds: string[]): Promise<{
   const errors: string[] = [];
   const awakened: string[] = [];
   const failed: { agentId: string; error: string }[] = [];
-  const { db, Project } = await loadAstroDb();
-  const activeProjects = await db.select().from(Project);
-  const swarmProjects = activeProjects.filter((p) => p.swarmEnabled === 1);
-
   const ordered = orderDirectiveTargets(
     agentIds.length ? agentIds : ['CHEF_TECHNIQUE'],
   );
-
-  let projectListMsg = '';
-  if (swarmProjects.length > 0) {
-    const translatedPaths = await Promise.all(
-      swarmProjects.map(async (p) => `- ${p.name} (${await toAgentPath(p.path)})`),
-    );
-    projectListMsg =
-      '\n\n🎯 PROJETS ACTIFS POUR LE SWARM :\n' +
-      translatedPaths.join('\n') +
-      '\n\nInstructions prioritaires : le CHEF coordonne, la VEILLE propose des améliorations sur ces dépôts, les autres agents exécutent selon leurs rôles. Analyse les dossiers sur le NAS, identifie les manques et lance les tâches en attente.';
-  } else {
-    projectListMsg =
-      '\n\n⚠️ AUCUN PROJET SWARM ACTIF (toggle par projet). La VEILLE peut quand même proposer des idées générales ; le CHEF garde la priorité sur ce qui est pertinent.';
-  }
-
-  const message =
-    '[Forge — début de session de travail automatique]\n\n' +
-    "Le système de travail Forge vient de démarrer une session. " +
-    projectListMsg;
-
   const MAX_ATTEMPTS = 3;
   for (const sessionKey of ordered) {
     let delivered = false;
@@ -682,6 +671,68 @@ async function sendWorkDirective(agentIds: string[]): Promise<{
     }
   }
   return { errors, awakened, failed };
+}
+
+/** Envoie la directive de début de session à **tous** les agents cibles avec retries. */
+async function sendWorkDirective(agentIds: string[]): Promise<{
+  errors: string[];
+  awakened: string[];
+  failed: { agentId: string; error: string }[];
+}> {
+  const { db, Project } = await loadAstroDb();
+  const activeProjects = await db.select().from(Project);
+  const swarmProjects = activeProjects.filter((p) => p.swarmEnabled === 1);
+
+  let projectListMsg = '';
+  if (swarmProjects.length > 0) {
+    const translatedPaths = await Promise.all(
+      swarmProjects.map(async (p) => `- ${p.name} (${await toAgentPath(p.path)})`),
+    );
+    projectListMsg =
+      '\n\n🎯 PROJETS ACTIFS POUR LE SWARM :\n' +
+      translatedPaths.join('\n') +
+      '\n\nInstructions prioritaires : le CHEF coordonne, la VEILLE propose des améliorations sur ces dépôts, les autres agents exécutent selon leurs rôles. Analyse les dossiers sur le NAS, identifie les manques et lance les tâches en attente.';
+  } else {
+    projectListMsg =
+      '\n\n⚠️ AUCUN PROJET SWARM ACTIF (toggle par projet). La VEILLE peut quand même proposer des idées générales ; le CHEF garde la priorité sur ce qui est pertinent.';
+  }
+
+  const message =
+    '[Forge — début de session de travail automatique]\n\n' +
+    "Le système de travail Forge vient de démarrer une session. " +
+    projectListMsg;
+
+  return deliverWorkDirectiveMessage(message, agentIds);
+}
+
+/** Directive ciblée sur un seul projet (tableau de bord : lancer le travail sur cette appli). */
+async function sendWorkDirectiveForSingleProject(
+  projectId: number,
+  agentIds: string[],
+): Promise<{
+  errors: string[];
+  awakened: string[];
+  failed: { agentId: string; error: string }[];
+}> {
+  const { db, Project } = await loadAstroDb();
+  const rows = await db.select().from(Project).where(eq(Project.id, projectId)).limit(1);
+  const proj = rows[0];
+  if (!proj || !proj.swarmEnabled) {
+    return { errors: ['projet introuvable ou hors carnet'], awakened: [], failed: [] };
+  }
+
+  const pathLine = `- ${proj.name} (${await toAgentPath(proj.path)})`;
+  const projectListMsg =
+    '\n\n🎯 SESSION PRIORITAIRE — UN SEUL DÉPÔT :\n' +
+    pathLine +
+    '\n\nTraite en priorité les demandes carnet, bugs et tâches en attente pour ce dépôt.';
+
+  const message =
+    '[Forge — travail lancé pour une application]\n\n' +
+    'Une session ciblée a été demandée depuis le tableau de bord Forge. ' +
+    projectListMsg;
+
+  return deliverWorkDirectiveMessage(message, agentIds);
 }
 
 async function checkBudgetExceeded(): Promise<{ exceeded: boolean; info: string }> {
@@ -902,6 +953,72 @@ export function stopScheduler() {
 (import.meta as ImportMeta & { hot?: { dispose: (callback: () => void) => void } }).hot?.dispose(() => {
   stopScheduler();
 });
+
+/**
+ * Cycle de travail **ciblé sur un projet** (depuis le tableau de bord).
+ * Ne modifie pas l’état global du scheduler (`running` / `planifié`) : pulse immédiat
+ * (directive + dispatch bugs / demandes / tâches pour ce seul `projectId`).
+ */
+export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleResult> {
+  if (_currentlyWorking) {
+    return { ok: false, error: 'Un cycle de travail est déjà en cours. Réessayez dans quelques instants.' };
+  }
+
+  const { db, Project, ActivityLog } = await loadAstroDb();
+  const rows = await db.select().from(Project).where(eq(Project.id, projectId)).limit(1);
+  const proj = rows[0];
+  if (!proj) {
+    return { ok: false, error: 'Projet introuvable.' };
+  }
+  if (!proj.swarmEnabled) {
+    return { ok: false, error: 'Inscrivez d’abord ce projet au carnet (icône sur la carte), puis relancez.' };
+  }
+
+  const { exceeded, info } = await checkBudgetExceeded();
+  if (exceeded) {
+    await logHeartbeat('warn', `Cycle projet #${projectId} annulé : ${info}`);
+    return { ok: false, budgetBlocked: info };
+  }
+
+  _currentlyWorking = true;
+  try {
+    const agentIds = await getEnabledAgentIds();
+    await logHeartbeat('info', `Cycle ciblé « ${proj.name} » (#${projectId}) — ${info}`);
+
+    await db.insert(ActivityLog).values({
+      actorType: 'system',
+      actorId: 'scheduler',
+      action: 'work_cycle.project_burst.started',
+      entityType: 'project',
+      entityId: String(projectId),
+      details: JSON.stringify({ projectName: proj.name, agents: agentIds, budgetInfo: info }),
+      createdAt: new Date(),
+    });
+
+    const wake = await sendWorkDirectiveForSingleProject(projectId, agentIds);
+    await dispatchOpenAppIssues(agentIds, projectId);
+    await dispatchPendingForgeRequests(agentIds, projectId);
+    await dispatchPendingTasks(agentIds, projectId);
+    await scanZimaOSForForgeDoneSignals();
+    await maybeCleanupIdleSubagents();
+    const sessionCheck = await verifyAgentSessions(agentIds);
+    return {
+      ok: true,
+      zimaosErrors: wake.errors,
+      wakeReport: {
+        targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
+        awakened: wake.awakened,
+        failed: wake.failed,
+        sessionCheck,
+      },
+    };
+  } catch (e) {
+    await logHeartbeat('error', `Erreur cycle projet #${projectId} : ${String(e)}`);
+    return { ok: false, error: String(e) };
+  } finally {
+    _currentlyWorking = false;
+  }
+}
 
 /** Démarrage manuel — le système passe en `running` seulement après contrôle budget (voir `runWorkCycle`). */
 export async function manualStart(agentIds: string[] = []): Promise<WorkCycleResult> {

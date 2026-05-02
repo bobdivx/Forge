@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { eq } from 'drizzle-orm';
 import {
   fetchZimaOSSessionsPayload,
   normalizeZimaOSSessions,
@@ -12,7 +13,7 @@ import { scanZimaOSForForgeDoneSignals } from '../../lib/forge-zimaos-done-scan'
 
 /** POST { agentId, task, status? } — crée une tâche en base. */
 export const POST: APIRoute = async ({ request }) => {
-  const { db, AgentTask } = await loadAstroDb();
+  const { db, AgentTask, Project } = await loadAstroDb();
   let body: any;
   try {
     body = await request.json();
@@ -22,13 +23,33 @@ export const POST: APIRoute = async ({ request }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  const { agentId, task, input, status = 'pending' } = body ?? {};
+  const { agentId, task, input, status = 'pending', projectId: rawProjectId } = body ?? {};
   if (!agentId || !task) {
     return new Response(
       JSON.stringify({ error: 'agentId et task sont requis' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     );
   }
+
+  let projectId: number | undefined;
+  if (rawProjectId !== undefined && rawProjectId !== null && rawProjectId !== '') {
+    const pid = Number(rawProjectId);
+    if (!Number.isFinite(pid) || pid < 1) {
+      return new Response(JSON.stringify({ error: 'projectId invalide' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const [p] = await db.select().from(Project).where(eq(Project.id, pid)).limit(1);
+    if (!p) {
+      return new Response(JSON.stringify({ error: 'Projet / application introuvable' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    projectId = pid;
+  }
+
   try {
     const now = new Date();
     const [inserted] = await db
@@ -38,6 +59,7 @@ export const POST: APIRoute = async ({ request }) => {
         task: String(task),
         input: input != null ? String(input) : undefined,
         status: String(status),
+        projectId,
         createdAt: now,
         updatedAt: now,
       })

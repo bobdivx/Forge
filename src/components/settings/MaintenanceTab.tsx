@@ -162,6 +162,28 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
     }
   };
 
+  const reopenSetupWizard = async () => {
+    setSetupLoading(true);
+    setSetupMsg('');
+    try {
+      const res = await fetch('/api/setup-wizard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restart' }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setSetupMsg(typeof data.error === 'string' ? data.error : 'Impossible de rouvrir l’assistant.');
+        return;
+      }
+      window.location.href = '/setup';
+    } catch {
+      setSetupMsg('Erreur réseau.');
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
   const copyNetworkMatrix = async () => {
     if (!networkMatrix) return;
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {

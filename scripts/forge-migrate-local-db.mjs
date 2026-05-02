@@ -26,6 +26,8 @@ const db = createClient({ url: dbHref });
 
 const STATEMENTS = [
   'ALTER TABLE Project ADD COLUMN swarmEnabled INTEGER NOT NULL DEFAULT 1',
+  'ALTER TABLE Project ADD COLUMN githubBranchDev TEXT NOT NULL DEFAULT \'dev\'',
+  'ALTER TABLE Project ADD COLUMN githubBranchProd TEXT NOT NULL DEFAULT \'main\'',
   'ALTER TABLE AgentBudget ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1',
 ];
 

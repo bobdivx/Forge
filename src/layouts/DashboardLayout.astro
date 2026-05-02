@@ -26,13 +26,6 @@ const menuItems = [
     badge: null,
   },
   {
-    name: "Flux Swarm",
-    path: "/agents/flux",
-    icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>`,
-    match: ["/agents/flux"],
-    badge: null,
-  },
-  {
     name: "Discussion",
     path: "/discussion",
     icon: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>`,
@@ -130,10 +123,7 @@ const generalItems = [
         <p class="text-xs font-semibold text-gray-400 mb-4 tracking-wider">MENU</p>
         <nav class="flex flex-col gap-1 mb-8">
           {menuItems.map(item => {
-            const isActive = item.match.some(m => {
-              if (m === '/agents' && (currentPath === '/agents/flux' || currentPath.startsWith('/agents/flux/'))) return false;
-              return currentPath === m || currentPath.startsWith(m);
-            });
+            const isActive = item.match.some(m => currentPath === m || currentPath.startsWith(m));
             return (
               <a
                 href={item.path}
@@ -161,10 +151,7 @@ const generalItems = [
         <p class="text-xs font-semibold text-gray-400 mb-4 tracking-wider">GENERAL</p>
         <nav class="flex flex-col gap-1">
           {generalItems.map(item => {
-            const isActive = item.match.some(m => {
-              if (m === '/agents' && (currentPath === '/agents/flux' || currentPath.startsWith('/agents/flux/'))) return false;
-              return currentPath === m || currentPath.startsWith(m);
-            });
+            const isActive = item.match.some(m => currentPath === m || currentPath.startsWith(m));
             return (
               <a
                 href={item.path}

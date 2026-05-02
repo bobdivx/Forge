@@ -36,7 +36,7 @@ export default function AgentSteerForm({ sessionKey, currentModel }: Props) {
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    fetch('/api/models')
+    fetch('/api/models?filter=active')
       .then((res) => res.json())
       .then((data) => {
         if (!Array.isArray(data)) return;

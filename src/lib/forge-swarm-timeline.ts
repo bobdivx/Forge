@@ -27,6 +27,44 @@ function iso(d: Date | string | null | undefined): string {
   return Number.isFinite(t.getTime()) ? t.toISOString() : new Date(0).toISOString();
 }
 
+/** Libellés français pour les identifiants d’acteur techniques du journal. */
+function humanizeActorId(actorId: string | null | undefined): string | undefined {
+  if (actorId == null || actorId === '') return undefined;
+  const id = String(actorId);
+  if (id === 'board') return 'Tableau de bord';
+  if (id === 'work_scheduler') return 'Planificateur Forge';
+  return id;
+}
+
+function formatAgentsSynchronizedBody(o: Record<string, unknown>): string {
+  const agents = Array.isArray(o.agents) ? o.agents.map(String) : [];
+  const n =
+    typeof o.count === 'number' && Number.isFinite(o.count)
+      ? o.count
+      : agents.length;
+  const sample = agents.slice(0, 4).join(', ');
+  const more = agents.length > 4 ? ` (+${agents.length - 4} autres)` : '';
+  return `${n} profil${n > 1 ? 's' : ''} Forge ${n > 1 ? 'sont' : 'est'} aligné${n > 1 ? 's' : ''} sur la configuration ZimaOS (gateway).${sample ? ` Rôles : ${sample}${more}.` : ''}`;
+}
+
+/** Évite d’afficher un bloc JSON brut pour les actions non reconnues. */
+function summarizeUnknownLogDetails(action: string, o: Record<string, unknown>): string {
+  const pairs = Object.entries(o)
+    .slice(0, 8)
+    .map(([k, v]) => {
+      let s: string;
+      if (v == null) s = '—';
+      else if (typeof v === 'object') s = JSON.stringify(v).slice(0, 100);
+      else s = String(v).slice(0, 140);
+      return `${k} : ${s}`;
+    });
+  const joined = pairs.join(' · ');
+  const head = `Détails (${action}) : `;
+  const max = 400;
+  if (head.length + joined.length <= max) return head + joined;
+  return `${head}${joined.slice(0, max - head.length - 1)}…`;
+}
+
 export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[]> {
   const { db, ActivityLog, AgentMessage, AgentTask } = await loadAstroDb();
   const out: SwarmTimelineEventRow[] = [];
@@ -34,13 +72,13 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
   const logs = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(60);
   for (const L of logs) {
     const action = String(L.action || '');
-    let title = `Événement : ${action}`;
+    let title = `Événement technique : ${action}`;
     let icon = '🛰️';
     let tone: SwarmTimelineTone = 'neutral';
-    let body: string | undefined = L.details ? String(L.details).slice(0, 420) : undefined;
+    const rawDetails = L.details ? String(L.details) : '';
 
     const detailsObj = (() => {
-      const raw = L.details ? String(L.details) : '';
+      const raw = rawDetails;
       if (!raw.trim()) return null as Record<string, unknown> | null;
       try {
         const o = JSON.parse(raw) as unknown;
@@ -51,6 +89,11 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         return null;
       }
     })();
+
+    let body: string | undefined;
+    if (!detailsObj && rawDetails.trim()) {
+      body = rawDetails.slice(0, 420);
+    }
 
     if (action === 'work_cycle.started') {
       title = 'Session de travail démarrée';
@@ -139,6 +182,55 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
       if (detailsObj && detailsObj.status != null) {
         body = `Nouveau statut : ${detailsObj.status}`;
       }
+    } else if (action === 'agents.synchronized') {
+      title = 'Liste d’agents synchronisée avec ZimaOS';
+      icon = '🔄';
+      tone = 'info';
+      if (detailsObj) {
+        body = formatAgentsSynchronizedBody(detailsObj);
+      }
+    } else if (action === 'swarm.subagent.project_created') {
+      title = 'Sous-agent créé pour un projet';
+      icon = '🧩';
+      tone = 'brand';
+      if (detailsObj) {
+        const bits = [
+          detailsObj.projectName != null ? `Projet : ${String(detailsObj.projectName).slice(0, 120)}` : '',
+          detailsObj.parentAgentId != null ? `Parent : ${detailsObj.parentAgentId}` : '',
+          detailsObj.provisionOk === true ? 'Provision ZimaOS : OK' : '',
+          detailsObj.provisionOk === false ? 'Provision ZimaOS : échec' : '',
+        ].filter(Boolean);
+        body = bits.join(' · ') || undefined;
+      }
+    } else if (action === 'swarm.subagent.project_deleted_idle') {
+      title = 'Sous-agent inactif retiré';
+      icon = '🧹';
+      tone = 'warning';
+      if (detailsObj && detailsObj.reason != null) {
+        body = `Motif : ${detailsObj.reason}${detailsObj.ttlDays != null ? ` · délai ${detailsObj.ttlDays} j.` : ''}`;
+      }
+    } else if (action === 'budget.alert') {
+      title = 'Budget agents — alerte';
+      icon = '💶';
+      tone = 'warning';
+    } else if (action === 'budget.exceeded') {
+      title = 'Budget agents — plafond atteint';
+      icon = '⛔';
+      tone = 'warning';
+    } else if (action === 'budget.updated') {
+      title = 'Budget agents modifié';
+      icon = '💶';
+      tone = 'info';
+    } else if (action === 'cost.ingested') {
+      title = 'Coût IA enregistré';
+      icon = '📊';
+      tone = 'neutral';
+    } else if (action === 'approval.requested') {
+      title = 'Demande d’approbation';
+      icon = '✋';
+      tone = 'brand';
+    } else if (detailsObj && Object.keys(detailsObj).length > 0) {
+      body = `${body ?? ''}`.trim() || summarizeUnknownLogDetails(action, detailsObj);
     }
 
     out.push({
@@ -148,7 +240,7 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
       icon,
       title,
       body,
-      actor: L.actorId ? String(L.actorId) : undefined,
+      actor: humanizeActorId(L.actorId),
       tone,
     });
   }

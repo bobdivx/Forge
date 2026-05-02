@@ -131,14 +131,14 @@ export default function SwarmFlowTimeline() {
                 <p class="mt-1 text-[11px] text-gray-500">
                   {ev.actor && (
                     <span>
-                      <span class="text-gray-400">De</span>{' '}
+                      <span class="text-gray-400">Par</span>{' '}
                       <span class="font-mono font-medium text-[#175B37]">{ev.actor}</span>
                     </span>
                   )}
                   {ev.actor && ev.target && <span class="text-gray-300"> · </span>}
                   {ev.target && (
                     <span>
-                      <span class="text-gray-400">Vers</span>{' '}
+                      <span class="text-gray-400">À</span>{' '}
                       <span class="font-mono font-medium text-gray-700">{ev.target}</span>
                     </span>
                   )}

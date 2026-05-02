@@ -12,12 +12,13 @@ export default defineConfig({
   output: 'server',
   server: {
     host: '0.0.0.0',
-    port: 4321,
+    port: Number(process.env.PORT) || 4321,
   },
   vite: {
     server: {
       allowedHosts: ['forge.briseteia.me', 'oc.briseteia.me', 'localhost', '127.0.0.1', 'zimacube.local'],
-      strictPort: true,
+      /** Si 4321 est pris (autre dev), Vite choisit un port libre au lieu d’échouer. */
+      strictPort: false,
       // Sur lecteur réseau (Y:), le watcher peut boucler sur .env — redémarrer le dev à la main après édition.
       watch: {
         ignored: [
@@ -30,7 +31,9 @@ export default defineConfig({
       },
     },
     optimizeDeps: {
-      include: ['chart.js/auto']
+      // marked + dompurify (Markdown.tsx) : évite 504 "Outdated Optimize Dep" en dev
+      // quand le cache .vite dérive après changements de deps.
+      include: ['chart.js/auto', 'marked', 'dompurify'],
     },
   },
   adapter: node({

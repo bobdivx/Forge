@@ -17,6 +17,11 @@ type Agent = {
   model: string;
   totalTokens?: number;
   estimatedCostUsd?: number;
+  currentWork?: {
+    taskId: number;
+    title: string;
+    delegatedAgentId?: string;
+  } | null;
   sanity?: {
     ok: boolean;
     error?: string;
@@ -90,6 +95,28 @@ export default function AgentCard({
         {teamProfile.bio ? (
           <p class="mb-6 line-clamp-2 text-xs leading-relaxed text-gray-500 font-medium italic opacity-80">"{teamProfile.bio}"</p>
         ) : <div class="mb-6 h-[40px]" />}
+
+        {(stats.running > 0 || agent.currentWork) && (
+          <div class="mb-5 rounded-2xl border border-blue-100 bg-blue-50/90 px-3 py-2.5 text-left shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-wider text-blue-700 mb-1">
+              {stats.running > 0 ? 'Travail Forge (AgentTask)' : 'Activité liée'}
+            </p>
+            <p class="text-[12px] font-semibold text-gray-900 leading-snug line-clamp-4" title={agent.currentWork?.title || ''}>
+              {agent.currentWork?.title ||
+                (stats.running > 0
+                  ? `${stats.running} mission(s) marquée(s) running — ouvrez la chronologie pour le détail`
+                  : '—')}
+            </p>
+            {agent.currentWork?.delegatedAgentId && (
+              <p class="mt-1.5 text-[10px] text-blue-800/80 font-mono truncate" title={agent.currentWork.delegatedAgentId}>
+                Délégué · {agent.currentWork.delegatedAgentId}
+              </p>
+            )}
+            {agent.currentWork?.taskId != null && (
+              <p class="mt-1 text-[9px] text-gray-400">Tâche #{agent.currentWork.taskId}</p>
+            )}
+          </div>
+        )}
 
         <div class="grid grid-cols-3 gap-3 mb-7">
           <div class="bg-gray-50/50 rounded-2xl p-3 border border-gray-100/50 text-center transition-transform group-hover:-translate-y-0.5">

@@ -16,9 +16,12 @@ type MissionTask = {
   input: string | null;
   output: string | null;
   status: string;
+  projectId?: number | null;
   createdAt: string;
   updatedAt: string;
 };
+
+type ProjectOption = { id: number; name: string; path: string; swarmEnabled: number };
 
 type PanelPayload = {
   ok?: boolean;
@@ -59,6 +62,8 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
   const [sendNow, setSendNow] = useState(true);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [projectId, setProjectId] = useState<number | ''>('');
 
   const load = useCallback(() => {
     const q = encodeURIComponent(agentId);
@@ -82,6 +87,15 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
       clearInterval(t);
     };
   }, [load]);
+
+  useEffect(() => {
+    fetch('/api/projects-db')
+      .then((r) => r.json() as Promise<{ projects?: ProjectOption[] }>)
+      .then((j) => {
+        if (Array.isArray(j.projects)) setProjects(j.projects);
+      })
+      .catch(() => setProjects([]));
+  }, []);
 
   useEffect(() => {
     const onRefresh = (e: Event) => {
@@ -118,6 +132,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
           task: t,
           input: ins || undefined,
           status: 'pending',
+          ...(projectId !== '' ? { projectId } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; task?: MissionTask };
@@ -132,7 +147,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
         const rd = await fetch('/api/agent-task-redispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ taskId: taskRow.id }),
+          body: JSON.stringify({ taskId: taskRow.id, sessionKey }),
         });
         const rdJson = (await rd.json().catch(() => ({}))) as { error?: string };
         if (!rd.ok) dispatchErr = rdJson.error || `Erreur d'orchestration HTTP ${rd.status}`;
@@ -265,6 +280,29 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
               placeholder="Ex. : Audit des routes API…"
               disabled={busy}
             />
+          </label>
+          <label class="block">
+            <span class="text-[10px] font-bold uppercase text-gray-400">Application / dépôt</span>
+            <select
+              class="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#175B37]/50 focus:ring-2 focus:ring-[#175B37]/15"
+              value={projectId === '' ? '' : String(projectId)}
+              onChange={(e) => {
+                const v = (e.target as HTMLSelectElement).value;
+                setProjectId(v === '' ? '' : Number(v));
+              }}
+              disabled={busy}
+            >
+              <option value="">Toutes / non spécifiée</option>
+              {projects.map((p) => (
+                <option key={p.id} value={String(p.id)}>
+                  {p.name}
+                  {p.swarmEnabled === 0 ? ' (hors swarm)' : ''}
+                </option>
+              ))}
+            </select>
+            <p class="mt-1 text-[10px] text-gray-500">
+              La consigne envoyée à l’agent inclura le chemin de ce dépôt (vue NAS / agent). Liste issue des projets Forge.
+            </p>
           </label>
           <label class="block">
             <span class="text-[10px] font-bold uppercase text-gray-400">Consigne détaillée</span>

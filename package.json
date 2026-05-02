@@ -23,7 +23,10 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:e2e": "vitest run tests/e2e"
+    "test:e2e": "vitest run tests/e2e",
+    "db:migrate": "node scripts/migrate-astro-db-columns.mjs",
+    "audit:zimaos": "node scripts/audit-zimaos-surface.mjs",
+    "audit:zimaos:json": "node scripts/audit-zimaos-surface.mjs --json"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.60.2",

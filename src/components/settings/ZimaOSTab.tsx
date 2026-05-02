@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { useEffect } from 'preact/hooks';
 import FormField from '../ui/FormField';
 import SaveRow from '../ui/SaveRow';
+import ZimaOSForgeAuditPanel from './ZimaOSForgeAuditPanel';
 
 type Config = {
   zimaosAccessMode: string;
@@ -178,6 +179,8 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
 
   return (
     <div class="p-6 space-y-6">
+      <ZimaOSForgeAuditPanel />
+
       <p class="text-xs text-gray-500">
         Onglet dédié à la communication ZimaDev ↔ ZimaOS. Choisissez le mode local Docker ou distant SSH. En Docker sur
         le NAS, Forge utilise la CLI <span class="font-mono">docker</span> vers le socket de l’hôte (pas seulement le

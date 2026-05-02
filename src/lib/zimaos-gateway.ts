@@ -1,6 +1,11 @@
 /**
- * Appels au gateway ZimaOS.
- * Priorité : variables d’environnement, puis table Config (Astro DB).
+ * Couche HTTP unique vers le gateway ZimaOS (NAS).
+ *
+ * Ne pas utiliser pour la persistance métier : préférer Astro DB (AgentInstruction, AgentTask,
+ * Project, Config…). Ce module sert au runtime distant (sessions, invoke, sync fichier agents).
+ *
+ * Priorité URL / jeton : variables d’environnement, puis table Config (Astro DB).
+ * Audit intégration : Paramètres Forge → onglet ZIMAOS (ou `npm run audit:zimaos` en CI).
  */
 import fs from 'node:fs';
 import path from 'node:path';

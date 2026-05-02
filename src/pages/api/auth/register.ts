@@ -3,10 +3,9 @@ import {
   registerOrReplaceUser,
   createSessionToken,
   getUser,
-  isValidEmail,
-  isValidPassword,
   forgeSessionCookieSecure,
   migrateLegacyAuthOnce,
+  getCredentialsValidationError,
 } from '../../../lib/auth';
 
 function registerErrorMessage(e: unknown): string {
@@ -31,8 +30,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const email = String(body?.email ?? '').trim().toLowerCase();
     const password = String(body?.password ?? '').trim();
 
-    if (!isValidEmail(email) || !isValidPassword(password)) {
-      return new Response(JSON.stringify({ error: 'Identifiants invalides' }), { status: 400 });
+    const validationErr = getCredentialsValidationError(email, password);
+    if (validationErr) {
+      return new Response(JSON.stringify({ error: validationErr }), { status: 400 });
     }
 
     /** Ne jamais écraser un compte existant depuis « Créer un compte » (sinon l’ancien mot de passe ne marche plus). */

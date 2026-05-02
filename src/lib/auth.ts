@@ -279,6 +279,20 @@ export function isValidPassword(password: string): boolean {
   return String(password || '').length >= 10;
 }
 
+/** Messages explicites pour l’API login/register (éviter un 400 « identifiants invalides » sans détail). */
+export function getCredentialsValidationError(
+  email: string,
+  password: string,
+): string | null {
+  const em = String(email || '').trim();
+  const pw = String(password || '');
+  if (!em) return 'Indiquez une adresse e-mail.';
+  if (!isValidEmail(em)) return 'Format d’adresse e-mail invalide.';
+  if (!pw) return 'Indiquez un mot de passe.';
+  if (!isValidPassword(pw)) return 'Le mot de passe doit contenir au moins 10 caractères.';
+  return null;
+}
+
 export function isValidAppName(name: string): boolean {
   return /^[a-zA-Z0-9._-]{2,64}$/.test(String(name || '').trim());
 }

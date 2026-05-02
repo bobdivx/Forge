@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import SaveRow from '../ui/SaveRow';
+import FolderBrowseModal from './FolderBrowseModal';
 
 type Config = {
   forgePublicUrl: string;
@@ -97,6 +98,14 @@ const IconDocker = () => (
   </svg>
 );
 
+type BrowseField = 'forgeReposRoot' | 'dockerYamlDir' | 'dockerAppDataDir';
+
+const BROWSE_TITLES: Record<BrowseField, string> = {
+  forgeReposRoot: 'Choisir la racine des applications (hôte)',
+  dockerYamlDir: 'Choisir le dossier des stacks (YAML)',
+  dockerAppDataDir: 'Choisir le dossier AppData',
+};
+
 export default function IntegrationTab({
   settings,
   setSettings,
@@ -106,6 +115,7 @@ export default function IntegrationTab({
 }: Props) {
   const [reposHealth, setReposHealth] = useState<ReposHealth | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [browseField, setBrowseField] = useState<BrowseField | null>(null);
 
   const fetchHealth = async () => {
     setIsRefreshing(true);
@@ -169,20 +179,38 @@ export default function IntegrationTab({
             icon={<IconDocker />}
           >
             <Field label="Dossier des stacks (Docker YAML)" hint="Chemin où se trouvent les fichiers docker-compose.yml">
-              <input
-                type="text"
-                value={settings.dockerYamlDir}
-                onInput={(e) => setSettings({ ...settings, dockerYamlDir: (e.target as HTMLInputElement).value })}
-                class={inputCls}
-              />
+              <div class="flex gap-2 items-stretch">
+                <input
+                  type="text"
+                  value={settings.dockerYamlDir}
+                  onInput={(e) => setSettings({ ...settings, dockerYamlDir: (e.target as HTMLInputElement).value })}
+                  class={`${inputCls} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setBrowseField('dockerYamlDir')}
+                  class="shrink-0 text-xs font-semibold px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 whitespace-nowrap"
+                >
+                  Parcourir…
+                </button>
+              </div>
             </Field>
             <Field label="Dossier AppData (Volumes)" hint="Chemin racine pour les données persistantes des conteneurs">
-              <input
-                type="text"
-                value={settings.dockerAppDataDir}
-                onInput={(e) => setSettings({ ...settings, dockerAppDataDir: (e.target as HTMLInputElement).value })}
-                class={inputCls}
-              />
+              <div class="flex gap-2 items-stretch">
+                <input
+                  type="text"
+                  value={settings.dockerAppDataDir}
+                  onInput={(e) => setSettings({ ...settings, dockerAppDataDir: (e.target as HTMLInputElement).value })}
+                  class={`${inputCls} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setBrowseField('dockerAppDataDir')}
+                  class="shrink-0 text-xs font-semibold px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 whitespace-nowrap"
+                >
+                  Parcourir…
+                </button>
+              </div>
             </Field>
           </Card>
         </div>
@@ -194,13 +222,22 @@ export default function IntegrationTab({
             icon={<IconFolder />}
           >
             <Field label="Chemin Hôte (NAS / Machine Physique)" hint="Le dossier source (ex: /mnt/GitHub) vu par le moteur Docker.">
-              <input
-                type="text"
-                list={suggestions.length ? datalistId : undefined}
-                value={settings.forgeReposRoot}
-                onInput={(e) => setSettings({ ...settings, forgeReposRoot: (e.target as HTMLInputElement).value })}
-                class={inputCls}
-              />
+              <div class="flex gap-2 items-stretch">
+                <input
+                  type="text"
+                  list={suggestions.length ? datalistId : undefined}
+                  value={settings.forgeReposRoot}
+                  onInput={(e) => setSettings({ ...settings, forgeReposRoot: (e.target as HTMLInputElement).value })}
+                  class={`${inputCls} flex-1 min-w-0`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setBrowseField('forgeReposRoot')}
+                  class="shrink-0 text-xs font-semibold px-3 py-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 whitespace-nowrap"
+                >
+                  Parcourir…
+                </button>
+              </div>
               {suggestions.length > 0 && (
                 <datalist id={datalistId}>
                   {suggestions.map((s) => (
@@ -259,15 +296,22 @@ export default function IntegrationTab({
               </div>
             )}
 
-            <div class="pt-2">
-              <Field label="Chemin Agent (Intérieur du conteneur)" hint="Le chemin de destination utilisé par les LLMs dans leur environnement. Souvent identique à l'hôte.">
+            <div class="pt-2 space-y-2">
+              <Field
+                label="Chemin côté agent / conteneur (ZimaOS)"
+                hint="Le bind mount vu depuis Linux dans le conteneur (ex. /mnt/GitHub). Forge traduit les chemins locaux vers cette racine pour les commandes agents. Souvent différent du chemin Windows de la racine hôte. Vide → défaut /mnt/GitHub."
+              >
                 <input
                   type="text"
+                  placeholder="/mnt/GitHub"
                   value={settings.forgeReposRootAgent}
                   onInput={(e) => setSettings({ ...settings, forgeReposRootAgent: (e.target as HTMLInputElement).value })}
                   class={inputCls}
                 />
               </Field>
+              <p class="text-[11px] text-gray-500 leading-snug rounded-xl border border-gray-100 bg-gray-50/80 px-3 py-2">
+                Pas de bouton « Parcourir » : il ouvre le disque où tourne Forge (ex. Windows), alors que ce champ décrit le chemin <span class="font-medium">dans le conteneur</span>. Reprenez la valeur « Agent » des montages détectés ci-dessus si besoin.
+              </p>
             </div>
           </Card>
         </div>
@@ -276,6 +320,18 @@ export default function IntegrationTab({
       <div class="pt-4">
         <SaveRow message={message} saving={saving} onSave={onSave} label="Sauvegarder l'intégration" />
       </div>
+
+      <FolderBrowseModal
+        open={browseField !== null}
+        title={browseField ? BROWSE_TITLES[browseField] : ''}
+        initialPath={browseField ? settings[browseField] : ''}
+        onClose={() => setBrowseField(null)}
+        onPick={(absPath) => {
+          if (!browseField) return;
+          setSettings({ ...settings, [browseField]: absPath });
+          setBrowseField(null);
+        }}
+      />
     </div>
   );
 }
