@@ -13,6 +13,16 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'action and appName are required' }), { status: 400 });
     }
 
+    // Security: Validate appName to prevent command injection
+    if (!/^[a-zA-Z0-9_.-]+$/.test(appName)) {
+      return new Response(JSON.stringify({ error: 'Invalid appName format' }), { status: 400 });
+    }
+
+    // Security: Validate scriptPath if provided
+    if (scriptPath && !/^[a-zA-Z0-9_./-]+$/.test(scriptPath)) {
+      return new Response(JSON.stringify({ error: 'Invalid scriptPath format' }), { status: 400 });
+    }
+
     let command = '';
 
     if (action === 'start' || action === 'start_prod') {
