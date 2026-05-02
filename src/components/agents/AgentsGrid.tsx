@@ -574,6 +574,7 @@ export default function AgentsGrid() {
               commandBusy={Boolean(commandBusyByAgent[agent.id])}
               commandMessage={commandMsgByAgent[agent.id] ?? null}
               wakeStatusLabel={getWakeStatusLabel(agent)}
+              onModelChange={handleModelChange}
             />
           ))}
         </div>

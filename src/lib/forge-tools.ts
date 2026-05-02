@@ -14,6 +14,8 @@ import {
 } from './forge-repos';
 import { summarizeGithubFolder, type GithubFolderSummary } from './project-github-meta';
 import { getConfig } from './config-db';
+import { loadAstroDb } from './load-astro-db';
+import { eq } from 'drizzle-orm';
 import { isGithubAutomationAgent } from './agent-github-auth';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -679,7 +681,16 @@ const githubCommit: ForgeTool<
         cwd: dir,
         encoding: 'utf8',
       }).trim();
-      const targetBranch = String(branch || '').trim() || currentBranch;
+      let dbBranch = '';
+      try {
+        const { db, Project } = await loadAstroDb();
+        const pRows = await db.select().from(Project).where(eq(Project.name, project));
+        if (pRows.length > 0 && pRows[0].githubBranchDev) {
+          dbBranch = pRows[0].githubBranchDev;
+        }
+      } catch (e) {}
+
+      const targetBranch = String(branch || '').trim() || dbBranch || currentBranch;
 
       let pushed = false;
       if (push) {
@@ -721,6 +732,100 @@ const githubCommit: ForgeTool<
     }),
 };
 
+
+const githubPull: ForgeTool<{ project: string }, { pulled: boolean; branch: string; stdout: string }> = {
+  name: 'github_pull',
+  description: 'Pull GitHub contrôlé pour agent',
+  category: 'git',
+  params: {
+    project: { type: 'string', description: 'Nom du projet', required: true },
+  },
+  execute: ({ project }, _ctx) =>
+    run('github_pull', async () => {
+      const dir = await resolveProjectPath(project);
+      if (!dir) {
+        return {
+          ok: false,
+          output: { pulled: false, branch: '', stdout: '' },
+          error: `Projet introuvable: ${project}`,
+          durationMs: 0,
+          toolName: 'github_pull',
+        };
+      }
+
+      const currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim();
+
+      const token = String((await getConfig('githubToken')) || '').trim();
+      if (!token) {
+        return {
+          ok: false,
+          output: { pulled: false, branch: currentBranch, stdout: '' },
+          error: 'Token GitHub absent dans Forge (settings.githubToken)',
+          durationMs: 0,
+          toolName: 'github_pull',
+        };
+      }
+
+      let out = '';
+      try {
+        out = execFileSync(
+          'git',
+          [
+            '-c',
+            `http.extraHeader=Authorization: Bearer ${token}`,
+            'pull',
+            'origin',
+            currentBranch,
+          ],
+          { cwd: dir, encoding: 'utf8' },
+        );
+      } catch(e) {
+        return {
+          ok: false,
+          output: { pulled: false, branch: currentBranch, stdout: e.stdout || e.message },
+          error: 'Erreur lors du pull',
+          durationMs: 0,
+          toolName: 'github_pull',
+        };
+      }
+
+      return {
+        ok: true,
+        output: {
+          pulled: true,
+          branch: currentBranch,
+          stdout: out,
+        },
+        durationMs: 0,
+        toolName: 'github_pull',
+      };
+    }),
+};
+
+const systemExec: ForgeTool<{ project?: string; command: string }, string> = {
+  name: 'system_exec',
+  description: 'Exécute une commande système bash/shell',
+  category: 'system',
+  params: {
+    project: { type: 'string', description: 'Nom du projet (optionnel)' },
+    command: { type: 'string', description: 'La commande à exécuter', required: true },
+  },
+  execute: ({ project, command }, _ctx) =>
+    run('system_exec', async () => {
+      let dir = '/tmp';
+      if (project) {
+        const d = await resolveProjectPath(project);
+        if (d) dir = d;
+      }
+
+      const { stdout, ok } = safeExec(command, dir);
+      return { ok, output: stdout, toolName: 'system_exec', durationMs: 0 };
+    }),
+};
+
 // ── Registry ──────────────────────────────────────────────────────────────────
 
 const ALL_TOOLS: ForgeTool[] = [
@@ -734,7 +839,9 @@ const ALL_TOOLS: ForgeTool[] = [
   projectScripts as ForgeTool,
   dockerPs as ForgeTool,
   dockerLogs as ForgeTool,
+  systemExec as ForgeTool,
   githubCommit as ForgeTool,
+  githubPull as ForgeTool,
   githubMeta as ForgeTool,
   projectsList as ForgeTool,
 ];

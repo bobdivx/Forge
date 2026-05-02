@@ -6,6 +6,7 @@ import {
 } from '../../lib/agent-instruction-defaults';
 import { SWARM_WORK_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
 import { provisionAgentInZimaOS } from '../../lib/zimaos-agent-provision';
+import { getAllConfig } from '../../lib/config-db';
 
 /** GET  /api/agent-instructions         → liste tous les agents
  *  GET  /api/agent-instructions?id=X    → un agent spécifique
@@ -37,7 +38,14 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response(JSON.stringify({ error: 'agentId requis' }), { status: 400 });
   }
 
-  const { agentId, systemPrompt, model, enabled } = body;
+  let { agentId, systemPrompt, model, enabled } = body;
+
+  if (model === 'Auto') {
+    try {
+      const config = await getAllConfig();
+      model = config.agentDefaultModel || 'Auto';
+    } catch(e) {}
+  }
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
   if (systemPrompt !== undefined) updateData.systemPrompt = systemPrompt;
@@ -73,7 +81,14 @@ export const POST: APIRoute = async ({ request }) => {
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9_]/g, '_');
-  const model = String(body?.model ?? '').trim();
+  let model = String(body?.model ?? '').trim();
+
+  if (model === 'Auto') {
+    try {
+      const config = await getAllConfig();
+      model = config.agentDefaultModel || 'Auto';
+    } catch(e) {}
+  }
   const enabled = body?.enabled === undefined ? 1 : body.enabled ? 1 : 0;
   const customPath = String(body?.filePath ?? '').trim();
   const systemPrompt = String(body?.systemPrompt ?? '').trim();
