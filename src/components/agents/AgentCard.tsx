@@ -28,6 +28,7 @@ type Props = {
   taskStats?: TaskStats;
   teamProfile: AgentTeamProfile;
   onSwarmCommand?: (agentId: string, command: SwarmWorkCommand) => void;
+  onModelChange?: (agentId: string, newModel: string) => void;
   commandBusy?: boolean;
   commandMessage?: string | null;
   wakeStatusLabel?: string;
@@ -41,6 +42,7 @@ export default function AgentCard({
   commandBusy = false,
   commandMessage = null,
   wakeStatusLabel,
+  onModelChange,
 }: Props) {
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
@@ -147,6 +149,19 @@ export default function AgentCard({
         </div>
         <div class="flex flex-col items-end">
           <div class="text-[10px] font-black text-gray-900">{((agent.totalTokens ?? 0) / 1000).toFixed(1)}K tokens</div>
+          <div class="mt-1" onClick={e => e.preventDefault()}>
+            <select
+              class="text-[9px] font-mono text-gray-500 bg-transparent border-none outline-none appearance-none cursor-pointer hover:text-gray-900 text-right pr-2"
+              value={agent.model || "Auto"}
+              onChange={e => onModelChange?.(agent.id, e.target.value)}
+              title="Modifier le modèle (nécessite une sauvegarde globale)"
+            >
+              <option value={agent.model}>{agent.model || "Modèle"}</option>
+              <option value="Auto">Auto (Recommandé)</option>
+              <option value="qwen2.5-coder:7b">qwen2.5-coder:7b</option>
+              <option value="deepseek-r1:8b">deepseek-r1:8b</option>
+            </select>
+          </div>
           <div class="text-[9px] font-bold text-emerald-500 tabular-nums">${(agent.estimatedCostUsd ?? 0).toFixed(4)}</div>
         </div>
       </div>

@@ -8,6 +8,8 @@ const Project = defineTable({
     path: column.text(),
     status: column.text({ default: 'active' }),
     swarmEnabled: column.number({ default: 1 }),
+    githubBranchDev: column.text({ default: 'dev' }),
+    githubBranchProd: column.text({ default: 'main' }),
     createdAt: column.date({ default: new Date() }),
     updatedAt: column.date({ default: new Date() }),
   },
