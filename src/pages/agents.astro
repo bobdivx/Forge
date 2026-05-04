@@ -3,8 +3,10 @@
 export const prerender = false;
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import AgentsGrid from '../components/agents/AgentsGrid';
-import SwarmInteractionsBoard from '../components/agents/SwarmInteractionsBoard';
-import AgentTaskTable from '../components/agents/AgentTaskTable';
+import SwarmNetworkCanvas from '../components/agents/SwarmNetworkCanvas';
+import SwarmCommunicationHeatmap from '../components/agents/SwarmCommunicationHeatmap';
+import MissionGanttTimeline from '../components/agents/MissionGanttTimeline';
+import AgentsDiscoveryKpi from '../components/agents/AgentsDiscoveryKpi';
 import SwarmFlowTimeline from '../components/swarm/SwarmFlowTimeline';
 import { loadAstroDb } from '../lib/load-astro-db';
 
@@ -76,7 +78,7 @@ try {
     </div>
 
     <!-- KPIs équipe -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-5">
       <div class="bg-white rounded-[1.5rem] shadow-sm p-5">
         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Agents actifs</span>
         <span class="text-5xl font-bold text-gray-900">{agentStats.total}</span>
@@ -97,6 +99,7 @@ try {
         <span class="text-5xl font-bold" style={`color:${agentStats.pendingIssues > 0 ? '#EAB308' : '#9CA3AF'}`}>{agentStats.pendingIssues}</span>
         <span class="text-xs text-gray-400 block mt-2">anomalies non résolues</span>
       </div>
+      <AgentsDiscoveryKpi client:load />
     </div>
 
     <!-- Grille des membres -->
@@ -117,8 +120,8 @@ try {
         <span class="text-[10px] uppercase tracking-widest text-gray-400">Historique · Astro DB · Auto-refresh 10s</span>
         <a href="/work?tab=tasks" class="ml-auto text-xs hover:underline transition" style="color:#175B37">Voir tout →</a>
       </div>
-      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
-        <AgentTaskTable client:load />
+      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100 p-4">
+        <MissionGanttTimeline client:load />
       </div>
     </section>
 
@@ -129,7 +132,14 @@ try {
         <h3 class="text-base font-bold text-gray-900">Communications inter-agents</h3>
         <span class="text-[10px] uppercase tracking-widest text-gray-400">Messages AgentMessage · Astro DB</span>
       </div>
-      <SwarmInteractionsBoard client:load />
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div class="xl:col-span-2 bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-4">
+          <SwarmNetworkCanvas client:load />
+        </div>
+        <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-4">
+          <SwarmCommunicationHeatmap client:load />
+        </div>
+      </div>
     </section>
 
     <!-- Flux chronologique unifié (ex-page /agents/flux) -->

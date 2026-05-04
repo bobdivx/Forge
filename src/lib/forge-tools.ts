@@ -17,6 +17,7 @@ import { getConfig } from './config-db';
 import { loadAstroDb } from './load-astro-db';
 import { eq } from 'drizzle-orm';
 import { isGithubAutomationAgent } from './agent-github-auth';
+import { swarmTools } from './forge-swarm-tools';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ export interface ForgeTool<
 > {
   name: string;
   description: string;
-  category: 'git' | 'docker' | 'file' | 'system';
+  category: 'git' | 'docker' | 'file' | 'system' | 'swarm';
   params: Record<string, ToolParam>;
   execute(input: TInput, ctx: ToolContext): Promise<ToolResult<TOutput>>;
 }
@@ -844,6 +845,7 @@ const ALL_TOOLS: ForgeTool[] = [
   githubPull as ForgeTool,
   githubMeta as ForgeTool,
   projectsList as ForgeTool,
+  ...swarmTools,
 ];
 
 export const toolRegistry = {

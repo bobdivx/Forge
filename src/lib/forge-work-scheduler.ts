@@ -117,6 +117,10 @@ function sched(): ForgeSchedulerStore {
   return g[FORGE_SCHEDULER_STORE_KEY]!;
 }
 
+/** Rotation d’audits proactifs quand peu de tâches `running` (veille / analyse / sécurité). */
+let idleDiscoveryRound = 0;
+const IDLE_DISCOVERY_AGENTS = ['VEILLE_TECH', 'ANALYSTE_CODE', 'SECURITE_CODE'] as const;
+
 function isViteModuleRunnerClosedError(error: unknown): boolean {
   const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
   return /vite module runner has been closed/i.test(message);
@@ -207,6 +211,64 @@ function isAgentTargeted(agentId: string, targetIds: string[]): boolean {
     const target = normalizeAgentTarget(targetId);
     return agent === target || agent.startsWith(`${target}${FORGE_PROJECT_CHILD_TOKEN}`);
   });
+}
+
+async function maybeEnqueueIdleDiscoveryTask(agentIds: string[]): Promise<void> {
+  try {
+    const { db, AgentTask, Project } = await loadAstroDb();
+    const tasks = await db.select().from(AgentTask).limit(800);
+    const running = tasks.filter((t) => String(t.status).toLowerCase() === 'running').length;
+    if (running >= 2) return;
+
+    const prows = await db.select().from(Project).where(eq(Project.swarmEnabled, 1));
+    if (!prows.length) return;
+
+    const tick = idleDiscoveryRound++;
+    const agentId = IDLE_DISCOVERY_AGENTS[tick % IDLE_DISCOVERY_AGENTS.length]!;
+    if (!isAgentTargeted(agentId, agentIds)) return;
+
+    const busyAudit = tasks.some(
+      (t) =>
+        String(t.agentId) === agentId &&
+        ['pending', 'running', 'bug'].includes(String(t.status).toLowerCase()) &&
+        String(t.task || '').includes('[Audit proactif]'),
+    );
+    if (busyAudit) return;
+
+    const proj = prows[Math.floor(tick / IDLE_DISCOVERY_AGENTS.length) % prows.length]!;
+    const taskTitle = `[Audit proactif] ${proj.name}`;
+    const input =
+      `Analyse le projet « ${proj.name} » (chemin ${proj.path}).\n` +
+      `Utilise l’outil audit_project puis propose_bug / propose_improvement si tu identifies des problèmes concrets.`;
+    const now = new Date();
+    await db.insert(AgentTask).values({
+      agentId,
+      task: taskTitle,
+      input,
+      projectId: proj.id,
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await insertForgeActivityLog({
+      actorType: 'system',
+      actorId: 'work_scheduler',
+      action: 'swarm.idle_audit_enqueued',
+      entityType: 'agent_task',
+      entityId: 'pending',
+      details: { agentId, projectId: proj.id },
+    });
+    /** La file sera traitée au prochain `runDispatchOnly` (tick ≤ 60 s). */
+  } catch (e) {
+    await insertForgeActivityLog({
+      actorType: 'system',
+      actorId: 'work_scheduler',
+      action: 'swarm.idle_audit_enqueue_failed',
+      entityType: 'swarm',
+      entityId: 'global',
+      details: { error: String(e) },
+    });
+  }
 }
 
 // ── Journalisation ────────────────────────────────────────────────────────────
@@ -342,6 +404,14 @@ async function dispatchOpenAppIssues(agentIds: string[], onlyProjectId?: number)
     }
   } catch (e) {
     console.warn('[work-scheduler] dispatchOpenAppIssues error:', e);
+    await insertForgeActivityLog({
+      actorType: 'system',
+      actorId: 'work_scheduler',
+      action: 'swarm.issue.dispatch_failed',
+      entityType: 'agent_app_issue',
+      entityId: 'batch',
+      details: { error: String(e) },
+    });
   }
 }
 
@@ -495,8 +565,15 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
             },
           });
         }
-      } catch {
-        /* task skip silencieux */
+      } catch (err) {
+        await insertForgeActivityLog({
+          actorType: 'system',
+          actorId: 'work_scheduler',
+          action: 'swarm.task.dispatch_failed',
+          entityType: 'agent_task',
+          entityId: String(task.id),
+          details: { error: String(err), agentId: task.agentId },
+        });
       }
     }
   } catch (e) {
@@ -621,6 +698,7 @@ async function runDispatchOnly(agentIds: string[]): Promise<void> {
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
+    await maybeEnqueueIdleDiscoveryTask(agentIds);
     await maybeCleanupIdleSubagents();
   } finally {
     sched().dispatchInProgress = false;
@@ -742,10 +820,17 @@ async function sendWorkDirective(agentIds: string[]): Promise<{
       '\n\n⚠️ AUCUN PROJET SWARM ACTIF (toggle par projet). La VEILLE peut quand même proposer des idées générales ; le CHEF garde la priorité sur ce qui est pertinent.';
   }
 
+  const autonomy =
+    '\n\n🛠️ OUTILS D’AUTONOMIE (à utiliser avec sobriété, max. 3 propositions matérialisées par cycle utile) :\n' +
+    'Tu disposes notamment de `audit_project`, `propose_bug`, `propose_improvement`, `spawn_subagent` et `delegate_task`. ' +
+    'Si la file est vide ou si tu détectes un problème en parcourant un dépôt, **utilise-les** pour alimenter le carnet d’anomalies et les idées — ' +
+    'les quotas Forge limitent le spam.';
+
   const message =
     '[Forge — début de session de travail automatique]\n\n' +
     "Le système de travail Forge vient de démarrer une session. " +
-    projectListMsg;
+    projectListMsg +
+    autonomy;
 
   return deliverWorkDirectiveMessage(message, agentIds);
 }

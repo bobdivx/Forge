@@ -43,7 +43,17 @@ export async function runForgeAgentMessage(params: {
   if (params.taskId != null) {
     const [row] = await db.select().from(AgentTask).where(eq(AgentTask.id, params.taskId)).limit(1);
     taskBefore = row;
-    if (!row) return { ok: false, error: 'Tâche introuvable' };
+    if (!row) {
+      await insertForgeActivityLog({
+        actorType: 'system',
+        actorId: String(source),
+        action: 'swarm.task.preflight_failed',
+        entityType: 'agent_task',
+        entityId: String(params.taskId),
+        details: { reason: 'not_found', agentId },
+      });
+      return { ok: false, error: 'Tâche introuvable' };
+    }
     await db.update(AgentTask).set({ status: 'running', updatedAt: now }).where(eq(AgentTask.id, params.taskId));
   }
 
@@ -117,6 +127,14 @@ export async function runForgeAgentMessage(params: {
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     if (params.taskId != null) {
+      await insertForgeActivityLog({
+        actorType: 'system',
+        actorId: String(source),
+        action: 'swarm.task.run_failed',
+        entityType: 'agent_task',
+        entityId: String(params.taskId),
+        details: { error, agentId, phase: 'orchestration' },
+      });
       await db
         .update(AgentTask)
         .set({ status: 'failed', output: error, updatedAt: new Date() })

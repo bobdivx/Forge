@@ -6,6 +6,12 @@ import { loadAstroDb } from '../lib/load-astro-db';
 import WorkModals from '../components/work/WorkModals';
 import WorkSystemPanel from '../components/work/WorkSystemPanel';
 import WorkAgentTasksPanel from '../components/work/WorkAgentTasksPanel';
+import WorkAnalyticsHeader from '../components/work/WorkAnalyticsHeader';
+import BugFlowBoard from '../components/work/BugFlowBoard';
+import AgentIdeasBoard from '../components/work/AgentIdeasBoard';
+import WorkCarnetRest from '../components/work/WorkCarnetRest';
+import WorkDiagnosticPanel from '../components/work/WorkDiagnosticPanel';
+import SwarmProjectsToggle from '../components/work/SwarmProjectsToggle';
 
 let requests = [];
 let issues = [];
@@ -13,10 +19,8 @@ let deps = [];
 let projects: Record<number, string> = {};
 let projectOptions: { id: number; name: string }[] = [];
 
-let issueTaskMap = new Map();
-
 try {
-  const { db, Request, AgentAppIssue, AgentDependencyRequest, AgentTask, Project, desc } = await loadAstroDb();
+  const { db, Request, AgentAppIssue, AgentDependencyRequest, Project, desc } = await loadAstroDb();
   const projectRows = await db.select().from(Project);
   for (const p of projectRows) {
     projects[p.id] = p.name;
@@ -25,81 +29,7 @@ try {
   requests = await db.select().from(Request).orderBy(desc(Request.createdAt));
   issues   = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt));
   deps     = await db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt));
-
-  const taskRows = await db.select().from(AgentTask).limit(800);
-  issueTaskMap = buildIssueTaskMap(taskRows);
 } catch(e) { console.error('WORK PAGE DB ERROR:', e); }
-
-/** Lie AgentTask → AppIssue via la mention `AppIssue #id` dans task/input (même logique que le scheduler). */
-function buildIssueTaskMap(tasks) {
-  const map = new Map();
-  const rank = (s) => {
-    const x = String(s || '').toLowerCase();
-    if (x === 'running') return 4;
-    if (x === 'pending' || x === 'bug') return 3;
-    if (x === 'completed' || x === 'done') return 2;
-    return 1;
-  };
-  const time = (t) =>
-    t.updatedAt instanceof Date ? t.updatedAt.getTime() : new Date(t.updatedAt || 0).getTime();
-  for (const t of tasks) {
-    const blob = `${t.task ?? ''}\n${t.input ?? ''}`;
-    const m = blob.match(/AppIssue\s*#(\d+)/i);
-    if (!m) continue;
-    const issueId = Number(m[1]);
-    if (!Number.isFinite(issueId)) continue;
-    const prev = map.get(issueId);
-    const r = rank(t.status);
-    const pr = prev ? rank(prev.status) : 0;
-    if (!prev || r > pr || (r === pr && time(t) > time(prev))) {
-      map.set(issueId, t);
-    }
-  }
-  return map;
-}
-
-function issueActivityLabel(issue, task) {
-  const ist = String(issue.status || '').toLowerCase();
-  if (ist === 'resolved' || ist === 'wont_fix') {
-    return { cls: 'text-gray-400', short: '—', title: 'Anomalie clôturée' };
-  }
-  if (!task) {
-    if (ist === 'in_progress') {
-      return {
-        cls: 'text-amber-800',
-        short: '⚠ Sans tâche liée',
-        title:
-          'Statut in_progress en base, mais aucune AgentTask trouvée avec AppIssue #id — pas de traitement actif suivi',
-      };
-    }
-    return {
-      cls: 'text-gray-500',
-      short: 'Pas encore dispatché',
-      title: 'Aucune tâche agent liée à cette anomalie pour l’instant',
-    };
-  }
-  const ts = String(task.status || '').toLowerCase();
-  const ag = String(task.agentId || '').trim() || '?';
-  if (ts === 'running') {
-    return {
-      cls: 'text-emerald-700 font-semibold',
-      short: `● En cours · ${ag}`,
-      title: 'Tâche agent à l’état running',
-    };
-  }
-  if (ts === 'pending' || ts === 'bug') {
-    return {
-      cls: 'text-amber-700',
-      short: `○ File · ${ag}`,
-      title: 'Tâche créée ; en attente d’envoi ou de prise en charge par l’agent',
-    };
-  }
-  return {
-    cls: 'text-gray-600',
-    short: `${task.status} · ${ag}`,
-    title: 'État de la tâche liée à cette anomalie',
-  };
-}
 
 const openIssues       = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
 const openDeps         = deps.filter(d => d.status === 'open' || d.status === 'in_progress');
@@ -107,14 +37,6 @@ const pendingRequests  = requests.filter(r => r.status === 'pending' || r.status
 const finishedRequests = requests.filter(r => r.status === 'completed' || r.status === 'rejected');
 const finishedIssues   = issues.filter(i => i.status === 'resolved' || i.status === 'wont_fix');
 const finishedDeps     = deps.filter(d => d.status === 'installed' || d.status === 'rejected');
-
-function statusBadge(status: string) {
-  const s = String(status ?? '').toLowerCase();
-  if (s === 'completed' || s === 'resolved' || s === 'installed') return 'bg-green-50 text-green-600';
-  if (s === 'in_progress') return 'bg-yellow-50 text-yellow-600';
-  if (s === 'rejected' || s === 'wont_fix') return 'bg-red-50 text-red-500';
-  return 'bg-orange-50 text-orange-600';
-}
 
 // Sérialise les données pour le registre global JS
 const requestsJson  = JSON.stringify(requests.map(r => ({ ...r, _type: 'request', createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null })));
@@ -199,120 +121,43 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
       </div>
     </div>
 
+    <SwarmProjectsToggle client:load />
+
     <WorkSystemPanel client:load />
+
+    <WorkDiagnosticPanel client:load />
 
     <WorkAgentTasksPanel client:load />
 
-    <!-- ── Demandes & Fonctionnalités ──────────────────────────────────── -->
-    <section>
-      <div class="flex items-center gap-3 mb-4">
-        <div class="w-1 h-6 rounded-full bg-yellow-400"></div>
-        <h3 class="text-base font-bold text-gray-900">Demandes & Fonctionnalités</h3>
-        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{requests.length}</span>
-        <div class="flex-1"></div>
-        <a
-          href="/agents#swarm-flux"
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 mr-2"
-        >Chronologie Forge</a>
-        <button
-          type="button"
-          disabled={pendingRequests.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('request', 'active', ${pendingRequests.length}, 'demandes en attente')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-40"
-        >Supprimer lot ({pendingRequests.length})</button>
-        <button
-          type="button"
-          disabled={finishedRequests.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('request', 'finished', ${finishedRequests.length}, 'demandes terminées')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-        >Terminées ({finishedRequests.length})</button>
-        <button
-          type="button"
-          disabled={requests.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('request', 'all', ${requests.length}, 'demandes')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
-        >Tout supprimer</button>
-        <button
-          type="button"
-          onclick="window.__openWorkModal && window.__openWorkModal('request')"
-          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all hover:scale-110 shadow-sm"
-          style="background:#175B37"
-          title="Nouvelle demande"
-        >+</button>
+    <section class="space-y-4">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="w-1 h-6 rounded-full bg-[#175B37]"></div>
+        <h2 class="text-lg font-bold text-gray-900">Analytique carnet</h2>
+        <a href="/agents#swarm-flux" class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 ml-auto">
+          Chronologie Forge
+        </a>
       </div>
-      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
-        {requests.length === 0 ? (
-          <div class="py-12 text-center text-gray-400 text-sm">Aucune demande en base.</div>
-        ) : (
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-100">
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Statut</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Projet</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Titre</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Priorité</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Auteur</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map(r => (
-                  <tr
-                    class="border-b border-gray-50 hover:bg-amber-50/40 transition-colors cursor-pointer group"
-                    onclick={`window.__openWorkDetail && window.__openWorkDetail('request', ${r.id})`}
-                    title="Cliquer pour voir le détail"
-                  >
-                    <td class="px-5 py-3">
-                      <span class={`text-[10px] font-semibold px-2 py-1 rounded ${statusBadge(r.status)}`}>{r.status}</span>
-                    </td>
-                    <td class="px-5 py-3 text-xs text-gray-500">{projects[r.projectId] ?? '—'}</td>
-                    <td class="px-5 py-3 text-xs text-gray-800 max-w-xs">
-                      <div class="truncate max-w-[280px] group-hover:text-[#175B37] transition-colors" title={r.title}>{r.title}</div>
-                      {r.content && <div class="text-[10px] text-gray-400 truncate max-w-[280px]">{r.content.slice(0, 80)}</div>}
-                    </td>
-                    <td class="px-5 py-3">
-                      <span class="text-[10px] bg-purple-50 text-purple-600 font-medium px-2 py-0.5 rounded">{r.requestType || 'demande'}</span>
-                    </td>
-                    <td class="px-5 py-3">
-                      <span class={`text-[10px] font-medium px-2 py-0.5 rounded ${r.priority === 'high' ? 'bg-red-50 text-red-500' : r.priority === 'low' ? 'bg-gray-100 text-gray-500' : 'bg-orange-50 text-orange-500'}`}>{r.priority || 'medium'}</span>
-                    </td>
-                    <td class="px-5 py-3 text-[11px] text-gray-400 font-mono">{r.author || '—'}</td>
-                    <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
-                      {r.createdAt ? new Date(r.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <WorkAnalyticsHeader client:load />
     </section>
 
-    <!-- ── Bugs / Anomalies ────────────────────────────────────────────── -->
-    <section>
-      <div class="flex items-center gap-3 mb-4">
+    <section class="space-y-4">
+      <div class="flex items-center gap-3 mb-2 flex-wrap">
         <div class="w-1 h-6 rounded-full bg-red-400"></div>
-        <h3 class="text-base font-bold text-gray-900">Bugs & Anomalies</h3>
+        <h2 class="text-lg font-bold text-gray-900">Bugs &amp; anomalies — flux</h2>
         <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{issues.length}</span>
-        {openIssues.length > 0 && (
-          <span class="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">{openIssues.length} ouverts</span>
-        )}
         <div class="flex-1"></div>
         <button
           type="button"
           disabled={openIssues.length === 0}
           onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'active', ${openIssues.length}, 'bugs ouverts')`}
           class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
-        >Supprimer lot ({openIssues.length})</button>
+        >Supprimer lot ouverts</button>
         <button
           type="button"
           disabled={finishedIssues.length === 0}
           onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'finished', ${finishedIssues.length}, 'bugs clôturés')`}
           class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-        >Clôturés ({finishedIssues.length})</button>
+        >Clôturés</button>
         <button
           type="button"
           disabled={issues.length === 0}
@@ -322,154 +167,23 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
         <button
           type="button"
           onclick="window.__openWorkModal && window.__openWorkModal('issue')"
-          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all hover:scale-110 shadow-sm"
+          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm"
           style="background:#EF4444"
           title="Signaler un bug"
         >+</button>
       </div>
-      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
-        {issues.length === 0 ? (
-          <div class="py-12 text-center text-gray-400 text-sm">Aucun bug signalé.</div>
-        ) : (
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-100">
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Statut</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Projet</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Titre</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Rapporté par</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Assigné</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Activité tâche</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {issues.map(i => {
-                  const ti = issueTaskMap.get(i.id);
-                  const act = issueActivityLabel(i, ti);
-                  return (
-                  <tr
-                    class="border-b border-gray-50 hover:bg-red-50/30 transition-colors cursor-pointer group"
-                    onclick={`window.__openWorkDetail && window.__openWorkDetail('issue', ${i.id})`}
-                    title="Cliquer pour voir le détail"
-                  >
-                    <td class="px-5 py-3">
-                      <span class={`text-[10px] font-semibold px-2 py-1 rounded ${statusBadge(i.status)}`}>{i.status}</span>
-                    </td>
-                    <td class="px-5 py-3 text-xs text-gray-500">{projects[i.projectId] ?? '—'}</td>
-                    <td class="px-5 py-3 text-xs text-gray-800 max-w-xs">
-                      <div class="truncate max-w-[260px] group-hover:text-red-500 transition-colors" title={i.title}>{i.title}</div>
-                      <div class="text-[10px] text-gray-400 font-mono truncate">{i.url}</div>
-                    </td>
-                    <td class="px-5 py-3 text-[11px] font-mono text-gray-500">{i.errorType}</td>
-                    <td class="px-5 py-3 text-[11px] font-mono" style="color:#175B37">{i.reportedByAgentId}</td>
-                    <td
-                      class={`px-5 py-3 text-[11px] font-mono max-w-[140px] truncate ${i.assigneeAgentId ? 'text-gray-800' : 'text-gray-400'}`}
-                      title={i.assigneeAgentId || 'Non renseigné'}
-                    >
-                      {i.assigneeAgentId || '—'}
-                    </td>
-                    <td class={`px-5 py-3 text-[11px] max-w-[200px] ${act.cls}`} title={act.title}>
-                      {act.short}
-                    </td>
-                    <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
-                      {i.createdAt ? new Date(i.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
-                    </td>
-                  </tr>
-                );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <BugFlowBoard client:load />
     </section>
 
-    <!-- ── Dépendances ─────────────────────────────────────────────────── -->
-    <section>
-      <div class="flex items-center gap-3 mb-4">
-        <div class="w-1 h-6 rounded-full bg-blue-400"></div>
-        <h3 class="text-base font-bold text-gray-900">Demandes de dépendances</h3>
-        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{deps.length}</span>
-        {openDeps.length > 0 && (
-          <span class="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">{openDeps.length} à traiter</span>
-        )}
-        <div class="flex-1"></div>
-        <button
-          type="button"
-          disabled={openDeps.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('dep', 'active', ${openDeps.length}, 'demandes de dépendances ouvertes')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40"
-        >Supprimer lot ({openDeps.length})</button>
-        <button
-          type="button"
-          disabled={finishedDeps.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('dep', 'finished', ${finishedDeps.length}, 'dépendances traitées')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-        >Traitées ({finishedDeps.length})</button>
-        <button
-          type="button"
-          disabled={deps.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('dep', 'all', ${deps.length}, 'demandes de dépendances')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
-        >Tout supprimer</button>
-        <button
-          type="button"
-          onclick="window.__openWorkModal && window.__openWorkModal('dep')"
-          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all hover:scale-110 shadow-sm"
-          style="background:#3B82F6"
-          title="Nouvelle dépendance"
-        >+</button>
+    <section class="space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="w-1 h-6 rounded-full bg-amber-400"></div>
+        <h2 class="text-lg font-bold text-gray-900">Idées &amp; améliorations (agents)</h2>
       </div>
-      <div class="bg-white rounded-[1.5rem] shadow-sm overflow-hidden border border-gray-100">
-        {deps.length === 0 ? (
-          <div class="py-12 text-center text-gray-400 text-sm">Aucune demande de dépendance.</div>
-        ) : (
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-100">
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Statut</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Projet</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Paquet</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Type</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Raison</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Demandé par</th>
-                  <th class="text-[10px] uppercase font-bold text-gray-400 px-5 py-3 text-left">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deps.map(d => (
-                  <tr
-                    class="border-b border-gray-50 hover:bg-blue-50/30 transition-colors cursor-pointer group"
-                    onclick={`window.__openWorkDetail && window.__openWorkDetail('dep', ${d.id})`}
-                    title="Cliquer pour voir le détail"
-                  >
-                    <td class="px-5 py-3">
-                      <span class={`text-[10px] font-semibold px-2 py-1 rounded ${statusBadge(d.status)}`}>{d.status}</span>
-                    </td>
-                    <td class="px-5 py-3 text-xs text-gray-500">{projects[d.projectId] ?? '—'}</td>
-                    <td class="px-5 py-3 font-mono text-xs text-blue-600 group-hover:text-blue-700 transition-colors">
-                      {d.packageName}{d.versionSpec ? `@${d.versionSpec}` : ''}
-                    </td>
-                    <td class="px-5 py-3">
-                      <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-medium">{d.isDev ? 'devDep' : 'dep'}</span>
-                    </td>
-                    <td class="px-5 py-3 text-[11px] text-gray-400 max-w-[200px] truncate">{d.reason || '—'}</td>
-                    <td class="px-5 py-3 text-[11px] font-mono" style="color:#175B37">{d.requestedByAgentId}</td>
-                    <td class="px-5 py-3 text-[10px] text-gray-400 whitespace-nowrap">
-                      {d.createdAt ? new Date(d.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <AgentIdeasBoard client:load />
     </section>
+
+    <WorkCarnetRest client:load />
 
   </div>
 

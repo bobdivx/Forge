@@ -23,8 +23,24 @@ export const FORGE_AGENT_INSTRUCTION_ROWS = [
 
 export const FORGE_SWARM_AGENT_COUNT = FORGE_AGENT_INSTRUCTION_ROWS.length;
 
+const DISCOVERY_EXTRA: Partial<Record<string, string>> = {
+  VEILLE_TECH:
+    '\n\n**Mode découverte :** parcours les dépôts swarm (chemins indiqués par la session) et signale toute évolution utile. Utilise `audit_project` puis `propose_improvement` / `propose_bug` quand c’est pertinent (reste sobre, quotas appliqués).',
+  ANALYSTE_CODE:
+    '\n\n**Mode audit :** inspecte le code (lecture ciblée, smells, null deref) et matérialise les découvertes via `propose_bug` / `propose_improvement` plutôt que de seulement les décrire en texte libre.',
+  SECURITE_CODE:
+    '\n\n**Mode sécurité :** cherche secrets, XSS, SQLi, auth faible. Exploite `audit_project` (scope security) et remonte via `propose_bug` / `propose_improvement` si le risque est réel.',
+  MAINTENANCE_REPO:
+    '\n\n**Mode maintenance :** dépendances obsolètes, dette, scripts cassés. Documente et appelle `propose_bug` / `propose_improvement` quand la correction est claire.',
+};
+
 export function getInitialSystemPrompt(agentId: string): string {
-  const agent = FORGE_AGENT_INSTRUCTION_ROWS.find(a => a.agentId === agentId);
-  return `# Identité : ${agentId}\n\n${agent?.description || 'Agent spécialisé Forge.'}\n\nMission : accomplir les tâches assignées en respectant les règles définies dans le dashboard (Politique Agents).`;
+  const agent = FORGE_AGENT_INSTRUCTION_ROWS.find((a) => a.agentId === agentId);
+  const extra = DISCOVERY_EXTRA[agentId] || '';
+  return (
+    `# Identité : ${agentId}\n\n${agent?.description || 'Agent spécialisé Forge.'}\n\n` +
+    `Mission : accomplir les tâches assignées en respectant les règles définies dans le dashboard (Politique Agents).` +
+    extra
+  );
 }
 

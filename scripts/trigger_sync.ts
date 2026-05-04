@@ -1,4 +1,4 @@
-import { performZimaOSAgentsSync } from '../src/pages/api/zimaos-sync-agents.ts';
+import { performZimaOSAgentsSync } from '../src/pages/api/forge-sync-agents.ts';
 
 export default async function () {
   console.log('Starting ZimaOS agents sync...');

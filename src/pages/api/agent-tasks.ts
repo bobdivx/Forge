@@ -80,12 +80,14 @@ type TaskRow = {
   source: 'db';
 };
 
-export const GET: APIRoute = async () => {
+export const GET: APIRoute = async ({ url }) => {
   const { db, AgentTask, desc } = await loadAstroDb();
+
+  const lim = Math.min(Math.max(parseInt(url?.searchParams?.get('limit') ?? '120', 10) || 120, 1), 600);
 
   let dbTasks: TaskRow[] = [];
   try {
-    const rows = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(50);
+    const rows = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(lim);
     dbTasks = rows.map((t) => ({
       id: t.id,
       agentId: t.agentId,

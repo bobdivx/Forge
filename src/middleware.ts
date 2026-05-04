@@ -17,6 +17,21 @@ function ensureSchedulerOnce() {
   setTimeout(() => {
     startScheduler();
     startBugDetector();
+    void (async () => {
+      try {
+        const { loadAstroDb } = await import('./lib/load-astro-db');
+        const { eq } = await import('drizzle-orm');
+        const { db, Project } = await loadAstroDb();
+        const rows = await db.select({ id: Project.id }).from(Project).where(eq(Project.swarmEnabled, 1));
+        if (rows.length === 0) {
+          console.warn(
+            '[forge] Aucun projet avec swarm activé : aucune AgentAppIssue ne sera dispatchée tant que le toggle « swarm » reste désactivé sur tous les dépôts.',
+          );
+        }
+      } catch (e) {
+        console.warn('[forge] Vérification projets swarm au boot :', e);
+      }
+    })();
   }, 8_000);
 }
 

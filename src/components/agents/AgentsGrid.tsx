@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'preact/hooks';
 import AgentCard from './AgentCard';
 import AgentActivityChart from './AgentActivityChart';
+import AgentsSwarmHeatRadar from './AgentsSwarmHeatRadar';
 import TabBar from '../ui/TabBar';
 import {
   buildAgentTeamProfile,
@@ -51,13 +52,6 @@ type AppVersionCheck = {
   latestVersion?: string | null;
   currentVersion?: string | null;
   latestUrl?: string | null;
-  error?: string;
-};
-
-type WakePreRepair = {
-  attempted?: boolean;
-  ok?: boolean;
-  note?: string;
   error?: string;
 };
 
@@ -112,7 +106,7 @@ export default function AgentsGrid() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'active' | 'idle'>('all');
   const [query, setQuery] = useState('');
-  const [activationAdvice, setActivationAdvice] = useState<ActivationAdvice | null>(null);
+  const [, setActivationAdvice] = useState<ActivationAdvice | null>(null);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [newAgentId, setNewAgentId] = useState('');
   const [newAgentModel, setNewAgentModel] = useState('');
@@ -125,6 +119,7 @@ export default function AgentsGrid() {
   const [appVersion, setAppVersion] = useState<AppVersionCheck | null>(null);
   const [globalDefaultModel, setGlobalDefaultModel] = useState('Auto');
   const [savingGlobalDefault, setSavingGlobalDefault] = useState(false);
+  const [timelineEvents, setTimelineEvents] = useState<Array<{ at: string; actor?: string; target?: string }>>([]);
 
   const loadGlobalDefault = async () => {
     try {
@@ -226,12 +221,25 @@ export default function AgentsGrid() {
           setAvailableModels([]);
         });
     };
+    const loadTimeline = () => {
+      fetch('/api/swarm-timeline')
+        .then((r) => r.json())
+        .then((d) => {
+          if (Array.isArray(d.events)) setTimelineEvents(d.events);
+        })
+        .catch(() => {});
+    };
     load();
+    loadTimeline();
     loadAppVersion();
     loadModels();
     loadGlobalDefault();
     const t = setInterval(load, 15000);
-    return () => clearInterval(t);
+    const t2 = setInterval(loadTimeline, 12_000);
+    return () => {
+      clearInterval(t);
+      clearInterval(t2);
+    };
   }, []);
 
   const createAgent = async () => {
@@ -415,6 +423,26 @@ export default function AgentsGrid() {
   const pendingCount = Object.values(taskStats).reduce((sum, s) => sum + (s.pending ?? 0), 0);
   const { barData, doughnutData } = buildChartData(agents, taskStats, teamProfiles);
 
+  const swarmPulseByAgent = useMemo(() => {
+    const now = Date.now();
+    const windowMs = 120_000;
+    const ids = new Set(agents.map((a) => a.id));
+    const out: Record<string, boolean> = {};
+    for (const a of agents) out[a.id] = false;
+    for (const ev of timelineEvents) {
+      const t = new Date(ev.at).getTime();
+      if (!Number.isFinite(t) || now - t > windowMs) continue;
+      const from = String(ev.actor || '').trim();
+      const to = String(ev.target || '').trim();
+      for (const id of ids) {
+        if (from === id || to === id || from.includes(id) || to.includes(id)) {
+          out[id] = true;
+        }
+      }
+    }
+    return out;
+  }, [agents, timelineEvents]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const rankAgent = (a: Agent) => {
@@ -493,6 +521,8 @@ export default function AgentsGrid() {
           </div>
         </div>
       </div>
+
+      <AgentsSwarmHeatRadar taskStats={taskStats} events={timelineEvents} agentCount={agents.length} />
 
       <details class="group rounded-[1.5rem] border border-gray-100 bg-white shadow-sm">
         <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-gray-900 [&::-webkit-details-marker]:hidden">
@@ -657,6 +687,7 @@ export default function AgentsGrid() {
                 commandMessage={commandMsgByAgent[agent.id] ?? null}
                 wakeStatusLabel={getWakeStatusLabel(agent)}
                 onModelChange={handleModelChange}
+                swarmPulse={Boolean(swarmPulseByAgent[agent.id])}
               />
             </div>
           ))}

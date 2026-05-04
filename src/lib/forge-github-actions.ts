@@ -19,6 +19,16 @@ function parseGithubRepo(remoteUrl: string | null): { owner: string; repo: strin
   return null;
 }
 
+/** Extrait owner/repo/numéro PR depuis une URL `html_url` GitHub. */
+function parseGithubPullFromHtmlUrl(url: string | null | undefined): { owner: string; repo: string; number: number } | null {
+  if (!url) return null;
+  const m = String(url).match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/i);
+  if (!m) return null;
+  const n = parseInt(m[3]!, 10);
+  if (!Number.isFinite(n)) return null;
+  return { owner: m[1]!, repo: m[2]!, number: n };
+}
+
 /** Lit le corps d'une réponse d'erreur GitHub (message JSON ou extrait du texte). */
 async function formatGithubApiError(res: Response): Promise<string> {
   const text = await res.text();
@@ -274,7 +284,7 @@ export async function checkGithubActionsForProjects(scope?: GithubMonitoringScop
                 url: run.html_url,
                 errorType: 'ci_cd_failure',
                 title: `Échec CI/CD: ${run.name} (branche ${run.head_branch})`,
-                detail: `Le workflow GitHub Actions a échoué sur le commit ${run.head_sha}.\n\n${logsSnippet}`,
+                detail: `Le workflow GitHub Actions a échoué sur le commit ${run.head_sha}.\n\n${logsSnippet}\n\n---\nforge_github_run_id: ${run.id}`,
                 status: 'open',
                 reportedByAgentId: 'SYSTEM_GITHUB',
                 assigneeAgentId: 'EXPERT_GITHUB',
@@ -284,12 +294,20 @@ export async function checkGithubActionsForProjects(scope?: GithubMonitoringScop
               console.log(`[github-actions] Issue créée pour l'échec CI/CD du projet ${project.name}`); } catch (e) { console.error('Failed to insert issue:', e); }
             }
           } else if (run.conclusion === 'success') {
-             // If success, find any open CI/CD issues for this exact branch and close them!
+             // Si succès : clôturer les issues CI liées (run_id stable, avec repli sur le titre / branche).
              const openBranchIssues = await db.select().from(AgentAppIssue).where(eq(AgentAppIssue.projectId, project.id));
              for (const issue of openBranchIssues) {
-                if (issue.status === 'open' && issue.errorType === 'ci_cd_failure' && issue.title.includes(`(branche ${run.head_branch})`)) {
-                   await db.update(AgentAppIssue).set({ status: 'resolved', updatedAt: new Date() }).where(eq(AgentAppIssue.id, issue.id));
-                   console.log(`[github-actions] Issue résolue automatiquement suite au succès de CI/CD: ${issue.title}`);
+                if (String(issue.status).toLowerCase() !== 'open' || issue.errorType !== 'ci_cd_failure') continue;
+                const rid = String(issue.detail || '').match(/forge_github_run_id:\s*(\d+)/i)?.[1];
+                const sameRun = rid != null && Number(rid) === Number(run.id);
+                const sameBranch = issue.title.includes(`(branche ${run.head_branch})`);
+                if (sameRun || sameBranch) {
+                   await db.update(AgentAppIssue).set({
+                     status: 'resolved',
+                     detail: `${issue.detail || ''}\n\n---\nAuto-clôturé : run #${run.id} success sur branche ${run.head_branch}`.slice(0, 120_000),
+                     updatedAt: new Date(),
+                   }).where(eq(AgentAppIssue.id, issue.id));
+                   console.log(`[github-actions] Issue CI résolue (run/branch) : ${issue.title}`);
                 }
              }
           }
@@ -376,6 +394,42 @@ export async function checkGithubPullRequestsForProjects(scope?: GithubMonitorin
           });
           console.log(`[github-pulls] Issue de revue créée pour la PR #${pr.number} de ${project.name}`);
         }
+      }
+
+      // PR mergée / fermée côté GitHub : clôturer les AgentAppIssue pr_review encore ouvertes.
+      const projectIssues = await db.select().from(AgentAppIssue).where(eq(AgentAppIssue.projectId, project.id));
+      for (const issue of projectIssues) {
+        if (String(issue.status).toLowerCase() !== 'open') continue;
+        if (issue.errorType !== 'pr_review') continue;
+        const parsed = parseGithubPullFromHtmlUrl(String(issue.url || ''));
+        if (!parsed || parsed.owner !== owner || parsed.repo !== repo) continue;
+        const prRes = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/pulls/${parsed.number}`,
+          {
+            headers: {
+              Authorization: `token ${githubToken}`,
+              Accept: 'application/vnd.github.v3+json',
+              'User-Agent': 'Ageton',
+            },
+          },
+        );
+        if (!prRes.ok) continue;
+        const prData = (await prRes.json()) as { state?: string; merged_at?: string | null; closed_at?: string | null };
+        if (prData.state === 'open') continue;
+        const merged = Boolean(prData.merged_at);
+        const closedAt = prData.closed_at ? new Date(prData.closed_at).toISOString() : '';
+        await db
+          .update(AgentAppIssue)
+          .set({
+            status: 'resolved',
+            detail: `${issue.detail || ''}\n\n---\nAuto-clôturé : PR #${parsed.number} ${merged ? 'fusionnée' : 'fermée'} le ${closedAt}`.slice(
+              0,
+              120_000,
+            ),
+            updatedAt: new Date(),
+          })
+          .where(eq(AgentAppIssue.id, issue.id));
+        console.log(`[github-pulls] Issue pr_review #${issue.id} clôturée (PR #${parsed.number} ${merged ? 'merged' : 'closed'})`);
       }
     }
   } catch (error) {

@@ -40,6 +40,8 @@ type Props = {
   commandBusy?: boolean;
   commandMessage?: string | null;
   wakeStatusLabel?: string;
+  /** Impulsion visuelle — message / tâche récente sur le flux swarm (~2 min). */
+  swarmPulse?: boolean;
 };
 
 export default function AgentCard({
@@ -51,6 +53,7 @@ export default function AgentCard({
   commandMessage = null,
   wakeStatusLabel,
   onModelChange,
+  swarmPulse = false,
 }: Props) {
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
@@ -112,6 +115,9 @@ export default function AgentCard({
         <div class="mb-3 flex items-start justify-between gap-3">
           <div class="flex min-w-0 flex-1 items-center gap-3">
             <div class="relative shrink-0">
+              {swarmPulse && (
+                <div class="pointer-events-none absolute -inset-1 z-[5] rounded-full bg-emerald-400/25 animate-ping" />
+              )}
               <div class={`absolute inset-0 scale-125 rounded-full bg-blue-500/20 blur-md transition-opacity ${glowCls}`} />
               <TeamAvatar profile={teamProfile} size="md" class="relative z-10 shadow-sm ring-4 ring-white" />
               <div class={`absolute -bottom-0.5 -right-0.5 z-20 h-3.5 w-3.5 rounded-full border-[3px] border-white ${dotCls}`} />

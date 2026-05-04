@@ -13,6 +13,14 @@ export const APP_ERROR_TYPES = [
   'runtime',
   'visual',
   'other',
+  /** GitHub & agents */
+  'pr_review',
+  'ci_cd_failure',
+  'code_smell',
+  'security',
+  'perf',
+  'bug',
+  'obsolete_dep',
 ] as const;
 export type AppErrorType = (typeof APP_ERROR_TYPES)[number];
 
