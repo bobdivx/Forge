@@ -72,6 +72,11 @@ export type ForgeConfig = {
   agentPolicyRules: string;
   /** Modèle LLM par défaut pour l'équipe (ex: qwen2.5:7b, Auto). */
   agentDefaultModel: string;
+  /**
+   * `true` : en mode planifié, le dispatch des tâches carnet / bugs (file) continue hors plage horaire.
+   * `false` : hors plage, rien n'est envoyé aux agents (sauf démarrage manuel « Démarrer maintenant »).
+   */
+  workSchedulerDispatchOutsideWindow: string;
 };
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
@@ -112,6 +117,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   agentPreferredLanguage: 'fr',
   agentPolicyRules: '[]',
   agentDefaultModel: 'Auto',
+  workSchedulerDispatchOutsideWindow: 'true',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);

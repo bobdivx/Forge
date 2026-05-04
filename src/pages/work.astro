@@ -5,6 +5,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import { loadAstroDb } from '../lib/load-astro-db';
 import WorkModals from '../components/work/WorkModals';
 import WorkSystemPanel from '../components/work/WorkSystemPanel';
+import WorkAgentTasksPanel from '../components/work/WorkAgentTasksPanel';
 
 let requests = [];
 let issues = [];
@@ -179,6 +180,8 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
     </div>
 
     <WorkSystemPanel client:load />
+
+    <WorkAgentTasksPanel client:load />
 
     <!-- ── Demandes & Fonctionnalités ──────────────────────────────────── -->
     <section>

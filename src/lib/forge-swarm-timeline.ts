@@ -44,7 +44,7 @@ function formatAgentsSynchronizedBody(o: Record<string, unknown>): string {
       : agents.length;
   const sample = agents.slice(0, 4).join(', ');
   const more = agents.length > 4 ? ` (+${agents.length - 4} autres)` : '';
-  return `${n} profil${n > 1 ? 's' : ''} Forge ${n > 1 ? 'sont' : 'est'} aligné${n > 1 ? 's' : ''} sur la configuration ZimaOS (gateway).${sample ? ` Rôles : ${sample}${more}.` : ''}`;
+  return `${n} profil${n > 1 ? 's' : ''} Forge ${n > 1 ? 'sont' : 'est'} aligné${n > 1 ? 's' : ''} sur la configuration distante (passerelle).${sample ? ` Rôles : ${sample}${more}.` : ''}`;
 }
 
 /** Évite d’afficher un bloc JSON brut pour les actions non reconnues. */
@@ -115,8 +115,8 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         ].filter(Boolean);
         body = bits.join(' · ') || body;
       }
-    } else if (action === 'swarm.task.sent_zimaos') {
-      title = 'Tâche poussée vers ZimaOS';
+    } else if (action === 'swarm.task.dispatched' || action === 'swarm.task.sent_zimaos') {
+      title = 'Tâche dispatchée (Forge → agent)';
       icon = '▶️';
       tone = 'info';
       if (detailsObj) {
@@ -183,7 +183,7 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         body = `Nouveau statut : ${detailsObj.status}`;
       }
     } else if (action === 'agents.synchronized') {
-      title = 'Liste d’agents synchronisée avec ZimaOS';
+      title = 'Liste d’agents synchronisée (profils runtime / passerelle)';
       icon = '🔄';
       tone = 'info';
       if (detailsObj) {
@@ -294,7 +294,7 @@ export async function buildSwarmTimelineEvents(): Promise<SwarmTimelineEventRow[
         : st === 'failed'
           ? 'en échec (nouvelle tentative possible)'
           : st === 'running'
-            ? 'en cours sur ZimaOS'
+            ? 'en cours d’exécution (agent)'
             : st === 'pending'
               ? 'en file d’attente'
               : st;

@@ -56,6 +56,7 @@ export const POST: APIRoute = async ({ request }) => {
       'forgeReposRootAgent',
       'agentGlobalBuildRules',
       'agentPreferredLanguage',
+      'workSchedulerDispatchOutsideWindow',
     ];
     for (const key of allowed) {
       if (!(key in data)) continue;

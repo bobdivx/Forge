@@ -18,6 +18,7 @@
     "install:unc": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prep-npm-unc.ps1",
     "dev:unc": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/prep-npm-unc.ps1 -RunDev",
     "build": "node ./scripts/run-astro.mjs build",
+    "check": "node ./scripts/run-astro.mjs check",
     "prepreview": "node scripts/ensure-win32-natives.cjs && node scripts/assert-astro-stack.cjs && node scripts/patch-astro-node-polyfill.cjs && node scripts/patch-astro-db-vite-sync-no-drop.cjs",
     "preview": "node ./scripts/run-astro.mjs preview",
     "test": "vitest run",
@@ -50,8 +51,10 @@
     "tailwindcss": "^3.4.19"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.6",
     "@types/dompurify": "^3.0.5",
     "@types/marked": "^5.0.2",
+    "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
 }

@@ -19,6 +19,8 @@ type WorkStatus = {
   lastStoppedAt: string | null;
   inScheduledWindow: boolean;
   nextWindowAt: string | null;
+  /** Dispatch carnet / file hors plage (mode planifié). */
+  dispatchOutsideScheduledWindow?: boolean;
 };
 
 const DAYS = [
@@ -378,7 +380,7 @@ export default function WorkScheduleTab() {
           | {
               ok?: boolean;
               budgetBlocked?: string;
-              zimaosErrors?: string[];
+              gatewayErrors?: string[];
               wakeReport?: {
                 targeted: number;
                 awakened: string[];
@@ -401,12 +403,12 @@ export default function WorkScheduleTab() {
                 ? `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}, manquantes: ${ko.join(', ')}.`
                 : `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}.`,
             );
-          } else if (wc?.zimaosErrors?.length) {
+          } else if (wc?.gatewayErrors?.length) {
             setMsg(
-              `Attention : ZimaOS n'a pas reçu les directives (${wc.zimaosErrors.join(' · ')}). Vérifiez le token, l'URL de la gateway et que sessions_send est autorisé.`,
+              `Attention : la passerelle n'a pas confirmé l'envoi des directives (${wc.gatewayErrors.join(' · ')}). Vérifiez le token, l'URL gateway et que sessions_send est autorisé.`,
             );
           } else {
-            setMsg('Travail démarré : directives envoyées vers ZimaOS.');
+            setMsg('Travail démarré : directives acheminées vers les agents.');
           }
         } else {
           setMsg(action === 'stop' ? 'Système arrêté.' : 'Mode planifié activé.');
@@ -501,6 +503,55 @@ export default function WorkScheduleTab() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Hors plage — dispatch carnet */}
+      <div class="bg-gray-50 border border-gray-200 rounded-2xl p-5">
+        <h4 class="text-sm font-semibold text-gray-900">Comportement hors plage horaire</h4>
+        <p class="text-[11px] text-gray-500 mt-1 mb-4">
+          En mode planifié, hors des heures définies ci-dessous : soit Forge continue d’envoyer les tâches du carnet et la file (bugs, demandes…), soit tout attend la prochaine plage ou un clic sur « Démarrer maintenant » dans Travail.
+        </p>
+        <label class="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            class="mt-1 rounded border-gray-300 text-[#175B37] focus:ring-[#175B37]"
+            checked={st?.dispatchOutsideScheduledWindow !== false}
+            disabled={saving}
+            onChange={async (e) => {
+              const checked = (e.target as HTMLInputElement).checked;
+              setSaving(true);
+              setMsg('');
+              try {
+                const res = await fetch('/api/settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    workSchedulerDispatchOutsideWindow: checked ? 'true' : 'false',
+                  }),
+                });
+                if (res.ok) {
+                  setMsg(checked ? 'Le carnet sera traité même hors plage.' : 'Hors plage : plus d’envoi automatique vers les agents (sauf démarrage manuel).');
+                  await load();
+                } else {
+                  const d = await res.json().catch(() => ({}));
+                  setMsg((d as { error?: string }).error || 'Erreur de sauvegarde.');
+                }
+              } catch {
+                setMsg('Erreur réseau.');
+              } finally {
+                setSaving(false);
+              }
+            }}
+          />
+          <span class="text-sm text-gray-700">
+            <span class="font-medium group-hover:text-gray-900">
+              Continuer à dispatcher le carnet et la file hors des plages
+            </span>
+            <span class="block text-[11px] text-gray-500 mt-1">
+              Désactivez cette option pour ne solliciter les agents que pendant les plages — ou après un démarrage manuel.
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* Plages horaires */}

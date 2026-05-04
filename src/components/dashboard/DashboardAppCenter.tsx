@@ -164,7 +164,7 @@ export default function DashboardAppCenter({ initialProjects }: { initialProject
         alert(
           n > 0
             ? `Travail lancé sur « ${project.name} ». Directive envoyée à ${n} agent(s).`
-            : `Travail lancé sur « ${project.name} ». Aucun agent n’a confirmé la livraison ; vérifiez ZimaOS ou les journaux.`,
+            : `Travail lancé sur « ${project.name} ». Aucun agent n’a confirmé la livraison ; vérifiez la passerelle ou les journaux Forge.`,
         );
         await fetchWorkSystem();
       } else {

@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { runProjectWorkBurst, startScheduler } from '../../lib/forge-work-scheduler';
 
 /**
- * POST — lance un cycle de travail **ciblé sur un seul projet** (directive ZimaOS + dispatch).
+ * POST — lance un cycle de travail **ciblé sur un seul projet** (directive Forge + dispatch des tâches).
  * Body : { projectId: number }
  */
 export const POST: APIRoute = async ({ request }) => {

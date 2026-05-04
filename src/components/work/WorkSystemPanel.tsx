@@ -7,13 +7,14 @@ type WorkSystemStatus = {
   lastStoppedAt: string | null;
   inScheduledWindow: boolean;
   nextWindowAt: string | null;
+  dispatchOutsideScheduledWindow?: boolean;
 };
 
 /** Aligné sur WorkCycleResult (forge-work-scheduler) — affichage uniquement. */
 type WorkCycleResult = {
   ok: boolean;
   budgetBlocked?: string;
-  zimaosErrors?: string[];
+  gatewayErrors?: string[];
   wakeReport?: {
     targeted: number;
     awakened: string[];
@@ -41,6 +42,8 @@ function parseStatusPayload(data: Record<string, unknown>): WorkSystemStatus {
     lastStoppedAt: (data.lastStoppedAt as string | null) ?? null,
     inScheduledWindow: Boolean(data.inScheduledWindow),
     nextWindowAt: (data.nextWindowAt as string | null) ?? null,
+    dispatchOutsideScheduledWindow:
+      data.dispatchOutsideScheduledWindow === undefined ? undefined : Boolean(data.dispatchOutsideScheduledWindow),
   };
 }
 
@@ -180,6 +183,14 @@ export default function WorkSystemPanel() {
         </div>
       ) : null}
 
+      {status?.state === 'scheduled' &&
+      !status?.inScheduledWindow &&
+      status?.dispatchOutsideScheduledWindow === false ? (
+        <p class="mt-3 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-[11px] text-amber-950">
+          <span class="font-semibold">Hors plage :</span> l’envoi automatique des tâches (carnet, bugs en file) est désactivé dans Paramètres → Planification. Utilisez « Démarrer maintenant » ou attendez la prochaine plage.
+        </p>
+      ) : null}
+
       {error ? (
         <p class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>
       ) : null}
@@ -263,9 +274,9 @@ export default function WorkSystemPanel() {
               ) : null}
             </ul>
           ) : null}
-          {lastWorkCycle.zimaosErrors?.length ? (
+          {lastWorkCycle.gatewayErrors?.length ? (
             <p class="mt-2 text-[11px] text-rose-800">
-              <span class="font-semibold">Erreurs liaison / passerelle :</span> {lastWorkCycle.zimaosErrors.join(' · ')}
+              <span class="font-semibold">Erreurs liaison / passerelle :</span> {lastWorkCycle.gatewayErrors.join(' · ')}
             </p>
           ) : null}
         </div>

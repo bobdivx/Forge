@@ -1,18 +1,20 @@
 /**
  * Scheduler de travail du swarm Forge.
  *
- * - Tourne en arrière-plan via setInterval (60 s).
+ * - Source de vérité : base Forge (`AgentTask`, `AgentInstruction`, carnet, anomalies).
+ * - Tourne en arrière-plan via setInterval (60 s). Le suivi GitHub CI/PR est déclenché au démarrage
+ *   d’un cycle de travail (session ou pulse projet), pas à chaque tick.
  * - Lit les WorkSchedule actifs en DB pour décider si la plage horaire est valide.
  * - Peut être démarré / arrêté manuellement (override = ignore les plages).
- * - Au début d’une session (manuel ou entrée dans une plage) : directive à tous les agents
- *   concernés via ZimaOS, puis création de tâches depuis les bugs ouverts et envoi des
- *   AgentTask `pending` / `bug`.
- * - Pendant la session : redispatch périodique des tâches sans renvoyer la directive complète.
+ * - Au début d’une session : directives aux agents ciblés (acheminement via la passerelle / gateway
+ *   configurée), puis matérialisation des bugs ouverts en `AgentTask` et envoi des tâches `pending` / `bug`.
+ * - Pendant la session : redispatch périodique sans renvoyer la directive complète.
  * - Les demandes carnet (`Request` en pending) sont converties en `AgentTask` liées par `[ForgeRequest #id]`.
  * - Journalise dans la table Heartbeat.
  */
 
 import { eq } from 'drizzle-orm';
+import { getConfig } from './config-db';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
 import {
@@ -36,7 +38,7 @@ import {
   cleanupIdleForgeProjectScopedAgents,
   FORGE_PROJECT_CHILD_TOKEN,
 } from './forge-project-scoped-agents';
-import { checkGithubActionsForProjects } from './forge-github-actions';
+import type { GithubMonitoringScope } from './forge-github-actions';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,13 +56,15 @@ export type WorkSystemStatus = {
   inScheduledWindow: boolean;
   /** Prochaine fenêtre de démarrage calculée (ISO string) ou null. */
   nextWindowAt: string | null;
+  /** Si true, le dispatch (carnet, tâches en file) est autorisé hors plage en mode planifié. */
+  dispatchOutsideScheduledWindow: boolean;
 };
 
-/** Retour de `runWorkCycle` / `manualStart` pour affichage API (ZimaOS, budget). */
+/** Retour de `runWorkCycle` / `manualStart` pour affichage API (erreurs passerelle, budget). */
 export type WorkCycleResult = {
   ok: boolean;
   budgetBlocked?: string;
-  zimaosErrors?: string[];
+  gatewayErrors?: string[];
   wakeReport?: {
     targeted: number;
     awakened: string[];
@@ -83,19 +87,41 @@ type WorkScheduleRow = {
   enabled: number;
 };
 
-// ── État interne (singleton) ──────────────────────────────────────────────────
+// ── État interne : singleton process-wide (globalThis) ───────────────────────
+/** En dev, Vite peut charger ce module plusieurs fois ; un seul état évite ticks / GitHub doublés. */
+const FORGE_SCHEDULER_STORE_KEY = '__forgeSchedulerStore_v1';
 
-let _intervalHandle: ReturnType<typeof setInterval> | null = null;
-let _state: WorkSystemState = 'scheduled';
-let _lastStartedAt: Date | null = null;
-let _lastStoppedAt: Date | null = null;
-let _currentlyWorking = false;
-/** Évite les exécutions concurrentes du redispatch léger. */
-let _dispatchInProgress = false;
-let _lastSubagentCleanupAt = 0;
-/** Pour le mode planifié : évite une directive « début de session » à chaque minute dans la plage. */
-let _prevScheduledInWindow = false;
-let _initialTickHandle: ReturnType<typeof setTimeout> | null = null;
+type ForgeSchedulerStore = {
+  intervalHandle: ReturnType<typeof setInterval> | null;
+  initialTickHandle: ReturnType<typeof setTimeout> | null;
+  workState: WorkSystemState;
+  lastStartedAt: Date | null;
+  lastStoppedAt: Date | null;
+  currentlyWorking: boolean;
+  dispatchInProgress: boolean;
+  githubMonitoringInProgress: boolean;
+  lastSubagentCleanupAt: number;
+  prevScheduledInWindow: boolean;
+};
+
+function sched(): ForgeSchedulerStore {
+  const g = globalThis as typeof globalThis & Record<string, ForgeSchedulerStore | undefined>;
+  if (!g[FORGE_SCHEDULER_STORE_KEY]) {
+    g[FORGE_SCHEDULER_STORE_KEY] = {
+      intervalHandle: null,
+      initialTickHandle: null,
+      workState: 'scheduled',
+      lastStartedAt: null,
+      lastStoppedAt: null,
+      currentlyWorking: false,
+      dispatchInProgress: false,
+      githubMonitoringInProgress: false,
+      lastSubagentCleanupAt: 0,
+      prevScheduledInWindow: false,
+    };
+  }
+  return g[FORGE_SCHEDULER_STORE_KEY]!;
+}
 
 function isViteModuleRunnerClosedError(error: unknown): boolean {
   const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
@@ -486,7 +512,7 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
           await insertForgeActivityLog({
             actorType: 'system',
             actorId: 'work_scheduler',
-            action: 'swarm.task.sent_zimaos',
+            action: 'swarm.task.dispatched',
             entityType: 'agent_task',
             entityId: String(task.id),
             details: {
@@ -501,6 +527,73 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
     }
   } catch (e) {
     console.warn('[work-scheduler] dispatchPendingTasks error:', e);
+  }
+}
+
+/**
+ * Dispatch une `AgentTask` en file (pending / bug) vers la session agent — même logique que le tick.
+ * La tâche et l’assignation viennent de Forge ; l’acheminement passe par la passerelle configurée.
+ * Utilisé depuis la page Travail pour relancer une entrée sans attendre le prochain cycle.
+ */
+export async function dispatchSinglePendingTaskById(
+  taskId: number,
+  options?: { actorId?: string },
+): Promise<{ ok: boolean; error?: string; task?: unknown }> {
+  const { exceeded, info } = await checkBudgetExceeded();
+  if (exceeded) return { ok: false, error: info };
+
+  const { db, AgentTask, Project, eq } = await loadAstroDb();
+  const [task] = await db.select().from(AgentTask).where(eq(AgentTask.id, taskId)).limit(1);
+  if (!task) return { ok: false, error: 'Tâche introuvable' };
+
+  const st = String(task.status || '').toLowerCase();
+  if (!['pending', 'bug'].includes(st)) {
+    return { ok: false, error: `La tâche n'est pas en file (statut : ${task.status}).` };
+  }
+
+  if (task.projectId != null) {
+    const activeProjects = await db.select({ id: Project.id }).from(Project).where(eq(Project.swarmEnabled, 1));
+    const activeProjectIds = new Set(activeProjects.map((p) => p.id));
+    if (!activeProjectIds.has(task.projectId)) {
+      return { ok: false, error: "Le projet de cette tâche n'a pas le swarm activé." };
+    }
+  }
+
+  try {
+    const sessionKey = task.agentId;
+    const inputClean = stripForgeDoneFooterFromBody(task.input || '');
+    const rawMessage = `[Forge — reprise automatique · tâche #${task.id}]\n\n${task.task}${inputClean ? '\n\n' + inputClean : ''}`;
+    const translatedCore = await translateContentForAgent(rawMessage);
+    const message = (
+      translatedCore.trimEnd() +
+      '\n\n' +
+      buildForgeTaskDispatchFooter(task.id)
+    ).slice(0, 120_000);
+
+    const res = await sessionsSendWithFallback(sessionKey, message, [
+      task.agentId,
+      String(task.agentId || '').replace(/^zimaos\//i, ''),
+    ]);
+    if (!res.ok) {
+      return { ok: false, error: res.error || "Impossible d'acheminer la tâche vers l'agent (passerelle)." };
+    }
+
+    const actor = String(options?.actorId || '').trim().slice(0, 200) || 'dashboard';
+    const now = new Date();
+    const { db: db2, AgentTask: AT2, eq: eq2 } = await loadAstroDb();
+    await db2.update(AT2).set({ status: 'running', updatedAt: now }).where(eq2(AT2.id, task.id));
+    await insertForgeActivityLog({
+      actorType: 'user',
+      actorId: actor,
+      action: 'swarm.task.dispatched',
+      entityType: 'agent_task',
+      entityId: String(task.id),
+      details: { manual: true, sessionKey },
+    });
+    const [updated] = await db2.select().from(AT2).where(eq2(AT2.id, task.id)).limit(1);
+    return { ok: true, task: updated ?? task };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -545,8 +638,8 @@ async function resolveTargetsForScheduleWindow(
 
 /** Reprend les bugs → tâches et pousse les tâches pending (sans renvoyer la directive « début de session »). */
 async function runDispatchOnly(agentIds: string[]): Promise<void> {
-  if (_dispatchInProgress || _currentlyWorking) return;
-  _dispatchInProgress = true;
+  if (sched().dispatchInProgress || sched().currentlyWorking) return;
+  sched().dispatchInProgress = true;
   try {
     const { exceeded } = await checkBudgetExceeded();
     if (exceeded) return;
@@ -556,15 +649,15 @@ async function runDispatchOnly(agentIds: string[]): Promise<void> {
     await scanZimaOSForForgeDoneSignals();
     await maybeCleanupIdleSubagents();
   } finally {
-    _dispatchInProgress = false;
+    sched().dispatchInProgress = false;
   }
 }
 
 async function maybeCleanupIdleSubagents(): Promise<void> {
   const now = Date.now();
   const everyMs = 6 * 60 * 60 * 1000;
-  if (now - _lastSubagentCleanupAt < everyMs) return;
-  _lastSubagentCleanupAt = now;
+  if (now - sched().lastSubagentCleanupAt < everyMs) return;
+  sched().lastSubagentCleanupAt = now;
   try {
     const res = await cleanupIdleForgeProjectScopedAgents();
     if (res.removed.length > 0) {
@@ -774,12 +867,12 @@ async function checkBudgetExceeded(): Promise<{ exceeded: boolean; info: string 
 }
 
 /**
- * @param fromManual — true si déclenché par POST /api/work-system (manualStart) : on garde `_state === 'running'`.
+ * @param fromManual — true si déclenché par POST /api/work-system (manualStart) : on garde `sched().workState === 'running'`.
  *                     false si déclenché par la planification : après le cycle on repasse en `scheduled`
- *                     sinon le premier tick bloque tous les suivants (`tick` ignorait tout si `_state === 'running'`).
+ *                     sinon le premier tick bloque tous les suivants (`tick` ignorait tout si `sched().workState === 'running'`).
  */
 async function runWorkCycle(agentIds: string[], fromManual = false): Promise<WorkCycleResult> {
-  if (_currentlyWorking) return { ok: false };
+  if (sched().currentlyWorking) return { ok: false };
 
   const { exceeded, info } = await checkBudgetExceeded();
   if (exceeded) {
@@ -787,10 +880,10 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
     return { ok: false, budgetBlocked: info };
   }
 
-  _currentlyWorking = true;
-  _lastStartedAt = new Date();
+  sched().currentlyWorking = true;
+  sched().lastStartedAt = new Date();
   if (fromManual) {
-    _state = 'running';
+    sched().workState = 'running';
   }
 
   try {
@@ -807,6 +900,8 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
       createdAt: new Date(),
     });
 
+    await syncGithubMonitorsForCurrentWorkSession({});
+
     const wake = await sendWorkDirective(agentIds);
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
@@ -816,7 +911,7 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
     const sessionCheck = await verifyAgentSessions(agentIds);
     return {
       ok: true,
-      zimaosErrors: wake.errors,
+      gatewayErrors: wake.errors,
       wakeReport: {
         targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
         awakened: wake.awakened,
@@ -827,40 +922,54 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
   } catch (e) {
     await logHeartbeat('error', `Erreur cycle de travail : ${String(e)}`);
     if (fromManual) {
-      _state = 'scheduled';
+      sched().workState = 'scheduled';
     }
     return { ok: false, error: String(e) };
   } finally {
-    _currentlyWorking = false;
+    sched().currentlyWorking = false;
     if (!fromManual) {
-      _state = 'scheduled';
+      sched().workState = 'scheduled';
     }
   }
 }
 
 async function stopWorkCycle(reason: string) {
-  _lastStoppedAt = new Date();
-  _state = 'stopped';
+  sched().lastStoppedAt = new Date();
+  sched().workState = 'stopped';
   await logHeartbeat('info', `Système de travail arrêté : ${reason}`);
+}
+
+/**
+ * Alimente CI/PR → issues agents juste avant une directive de travail (pas sur chaque tick).
+ */
+async function syncGithubMonitorsForCurrentWorkSession(scope: GithubMonitoringScope) {
+  if (sched().githubMonitoringInProgress) return;
+  sched().githubMonitoringInProgress = true;
+  try {
+    const { syncGithubMonitorsForWorkSession } = await import('./forge-github-actions');
+    await syncGithubMonitorsForWorkSession(scope);
+  } catch (e) {
+    if (stopSchedulerAfterViteClose('sync GitHub session', e)) return;
+    console.error('[work-scheduler] sync GitHub session :', e);
+  } finally {
+    sched().githubMonitoringInProgress = false;
+  }
+}
+
+/** Config `workSchedulerDispatchOutsideWindow` — défaut true (carnet / file traités hors plage). */
+export async function readDispatchOutsideScheduledWindowEnabled(): Promise<boolean> {
+  const raw = (await getConfig('workSchedulerDispatchOutsideWindow')).trim().toLowerCase();
+  if (raw === 'false' || raw === '0' || raw === 'no' || raw === 'off') return false;
+  return true;
 }
 
 // ── Tick principal ────────────────────────────────────────────────────────────
 
 async function tick() {
-  if (_state === 'stopped') return;
-
-  // Background monitorings
-  try {
-    const { checkGithubActionsForProjects, checkGithubPullRequestsForProjects } = await import('./forge-github-actions');
-    await checkGithubActionsForProjects();
-    await checkGithubPullRequestsForProjects();
-  } catch (e) {
-    if (stopSchedulerAfterViteClose('github monitoring', e)) return;
-    console.error('[work-scheduler] github monitoring error:', e);
-  }
+  if (sched().workState === 'stopped') return;
 
   // Mode manuel « En cours » : redispatch régulier (la directive complète a été envoyée au démarrage).
-  if (_state === 'running') {
+  if (sched().workState === 'running') {
     try {
       const agentIds = await getEnabledAgentIds();
       await runDispatchOnly(agentIds);
@@ -871,7 +980,7 @@ async function tick() {
     return;
   }
 
-  if (_state !== 'scheduled') return;
+  if (sched().workState !== 'scheduled') return;
 
   try {
     const { db, WorkSchedule } = await loadAstroDb();
@@ -884,20 +993,33 @@ async function tick() {
     if (inWindow) {
       const targets = await resolveTargetsForScheduleWindow(activeSchedules, now);
 
-      if (!_prevScheduledInWindow) {
-        if (!_currentlyWorking) {
+      if (!sched().prevScheduledInWindow) {
+        if (!sched().currentlyWorking) {
           const cycle = await runWorkCycle(targets, false);
           if (!cycle.budgetBlocked) {
-            _prevScheduledInWindow = true;
+            sched().prevScheduledInWindow = true;
           }
         }
       } else {
         await runDispatchOnly(targets);
       }
     } else {
-      if (_prevScheduledInWindow) {
+      if (sched().prevScheduledInWindow) {
         await logHeartbeat('info', '[work-scheduler] Fin de plage horaire planifiée');
-        _prevScheduledInWindow = false;
+        sched().prevScheduledInWindow = false;
+      }
+      /**
+       * Hors plage : pas de `runWorkCycle` (pas de directive « début de session »).
+       * Si activé en Config : `runDispatchOnly` pour le carnet / la file (voir réglage planification).
+       */
+      if (await readDispatchOutsideScheduledWindowEnabled()) {
+        try {
+          const agentIds = await getEnabledAgentIds();
+          await runDispatchOnly(agentIds);
+        } catch (e) {
+          if (stopSchedulerAfterViteClose('tick dispatch hors plage', e)) return;
+          console.warn('[work-scheduler] tick (scheduled, hors plage) dispatch error:', e);
+        }
       }
     }
   } catch (e) {
@@ -910,13 +1032,13 @@ async function tick() {
 
 /** Démarrage le scheduler interne (idempotent). Appelé depuis le middleware au boot. */
 export function startScheduler() {
-  if (_intervalHandle) {
+  if (sched().intervalHandle) {
     console.log('[work-scheduler] already running');
     return;
   }
   
   console.log('[work-scheduler] starting interval loop...');
-  _intervalHandle = setInterval(async () => {
+  sched().intervalHandle = setInterval(async () => {
     try {
       await tick();
     } catch (e: any) {
@@ -926,8 +1048,8 @@ export function startScheduler() {
   }, 60_000);
 
   // Premier tick dans 5 s pour ne pas bloquer le démarrage
-  _initialTickHandle = setTimeout(async () => {
-    _initialTickHandle = null;
+  sched().initialTickHandle = setTimeout(async () => {
+    sched().initialTickHandle = null;
     console.log('[work-scheduler] performing initial tick...');
     try {
       await tick();
@@ -940,13 +1062,15 @@ export function startScheduler() {
 
 /** Arrête l'interval (ex. en test). */
 export function stopScheduler() {
-  if (_initialTickHandle) {
-    clearTimeout(_initialTickHandle);
-    _initialTickHandle = null;
+  const init = sched().initialTickHandle;
+  if (init) {
+    clearTimeout(init);
+    sched().initialTickHandle = null;
   }
-  if (_intervalHandle) {
-    clearInterval(_intervalHandle);
-    _intervalHandle = null;
+  const iv = sched().intervalHandle;
+  if (iv) {
+    clearInterval(iv);
+    sched().intervalHandle = null;
   }
 }
 
@@ -960,7 +1084,7 @@ export function stopScheduler() {
  * (directive + dispatch bugs / demandes / tâches pour ce seul `projectId`).
  */
 export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleResult> {
-  if (_currentlyWorking) {
+  if (sched().currentlyWorking) {
     return { ok: false, error: 'Un cycle de travail est déjà en cours. Réessayez dans quelques instants.' };
   }
 
@@ -980,7 +1104,7 @@ export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleR
     return { ok: false, budgetBlocked: info };
   }
 
-  _currentlyWorking = true;
+  sched().currentlyWorking = true;
   try {
     const agentIds = await getEnabledAgentIds();
     await logHeartbeat('info', `Cycle ciblé « ${proj.name} » (#${projectId}) — ${info}`);
@@ -995,6 +1119,8 @@ export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleR
       createdAt: new Date(),
     });
 
+    await syncGithubMonitorsForCurrentWorkSession({ projectId });
+
     const wake = await sendWorkDirectiveForSingleProject(projectId, agentIds);
     await dispatchOpenAppIssues(agentIds, projectId);
     await dispatchPendingForgeRequests(agentIds, projectId);
@@ -1004,7 +1130,7 @@ export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleR
     const sessionCheck = await verifyAgentSessions(agentIds);
     return {
       ok: true,
-      zimaosErrors: wake.errors,
+      gatewayErrors: wake.errors,
       wakeReport: {
         targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
         awakened: wake.awakened,
@@ -1016,7 +1142,7 @@ export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleR
     await logHeartbeat('error', `Erreur cycle projet #${projectId} : ${String(e)}`);
     return { ok: false, error: String(e) };
   } finally {
-    _currentlyWorking = false;
+    sched().currentlyWorking = false;
   }
 }
 
@@ -1046,15 +1172,15 @@ export async function triggerDispatchNow(agentIds: string[] = []): Promise<void>
 /** Arrêt manuel — repasse en mode `stopped` (les plages planifiées ne reprennent pas). */
 export async function manualStop() {
   await stopWorkCycle('arrêt manuel');
-  _state = 'stopped';
-  _prevScheduledInWindow = false;
+  sched().workState = 'stopped';
+  sched().prevScheduledInWindow = false;
 }
 
 /** Réactive le mode planifié — le scheduler reprend le contrôle. */
 export function enableScheduledMode() {
-  _state = 'scheduled';
-  _currentlyWorking = false;
-  _prevScheduledInWindow = false;
+  sched().workState = 'scheduled';
+  sched().currentlyWorking = false;
+  sched().prevScheduledInWindow = false;
 }
 
 /** Retourne l'état courant du système de travail. */
@@ -1070,13 +1196,15 @@ export async function getWorkSystemStatus(): Promise<WorkSystemStatus> {
   const now = new Date();
   const inWindow = schedules.some((s) => isInWindow(s, now));
   const nextWindowAt = computeNextWindowAt(schedules);
+  const dispatchOutsideScheduledWindow = await readDispatchOutsideScheduledWindowEnabled();
 
   return {
-    state: _state,
-    schedulerActive: _intervalHandle !== null,
-    lastStartedAt: _lastStartedAt,
-    lastStoppedAt: _lastStoppedAt,
+    state: sched().workState,
+    schedulerActive: sched().intervalHandle !== null,
+    lastStartedAt: sched().lastStartedAt,
+    lastStoppedAt: sched().lastStoppedAt,
     inScheduledWindow: inWindow,
     nextWindowAt,
+    dispatchOutsideScheduledWindow,
   };
 }

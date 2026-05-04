@@ -1,9 +1,7 @@
 import { loadAstroDb } from './load-astro-db';
-import { getConfig } from './config-db';
-import { getReposRootResolved, resolveProjectPathFromDbProject } from './forge-repos';
+import { resolveProjectPathFromDbProject } from './forge-repos';
 import { summarizeGithubFolder } from './project-github-meta';
 import fs from 'fs';
-import path from 'path';
 import { eq } from 'drizzle-orm';
 
 function isViteModuleRunnerClosedError(error: unknown): boolean {
@@ -21,9 +19,145 @@ function parseGithubRepo(remoteUrl: string | null): { owner: string; repo: strin
   return null;
 }
 
-export async function checkGithubActionsForProjects() {
+/** Lit le corps d'une réponse d'erreur GitHub (message JSON ou extrait du texte). */
+async function formatGithubApiError(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const j = JSON.parse(text) as { message?: string };
+    if (typeof j.message === 'string' && j.message.trim()) return j.message.trim();
+  } catch {
+    /* ignore */
+  }
+  const t = text.trim();
+  if (!t) return '';
+  return t.length > 200 ? `${t.slice(0, 200)}…` : t;
+}
+
+/** Fin de fenêtre de quota GitHub (ms), partagée entre actions + PRs. */
+let githubApiPausedUntilMs = 0;
+
+function rateLimitResetMsFromHeaders(res: Response): number | null {
+  const raw = res.headers.get('x-ratelimit-reset');
+  if (!raw) return null;
+  const sec = parseInt(raw, 10);
+  if (!Number.isFinite(sec)) return null;
+  return sec * 1000;
+}
+
+function registerGithubRateLimitPause(res: Response): void {
+  const resetMs = rateLimitResetMsFromHeaders(res);
+  const until = resetMs ?? Date.now() + 60_000;
+  githubApiPausedUntilMs = Math.max(githubApiPausedUntilMs, until);
+}
+
+function isGithubPrimaryRateLimit(res: Response, detail: string): boolean {
+  if (/rate limit exceeded/i.test(detail)) return true;
+  const rem = res.headers.get('x-ratelimit-remaining');
+  return rem === '0';
+}
+
+function githubApiIsPaused(): boolean {
+  return Date.now() < githubApiPausedUntilMs;
+}
+
+/**
+ * Court message de log pour quota ; évite les paragraphes Terms of Service dans les logs.
+ */
+function shortRateLimitLogDetail(detail: string): string {
+  const m = detail.match(/API rate limit exceeded[^.]*/i);
+  if (m) return m[0];
+  if (/rate limit/i.test(detail)) return 'API rate limit exceeded';
+  return detail.length > 120 ? `${detail.slice(0, 120)}…` : detail;
+}
+
+/** Périmètre du balayage CI/PR (appelé au démarrage d’un cycle de travail, pas en boucle). */
+export type GithubMonitoringScope = {
+  /** Un seul dépôt (ex. pulse tableau de bord). */
+  projectId?: number;
+  /**
+   * Sans `projectId` : ne parcourir que les projets inscrits au carnet (défaut true).
+   * `false` = tous les projets en base (cas rare).
+   */
+  swarmOnly?: boolean;
+};
+
+type DbProject = {
+  id: number;
+  name: string;
+  path: string;
+  swarmEnabled?: number | null;
+};
+
+async function selectProjectsForMonitoring(
+  db: {
+    select: () => { from: (t: unknown) => { where?: (c: unknown) => Promise<DbProject[]> } | Promise<DbProject[]> };
+  },
+  Project: { id: unknown; swarmEnabled: unknown },
+  scope?: GithubMonitoringScope,
+): Promise<DbProject[]> {
+  if (scope?.projectId != null) {
+    return db.select().from(Project).where(eq(Project.id, scope.projectId)) as Promise<DbProject[]>;
+  }
+  if (scope?.swarmOnly === false) {
+    return db.select().from(Project) as Promise<DbProject[]>;
+  }
+  return db.select().from(Project).where(eq(Project.swarmEnabled, 1)) as Promise<DbProject[]>;
+}
+
+const GITHUB_PENDING_MAP_KEY = '__forgeGithubSyncInflight_v1';
+
+function githubScopeKey(scope?: GithubMonitoringScope): string {
+  if (scope?.projectId != null) return `project:${scope.projectId}`;
+  if (scope?.swarmOnly === false) return 'all';
+  return 'swarm';
+}
+
+function getGithubInflightMap(): Map<string, Promise<void>> {
+  const g = globalThis as typeof globalThis & Record<string, Map<string, Promise<void>> | undefined>;
+  if (!g[GITHUB_PENDING_MAP_KEY]) {
+    g[GITHUB_PENDING_MAP_KEY] = new Map<string, Promise<void>>();
+  }
+  return g[GITHUB_PENDING_MAP_KEY]!;
+}
+
+/**
+ * Synchronise les échecs CI et les PR ouverts vers `AgentAppIssue` avant que les agents ne reçoivent le travail.
+ * À appeler au démarrage d’une session / d’un pulse projet — pas sur un timer global.
+ *
+ * Coalescence sur `globalThis` : la promesse est enregistrée **avant** tout await (via `queueMicrotask`),
+ * sinon plusieurs appels parallèles passent tous `get`/`set` et relancent le balayage N fois.
+ */
+export async function syncGithubMonitorsForWorkSession(scope?: GithubMonitoringScope): Promise<void> {
+  const key = githubScopeKey(scope);
+  const pending = getGithubInflightMap();
+  const existing = pending.get(key);
+  if (existing) {
+    await existing;
+    return;
+  }
+
+  const inflight = new Promise<void>((resolve, reject) => {
+    queueMicrotask(async () => {
+      try {
+        await checkGithubActionsForProjects(scope);
+        await checkGithubPullRequestsForProjects(scope);
+        resolve();
+      } catch (e) {
+        reject(e);
+      } finally {
+        pending.delete(key);
+      }
+    });
+  });
+  pending.set(key, inflight);
+  await inflight;
+}
+
+export async function checkGithubActionsForProjects(scope?: GithubMonitoringScope) {
 
   try {
+    if (githubApiIsPaused()) return;
+
     const astroDb = await loadAstroDb();
     const db = astroDb.db;
     const Config = astroDb.Config;
@@ -36,9 +170,10 @@ export async function checkGithubActionsForProjects() {
     } catch {}
     if (!githubToken) { console.log('No GitHub Token in Config'); return; }
 
-    
-    const projects = await db.select().from(Project);
-    const reposRoot = await getReposRootResolved();
+    const projects = await selectProjectsForMonitoring(db, Project, scope);
+    const scopeHint =
+      scope?.projectId != null ? `projet #${scope.projectId}` : 'projets carnet (swarm)';
+    console.log(`[github-actions] Balayage CI — ${projects.length} dépôt(s) (${scopeHint})`);
 
     for (const project of projects) {
 
@@ -53,9 +188,10 @@ export async function checkGithubActionsForProjects() {
         continue;
       }
 
-      if (!meta.present || !meta.remoteOriginUrl) { console.log('meta not present:', project.name); continue; }
+      if (!meta.present || !meta.remoteOriginUrl) {
+        continue;
+      }
 
-      console.log('meta:', meta.remoteOriginUrl);
       const repoInfo = parseGithubRepo(meta.remoteOriginUrl);
       if (!repoInfo) continue;
 
@@ -70,7 +206,21 @@ export async function checkGithubActionsForProjects() {
         }
       });
 
-      if (!runsRes.ok) { console.log('not ok:', runsRes.status); continue; }
+      if (!runsRes.ok) {
+        const detail = await formatGithubApiError(runsRes);
+        if (isGithubPrimaryRateLimit(runsRes, detail)) {
+          registerGithubRateLimitPause(runsRes);
+          const when = new Date(githubApiPausedUntilMs).toISOString();
+          console.log(
+            `[github-actions] ${shortRateLimitLogDetail(detail)} — arrêt du balayage ; prochaine fenêtre ~ ${when}`
+          );
+          break;
+        }
+        console.log(
+          `[github-actions] actions/runs ${owner}/${repo} [${project.name}] → ${runsRes.status}${detail ? `: ${detail}` : ''}`
+        );
+        continue;
+      }
       const runsData = await runsRes.json();
       
       
@@ -155,8 +305,10 @@ export async function checkGithubActionsForProjects() {
   }
 }
 
-export async function checkGithubPullRequestsForProjects() {
+export async function checkGithubPullRequestsForProjects(scope?: GithubMonitoringScope) {
   try {
+    if (githubApiIsPaused()) return;
+
     const { db, Config, Project, AgentAppIssue } = await loadAstroDb();
     let githubToken = '';
     try {
@@ -165,7 +317,7 @@ export async function checkGithubPullRequestsForProjects() {
     } catch {}
     if (!githubToken) return;
 
-    const projects = await db.select().from(Project);
+    const projects = await selectProjectsForMonitoring(db, Project, scope);
 
     for (const project of projects) {
       const projectPath = await resolveProjectPathFromDbProject(project);
@@ -190,7 +342,21 @@ export async function checkGithubPullRequestsForProjects() {
         }
       });
 
-      if (!pullsRes.ok) continue;
+      if (!pullsRes.ok) {
+        const detail = await formatGithubApiError(pullsRes);
+        if (isGithubPrimaryRateLimit(pullsRes, detail)) {
+          registerGithubRateLimitPause(pullsRes);
+          const when = new Date(githubApiPausedUntilMs).toISOString();
+          console.log(
+            `[github-pulls] ${shortRateLimitLogDetail(detail)} — arrêt du balayage ; prochaine fenêtre ~ ${when}`
+          );
+          break;
+        }
+        console.log(
+          `[github-pulls] pulls ${owner}/${repo} [${project.name}] → ${pullsRes.status}${detail ? `: ${detail}` : ''}`
+        );
+        continue;
+      }
       const pullsData = await pullsRes.json();
 
       for (const pr of pullsData) {

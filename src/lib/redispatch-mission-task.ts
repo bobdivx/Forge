@@ -45,7 +45,7 @@ async function sendWithFallbacks(sessionKey: string, message: string) {
 }
 
 /**
- * Relance une ligne AgentTask vers ZimaOS (sessions_send), avec résolution de clé et double mode sync/async.
+ * Relance une ligne AgentTask (Forge) vers la session agent via la passerelle (`sessions_send`), avec résolution de clé.
  */
 export async function runMissionRedispatch(params: {
   taskId: number;
