@@ -12,6 +12,7 @@ import AgentIdeasBoard from '../components/work/AgentIdeasBoard';
 import WorkCarnetRest from '../components/work/WorkCarnetRest';
 import WorkDiagnosticPanel from '../components/work/WorkDiagnosticPanel';
 import SwarmProjectsToggle from '../components/work/SwarmProjectsToggle';
+import WorkSimpleStory from '../components/work/WorkSimpleStory';
 
 let requests = [];
 let issues = [];
@@ -84,7 +85,8 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
       <div>
         <h1 class="text-4xl font-bold mb-2 text-gray-900">Carnet de Commandes</h1>
         <p class="text-gray-500 text-sm max-w-2xl">
-          Passez vos commandes asynchrones à l'équipe. Les agents s'attribuent automatiquement les tâches (Demandes, Bugs, Dépendances) en fonction de leur expertise.
+          D’abord le fil simple : application, PR/CI, agent, étape. Le détail technique (graphiques, tableaux) est repliable
+          plus bas.
         </p>
       </div>
     </div>
@@ -121,69 +123,84 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
       </div>
     </div>
 
-    <SwarmProjectsToggle client:load />
+    <WorkSimpleStory client:load />
 
-    <WorkSystemPanel client:load />
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <SwarmProjectsToggle client:load />
+      <WorkSystemPanel client:load />
+    </div>
 
-    <WorkDiagnosticPanel client:load />
+    <details class="group rounded-[1.5rem] border border-gray-200 bg-gray-50/70 p-4 shadow-sm">
+      <summary class="cursor-pointer list-none flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-gray-800 [&::-webkit-details-marker]:hidden">
+        <span class="flex items-center gap-2">
+          <span class="text-gray-400 transition group-open:rotate-90">▸</span>
+          Vue avancée — tâches brutes, diagnostic, graphiques, carnet détaillé
+        </span>
+        <span class="text-xs font-normal text-gray-500">repliable · tout ce qui était visible avant</span>
+      </summary>
+      <div class="mt-5 space-y-6 border-t border-gray-200/80 pt-5">
 
-    <WorkAgentTasksPanel client:load />
+        <WorkDiagnosticPanel client:load />
 
-    <section class="space-y-4">
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="w-1 h-6 rounded-full bg-[#175B37]"></div>
-        <h2 class="text-lg font-bold text-gray-900">Analytique carnet</h2>
-        <a href="/agents#swarm-flux" class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 ml-auto">
-          Chronologie Forge
-        </a>
+        <WorkAgentTasksPanel client:load />
+
+        <section class="space-y-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="w-1 h-6 rounded-full bg-[#175B37]"></div>
+            <h2 class="text-lg font-bold text-gray-900">Analytique carnet</h2>
+            <a href="/agents#swarm-flux" class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 ml-auto">
+              Chronologie Forge
+            </a>
+          </div>
+          <WorkAnalyticsHeader client:load />
+        </section>
+
+        <section class="space-y-4">
+          <div class="flex items-center gap-3 mb-2 flex-wrap">
+            <div class="w-1 h-6 rounded-full bg-red-400"></div>
+            <h2 class="text-lg font-bold text-gray-900">Bugs &amp; anomalies — flux</h2>
+            <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{issues.length}</span>
+            <div class="flex-1"></div>
+            <button
+              type="button"
+              disabled={openIssues.length === 0}
+              onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'active', ${openIssues.length}, 'bugs ouverts')`}
+              class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+            >Supprimer lot ouverts</button>
+            <button
+              type="button"
+              disabled={finishedIssues.length === 0}
+              onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'finished', ${finishedIssues.length}, 'bugs clôturés')`}
+              class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            >Clôturés</button>
+            <button
+              type="button"
+              disabled={issues.length === 0}
+              onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'all', ${issues.length}, 'bugs')`}
+              class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+            >Tout supprimer</button>
+            <button
+              type="button"
+              onclick="window.__openWorkModal && window.__openWorkModal('issue')"
+              class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm"
+              style="background:#EF4444"
+              title="Signaler un bug"
+            >+</button>
+          </div>
+          <BugFlowBoard client:load />
+        </section>
+
+        <section class="space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-1 h-6 rounded-full bg-amber-400"></div>
+            <h2 class="text-lg font-bold text-gray-900">Idées &amp; améliorations (agents)</h2>
+          </div>
+          <AgentIdeasBoard client:load />
+        </section>
+
+        <WorkCarnetRest client:load />
       </div>
-      <WorkAnalyticsHeader client:load />
-    </section>
-
-    <section class="space-y-4">
-      <div class="flex items-center gap-3 mb-2 flex-wrap">
-        <div class="w-1 h-6 rounded-full bg-red-400"></div>
-        <h2 class="text-lg font-bold text-gray-900">Bugs &amp; anomalies — flux</h2>
-        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">{issues.length}</span>
-        <div class="flex-1"></div>
-        <button
-          type="button"
-          disabled={openIssues.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'active', ${openIssues.length}, 'bugs ouverts')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
-        >Supprimer lot ouverts</button>
-        <button
-          type="button"
-          disabled={finishedIssues.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'finished', ${finishedIssues.length}, 'bugs clôturés')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-        >Clôturés</button>
-        <button
-          type="button"
-          disabled={issues.length === 0}
-          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'all', ${issues.length}, 'bugs')`}
-          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
-        >Tout supprimer</button>
-        <button
-          type="button"
-          onclick="window.__openWorkModal && window.__openWorkModal('issue')"
-          class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm"
-          style="background:#EF4444"
-          title="Signaler un bug"
-        >+</button>
-      </div>
-      <BugFlowBoard client:load />
-    </section>
-
-    <section class="space-y-4">
-      <div class="flex items-center gap-3">
-        <div class="w-1 h-6 rounded-full bg-amber-400"></div>
-        <h2 class="text-lg font-bold text-gray-900">Idées &amp; améliorations (agents)</h2>
-      </div>
-      <AgentIdeasBoard client:load />
-    </section>
-
-    <WorkCarnetRest client:load />
+    </details>
 
   </div>
 
