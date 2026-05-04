@@ -10,6 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { discoverZimaosGatewayPublishedPort } from './docker-engine-socket';
+import { loadAstroDb } from './load-astro-db';
 
 const GATEWAY_HTTP_TIMEOUT_MS = 1_500;
 const ZIMAOS_GATEWAY_INTERNAL_PORT = 18789;

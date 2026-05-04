@@ -1,34 +1,31 @@
 /**
- * Contrat d’intégration Forge ↔ ZimaOS.
+ * Contrat d’intégration Forge / infra ZimaOS-NAS.
  *
  * Forge reste la source de vérité pour : instructions agents, missions (AgentTask), projets,
  * configuration, budgets stockés, profils UI, orchestration « métier ».
  *
- * ZimaOS (gateway sur le NAS) ne doit intervenir que pour ce qui nécessite le runtime distant :
- * exécution LLM, envoi de directives `sessions_send`, discovery modèles côté cluster,
- * sync fichier embarqué sur la machine ZimaOS, SSH/infra NAS si applicable.
+ * ZimaOS/NAS ne doit intervenir que pour l’infrastructure : dossiers d’applications,
+ * montages, conteneurs Docker, accès SSH et vérifications système.
  *
- * Tout nouveau code qui appelle le gateway doit passer par `zimaos-gateway.ts` ou les
- * routes `/api/zimaos-*` dédiées — éviter les fetch dispersés vers `ZIMAOS_GATEWAY_URL`.
+ * Les agents, tâches et sous-agents doivent rester pilotés par Forge avec Ollama.
  */
 
-/** Rôles légitimes du runtime ZimaOS (exécution / NAS uniquement). */
+/** Rôles légitimes de l’infra ZimaOS/NAS. */
 export const ZIMAOS_RUNTIME_ROLES = [
-  'Envoi de directives et chat agent (sessions_send, agents_invoke, /v1/chat/completions)',
-  'Liste des sessions / état live pour affichage (quand le gateway répond)',
-  'Synchronisation du fichier de config agents embarqué sur ZimaOS',
-  'Sondes santé, sanity, provision SSH liées au conteneur / NAS',
+  'Dossiers d’applications et racines de travail sur le NAS',
+  'Conteneurs Docker, volumes et montages à inspecter',
+  'Accès SSH distant quand Forge n’est pas sur la même machine',
+  'Sondes santé infra liées au conteneur / NAS',
 ] as const;
 
 /** Ce qui doit rester entièrement côté Forge (pas de dépendance gateway pour la persistance). */
 export const FORGE_NATIVE_ROLES = [
-  'Tables Astro DB : AgentInstruction, AgentTask, Project, Config, ZimaOSAgentProfile (métadonnées)',
+  'Tables Astro DB : AgentInstruction, AgentTask, Project, Config, ForgeChatSession, ForgeChatMessage',
   'Pages UI et formulaires (swarm, agents, réglages)',
-  'Orchestration planifiable (forge-work-scheduler) qui décide quoi envoyer — le « quoi » est en DB',
+  'Orchestration agents et sous-agents via forge-work-scheduler, forge-orchestrator et Ollama',
 ] as const;
 
 /**
- * Modules « façade » qui encapsulent le gateway pour les pages produit (préférer ces
- * imports aux appels directs depuis les `.astro` / composants).
+ * Modules « façade » autorisés pour isoler les appels infra hérités.
  */
-export const FORGE_FACADES_OVER_ZIMAOS = ['lib/forge-swarm-page-sessions.ts', 'lib/redispatch-mission-task.ts'] as const;
+export const FORGE_FACADES_OVER_ZIMAOS = ['lib/zimaos-gateway.ts', 'pages/api/zimaos-*.ts'] as const;

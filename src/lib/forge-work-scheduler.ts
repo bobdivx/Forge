@@ -6,8 +6,8 @@
  *   d’un cycle de travail (session ou pulse projet), pas à chaque tick.
  * - Lit les WorkSchedule actifs en DB pour décider si la plage horaire est valide.
  * - Peut être démarré / arrêté manuellement (override = ignore les plages).
- * - Au début d’une session : directives aux agents ciblés (acheminement via la passerelle / gateway
- *   configurée), puis matérialisation des bugs ouverts en `AgentTask` et envoi des tâches `pending` / `bug`.
+ * - Au début d’une session : directives aux agents ciblés via l’orchestrateur Forge,
+ *   puis matérialisation des bugs ouverts en `AgentTask` et exécution des tâches `pending` / `bug`.
  * - Pendant la session : redispatch périodique sans renvoyer la directive complète.
  * - Les demandes carnet (`Request` en pending) sont converties en `AgentTask` liées par `[ForgeRequest #id]`.
  * - Journalise dans la table Heartbeat.
@@ -18,12 +18,6 @@ import { getConfig } from './config-db';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
 import {
-  invokeZimaOSSessionsSend,
-  resolveSessionsSendKey,
-  fetchZimaOSSessionsPayload,
-  normalizeZimaOSSessions,
-} from './zimaos-gateway';
-import {
   resolveAssigneeForForgeRequest,
   forgeRequestTaskTitle,
   extractForgeRequestIdFromTaskBlob,
@@ -31,8 +25,8 @@ import {
   buildForgeTaskDispatchFooter,
   stripForgeDoneFooterFromBody,
 } from './forge-request-routing';
-import { scanZimaOSForForgeDoneSignals } from './forge-zimaos-done-scan';
 import { insertForgeActivityLog } from './forge-activity-log';
+import { runForgeAgentMessage } from './forge-agent-task-runner';
 import {
   ensureForgeProjectScopedAgent,
   cleanupIdleForgeProjectScopedAgents,
@@ -60,11 +54,11 @@ export type WorkSystemStatus = {
   dispatchOutsideScheduledWindow: boolean;
 };
 
-/** Retour de `runWorkCycle` / `manualStart` pour affichage API (erreurs passerelle, budget). */
+/** Retour de `runWorkCycle` / `manualStart` pour affichage API (erreurs Forge, budget). */
 export type WorkCycleResult = {
   ok: boolean;
   budgetBlocked?: string;
-  gatewayErrors?: string[];
+  forgeErrors?: string[];
   wakeReport?: {
     targeted: number;
     awakened: string[];
@@ -203,7 +197,7 @@ function orderDirectiveTargets(ids: string[]): string[] {
 }
 
 function normalizeAgentTarget(id: string): string {
-  return String(id || '').trim().replace(/^zimaos\//i, '').toUpperCase();
+  return String(id || '').trim().replace(/^[a-z0-9_-]+\//i, '').toUpperCase();
 }
 
 function isAgentTargeted(agentId: string, targetIds: string[]): boolean {
@@ -213,26 +207,6 @@ function isAgentTargeted(agentId: string, targetIds: string[]): boolean {
     const target = normalizeAgentTarget(targetId);
     return agent === target || agent.startsWith(`${target}${FORGE_PROJECT_CHILD_TOKEN}`);
   });
-}
-
-/** Envoie `sessions_send` puis tente la résolution de clé gateway (ids métiers / alias). */
-async function sessionsSendWithFallback(
-  sessionKey: string,
-  message: string,
-  extraHints: string[] = [],
-): Promise<{ ok: boolean; error?: string }> {
-  let res = await invokeZimaOSSessionsSend({ sessionKey, message, asyncDelivery: true });
-  if (!res.ok) {
-    const fallback = await resolveSessionsSendKey(undefined, [
-      sessionKey,
-      sessionKey.replace(/^zimaos\//i, ''),
-      ...extraHints,
-    ]);
-    if (fallback && fallback !== sessionKey) {
-      res = await invokeZimaOSSessionsSend({ sessionKey: fallback, message, asyncDelivery: true });
-    }
-  }
-  return res.ok ? { ok: true } : { ok: false, error: res.error };
 }
 
 // ── Journalisation ────────────────────────────────────────────────────────────
@@ -492,7 +466,6 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
 
     for (const task of pending) {
       try {
-        const sessionKey = task.agentId;
         const inputClean = stripForgeDoneFooterFromBody(task.input || '');
         const rawMessage = `[Forge — reprise automatique · tâche #${task.id}]\n\n${task.task}${inputClean ? '\n\n' + inputClean : ''}`;
         const translatedCore = await translateContentForAgent(rawMessage);
@@ -502,21 +475,22 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
           buildForgeTaskDispatchFooter(task.id)
         ).slice(0, 120_000);
 
-        const res = await sessionsSendWithFallback(sessionKey, message, [
-          task.agentId,
-          String(task.agentId || '').replace(/^zimaos\//i, ''),
-        ]);
+        const res = await runForgeAgentMessage({
+          agentId: task.agentId,
+          message,
+          projectId: task.projectId,
+          taskId: task.id,
+          source: 'scheduler',
+        });
         if (res.ok) {
-          const { db: db2, AgentTask: AT2, eq: eq2 } = await loadAstroDb();
-          await db2.update(AT2).set({ status: 'running', updatedAt: new Date() }).where(eq2(AT2.id, task.id));
           await insertForgeActivityLog({
             actorType: 'system',
             actorId: 'work_scheduler',
-            action: 'swarm.task.dispatched',
+            action: 'swarm.task.executed',
             entityType: 'agent_task',
             entityId: String(task.id),
             details: {
-              sessionKey,
+              agentId: task.agentId,
               taskPreview: String(task.task || '').slice(0, 200),
             },
           });
@@ -531,8 +505,8 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
 }
 
 /**
- * Dispatch une `AgentTask` en file (pending / bug) vers la session agent — même logique que le tick.
- * La tâche et l’assignation viennent de Forge ; l’acheminement passe par la passerelle configurée.
+ * Dispatch une `AgentTask` en file (pending / bug) via l'orchestrateur Forge — même logique que le tick.
+ * La tâche et l’assignation viennent de Forge ; l'exécution reste dans Forge.
  * Utilisé depuis la page Travail pour relancer une entrée sans attendre le prochain cycle.
  */
 export async function dispatchSinglePendingTaskById(
@@ -560,7 +534,6 @@ export async function dispatchSinglePendingTaskById(
   }
 
   try {
-    const sessionKey = task.agentId;
     const inputClean = stripForgeDoneFooterFromBody(task.input || '');
     const rawMessage = `[Forge — reprise automatique · tâche #${task.id}]\n\n${task.task}${inputClean ? '\n\n' + inputClean : ''}`;
     const translatedCore = await translateContentForAgent(rawMessage);
@@ -570,25 +543,27 @@ export async function dispatchSinglePendingTaskById(
       buildForgeTaskDispatchFooter(task.id)
     ).slice(0, 120_000);
 
-    const res = await sessionsSendWithFallback(sessionKey, message, [
-      task.agentId,
-      String(task.agentId || '').replace(/^zimaos\//i, ''),
-    ]);
+    const actor = String(options?.actorId || '').trim().slice(0, 200) || 'dashboard';
+    const res = await runForgeAgentMessage({
+      agentId: task.agentId,
+      message,
+      projectId: task.projectId,
+      taskId: task.id,
+      actorId: actor,
+      source: 'manual',
+    });
     if (!res.ok) {
-      return { ok: false, error: res.error || "Impossible d'acheminer la tâche vers l'agent (passerelle)." };
+      return { ok: false, error: res.error || "Impossible d'exécuter la tâche via l'orchestrateur Forge." };
     }
 
-    const actor = String(options?.actorId || '').trim().slice(0, 200) || 'dashboard';
-    const now = new Date();
     const { db: db2, AgentTask: AT2, eq: eq2 } = await loadAstroDb();
-    await db2.update(AT2).set({ status: 'running', updatedAt: now }).where(eq2(AT2.id, task.id));
     await insertForgeActivityLog({
       actorType: 'user',
       actorId: actor,
-      action: 'swarm.task.dispatched',
+      action: 'swarm.task.executed',
       entityType: 'agent_task',
       entityId: String(task.id),
-      details: { manual: true, sessionKey },
+      details: { manual: true, agentId: task.agentId },
     });
     const [updated] = await db2.select().from(AT2).where(eq2(AT2.id, task.id)).limit(1);
     return { ok: true, task: updated ?? task };
@@ -646,7 +621,6 @@ async function runDispatchOnly(agentIds: string[]): Promise<void> {
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
-    await scanZimaOSForForgeDoneSignals();
     await maybeCleanupIdleSubagents();
   } finally {
     sched().dispatchInProgress = false;
@@ -675,36 +649,10 @@ async function verifyAgentSessions(agentIds: string[]): Promise<{ active: string
   const targeted = [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))];
   if (targeted.length === 0) return { active: [], missing: [] };
   try {
-    const payload = await fetchZimaOSSessionsPayload(undefined, {
-      invokeOnly: true,
-      sessionsListArgs: { limit: 120, messageLimit: 0 },
-    });
-    if (!payload.ok) {
-      return { active: [], missing: targeted };
-    }
-    const sessions = normalizeZimaOSSessions(payload.data) as Record<string, unknown>[];
-    const isActive = (agentId: string) => {
-      const want = agentId.trim().toUpperCase();
-      return sessions.some((s) => {
-        const keys = [
-          String(s.agentId ?? '').trim().toUpperCase(),
-          String(s.agent_id ?? '').trim().toUpperCase(),
-          String(s.sessionKey ?? '').trim().toUpperCase(),
-          String(s.session_key ?? '').trim().toUpperCase(),
-          String(s.key ?? '').trim().toUpperCase(),
-          String(s.displayName ?? '').trim().toUpperCase(),
-          String(s.display_name ?? '').trim().toUpperCase(),
-        ];
-        const status = String(s.status ?? s.state ?? '').trim().toLowerCase();
-        const stateActive =
-          status === 'running' ||
-          status === 'active' ||
-          status === 'connected' ||
-          status === 'online';
-        return stateActive && keys.some((k) => k === want || (k && k.includes(want)));
-      });
-    };
-    const active = targeted.filter((id) => isActive(id));
+    const { db, AgentInstruction } = await loadAstroDb();
+    const enabled = await db.select().from(AgentInstruction).where(eq(AgentInstruction.enabled, 1));
+    const enabledIds = new Set(enabled.map((a) => normalizeAgentTarget(a.agentId)));
+    const active = targeted.filter((id) => enabledIds.has(normalizeAgentTarget(id)));
     const missing = targeted.filter((id) => !active.includes(id));
     return { active, missing };
   } catch {
@@ -712,7 +660,7 @@ async function verifyAgentSessions(agentIds: string[]): Promise<{ active: string
   }
 }
 
-/** Envoie un texte de directive à tous les agents cibles (retries). */
+/** Exécute un texte de directive via l'orchestrateur Forge pour tous les agents cibles. */
 async function deliverWorkDirectiveMessage(
   message: string,
   agentIds: string[],
@@ -728,19 +676,23 @@ async function deliverWorkDirectiveMessage(
     agentIds.length ? agentIds : ['CHEF_TECHNIQUE'],
   );
   const MAX_ATTEMPTS = 3;
-  for (const sessionKey of ordered) {
+  for (const agentId of ordered) {
     let delivered = false;
     let lastError = 'échec inconnu';
     try {
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-        const res = await sessionsSendWithFallback(sessionKey, message, [sessionKey]);
+        const res = await runForgeAgentMessage({
+          agentId,
+          message,
+          source: 'work-directive',
+        });
         if (res.ok) {
           delivered = true;
-          awakened.push(sessionKey);
+          awakened.push(agentId);
           if (attempt > 1) {
             await logHeartbeat(
               'info',
-              `[work-scheduler] Réveil ${sessionKey} réussi au retry ${attempt}/${MAX_ATTEMPTS}`,
+              `[work-scheduler] Directive ${agentId} réussie au retry ${attempt}/${MAX_ATTEMPTS}`,
             );
           }
           break;
@@ -751,14 +703,14 @@ async function deliverWorkDirectiveMessage(
         }
       }
       if (!delivered) {
-        const line = `${sessionKey}: ${lastError}`;
-        failed.push({ agentId: sessionKey, error: lastError });
+        const line = `${agentId}: ${lastError}`;
+        failed.push({ agentId, error: lastError });
         errors.push(line);
         await logHeartbeat('warn', `[work-scheduler] Directive non livrée après retries — ${line}`);
       }
     } catch (e) {
-      const line = `${sessionKey}: ${String(e)}`;
-      failed.push({ agentId: sessionKey, error: String(e) });
+      const line = `${agentId}: ${String(e)}`;
+      failed.push({ agentId, error: String(e) });
       errors.push(line);
       await logHeartbeat('warn', `[work-scheduler] Directive exception — ${line}`);
     }
@@ -906,12 +858,11 @@ async function runWorkCycle(agentIds: string[], fromManual = false): Promise<Wor
     await dispatchOpenAppIssues(agentIds);
     await dispatchPendingForgeRequests(agentIds);
     await dispatchPendingTasks(agentIds);
-    await scanZimaOSForForgeDoneSignals();
     await maybeCleanupIdleSubagents();
     const sessionCheck = await verifyAgentSessions(agentIds);
     return {
       ok: true,
-      gatewayErrors: wake.errors,
+      forgeErrors: wake.errors,
       wakeReport: {
         targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
         awakened: wake.awakened,
@@ -1125,12 +1076,11 @@ export async function runProjectWorkBurst(projectId: number): Promise<WorkCycleR
     await dispatchOpenAppIssues(agentIds, projectId);
     await dispatchPendingForgeRequests(agentIds, projectId);
     await dispatchPendingTasks(agentIds, projectId);
-    await scanZimaOSForForgeDoneSignals();
     await maybeCleanupIdleSubagents();
     const sessionCheck = await verifyAgentSessions(agentIds);
     return {
       ok: true,
-      gatewayErrors: wake.errors,
+      forgeErrors: wake.errors,
       wakeReport: {
         targeted: [...new Set(agentIds.map((x) => String(x).trim()).filter(Boolean))].length,
         awakened: wake.awakened,

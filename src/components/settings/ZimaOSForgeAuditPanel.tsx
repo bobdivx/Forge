@@ -55,11 +55,12 @@ export default function ZimaOSForgeAuditPanel() {
     <div class="rounded-2xl border border-[#175B37]/20 bg-gradient-to-br from-[#f6faf7] to-white p-5 space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 class="text-sm font-bold text-gray-900">Contrôle d’intégration (Forge ↔ ZimaOS)</h3>
+          <h3 class="text-sm font-bold text-gray-900">Contrôle de frontière Forge / infra</h3>
           <p class="mt-1 text-[11px] text-gray-600 max-w-3xl leading-relaxed">
             Toute la configuration et le pilotage passent par <strong>Forge</strong>. ZimaOS ne sert qu’au{' '}
-            <strong>runtime</strong> sur le NAS (gateway, exécution des agents). Cet analyseur parcourt le code source
-            pour repérer les références au gateway — sans rien lancer en dehors de l’interface.
+            <strong>support infra</strong> sur le NAS : fichiers, dossiers d’applications, conteneurs Docker, montages et
+            accès SSH. Cet analyseur parcourt le code source pour repérer les références héritées au gateway — sans rien
+            lancer en dehors de l’interface.
           </p>
         </div>
         <button
@@ -87,7 +88,7 @@ export default function ZimaOSForgeAuditPanel() {
             </ul>
           </div>
           <div class="rounded-xl border border-gray-100 bg-white/80 p-3">
-            <p class="font-bold text-gray-800 mb-2">Rôle du runtime ZimaOS</p>
+            <p class="font-bold text-gray-800 mb-2">Rôle infra NAS/Docker</p>
             <ul class="list-disc pl-4 text-gray-600 space-y-1">
               {data.boundary.zimaosRuntimeRoles.map((x) => (
                 <li key={x}>{x}</li>

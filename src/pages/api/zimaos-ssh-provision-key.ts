@@ -5,17 +5,17 @@ import { resetZimaOSInfraClient } from '../../lib/zimaos-infra-client';
 import fs from 'node:fs';
 
 const { Client, utils: ssh2Utils } = ssh2Pkg as unknown as {
-  Client: typeof import('ssh2').Client;
-  utils: typeof import('ssh2').utils;
+  Client: any;
+  utils: any;
 };
 
 function q(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function sshExec(conn: Client, command: string): Promise<{ stdout: string; stderr: string; code: number }> {
+function sshExec(conn: any, command: string): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
-    conn.exec(command, (err, stream) => {
+    conn.exec(command, (err: unknown, stream: any) => {
       if (err) return reject(err);
       let stdout = '';
       let stderr = '';
@@ -40,7 +40,7 @@ async function verifyKeyLogin(host: string, port: number, user: string, privateK
     await new Promise<void>((resolve, reject) => {
       conn
         .on('ready', () => resolve())
-        .on('error', (e) => reject(e))
+        .on('error', (e: unknown) => reject(e))
         .connect({
           host,
           port,
@@ -60,7 +60,7 @@ async function verifyKeyLogin(host: string, port: number, user: string, privateK
 
 function generateOpenSshKeyPair(comment: string): Promise<{ privateKey: string; publicKey: string }> {
   return new Promise((resolve, reject) => {
-    ssh2Utils.generateKeyPair('ed25519', { comment }, (err, keys) => {
+    ssh2Utils.generateKeyPair('ed25519', { comment }, (err: unknown, keys: any) => {
       if (err) return reject(err);
       const privateKey = String((keys as any)?.private || '').trim();
       const publicKey = String((keys as any)?.public || '').trim();
@@ -121,7 +121,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     await new Promise<void>((resolve, reject) => {
       conn
         .on('ready', () => resolve())
-        .on('error', (e) => reject(e))
+        .on('error', (e: unknown) => reject(e))
         .connect({
           host,
           port,

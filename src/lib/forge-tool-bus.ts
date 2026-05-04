@@ -1,4 +1,5 @@
 import { getZimaOSInfraClient } from './zimaos-infra-client';
+import { loadAstroDb } from './load-astro-db';
 
 export type ForgeToolCall =
   | { tool: 'read_file'; path: string }
@@ -12,7 +13,49 @@ export type ForgeToolResult = {
   tool: ForgeToolCall['tool'];
   output?: string;
   error?: string;
+  beforeContent?: string | null;
+  afterContent?: string | null;
+  diff?: string;
+  addedLines?: number;
+  deletedLines?: number;
+  durationMs?: number;
+  exitCode?: number;
 };
+
+function buildUnifiedDiff(path: string, beforeContent: string | null, afterContent: string | null): string {
+  const before = beforeContent ?? '';
+  const after = afterContent ?? '';
+  if (before === after) return '';
+
+  const beforeLines = before.split(/\r?\n/);
+  const afterLines = after.split(/\r?\n/);
+  const rows = [`--- ${path}`, `+++ ${path}`];
+  const max = Math.max(beforeLines.length, afterLines.length);
+
+  for (let i = 0; i < max; i++) {
+    const oldLine = beforeLines[i];
+    const newLine = afterLines[i];
+    if (oldLine === newLine) {
+      if (oldLine !== undefined) rows.push(` ${oldLine}`);
+      continue;
+    }
+    if (oldLine !== undefined) rows.push(`-${oldLine}`);
+    if (newLine !== undefined) rows.push(`+${newLine}`);
+  }
+
+  return rows.join('\n');
+}
+
+function countDiffStats(diff: string): { addedLines: number; deletedLines: number } {
+  let addedLines = 0;
+  let deletedLines = 0;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) addedLines++;
+    if (line.startsWith('-')) deletedLines++;
+  }
+  return { addedLines, deletedLines };
+}
 
 export async function runForgeTool(call: ForgeToolCall): Promise<ForgeToolResult> {
   const infra = await getZimaOSInfraClient();
@@ -21,11 +64,24 @@ export async function runForgeTool(call: ForgeToolCall): Promise<ForgeToolResult
       return { ok: true, tool: call.tool, output: infra.readFile(call.path) };
     }
     if (call.tool === 'write_file') {
+      const beforeContent = infra.exists(call.path) ? infra.readFile(call.path) : null;
       infra.writeFile(call.path, call.content);
-      return { ok: true, tool: call.tool, output: 'ok' };
+      const afterContent = infra.readFile(call.path);
+      const diff = buildUnifiedDiff(call.path, beforeContent, afterContent);
+      const stats = countDiffStats(diff);
+      return {
+        ok: true,
+        tool: call.tool,
+        output: 'ok',
+        beforeContent,
+        afterContent,
+        diff,
+        ...stats,
+      };
     }
     if (call.tool === 'exec') {
-      return { ok: true, tool: call.tool, output: infra.exec(call.command) };
+      const startedAt = Date.now();
+      return { ok: true, tool: call.tool, output: infra.exec(call.command), durationMs: Date.now() - startedAt, exitCode: 0 };
     }
     if (call.tool === 'update_request_status') {
       const { db, Request, eq } = await loadAstroDb();

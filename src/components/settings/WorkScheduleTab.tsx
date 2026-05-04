@@ -380,7 +380,7 @@ export default function WorkScheduleTab() {
           | {
               ok?: boolean;
               budgetBlocked?: string;
-              gatewayErrors?: string[];
+              forgeErrors?: string[];
               wakeReport?: {
                 targeted: number;
                 awakened: string[];
@@ -400,15 +400,15 @@ export default function WorkScheduleTab() {
             const ko = wc.wakeReport.sessionCheck.missing;
             setMsg(
               ko.length > 0
-                ? `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}, manquantes: ${ko.join(', ')}.`
-                : `Travail démarré : sessions actives ${ok.length}/${wc.wakeReport.targeted}.`,
+                ? `Travail démarré : agents Forge actifs ${ok.length}/${wc.wakeReport.targeted}, manquants: ${ko.join(', ')}.`
+                : `Travail démarré : agents Forge actifs ${ok.length}/${wc.wakeReport.targeted}.`,
             );
-          } else if (wc?.gatewayErrors?.length) {
+          } else if (wc?.forgeErrors?.length) {
             setMsg(
-              `Attention : la passerelle n'a pas confirmé l'envoi des directives (${wc.gatewayErrors.join(' · ')}). Vérifiez le token, l'URL gateway et que sessions_send est autorisé.`,
+              `Attention : l'orchestrateur Forge n'a pas exécuté toutes les directives (${wc.forgeErrors.join(' · ')}). Vérifiez Ollama, le modèle de l'agent et les journaux Forge.`,
             );
           } else {
-            setMsg('Travail démarré : directives acheminées vers les agents.');
+            setMsg('Travail démarré : directives exécutées par Forge.');
           }
         } else {
           setMsg(action === 'stop' ? 'Système arrêté.' : 'Mode planifié activé.');

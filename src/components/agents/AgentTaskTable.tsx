@@ -7,7 +7,7 @@ type AgentTask = {
   status: string;
   createdAt: string;
   updatedAt: string;
-  source?: 'db' | 'gateway';
+  source?: 'db';
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -84,12 +84,8 @@ export default function AgentTaskTable() {
           {tasks.map((task) => (
             <tr key={String(task.id)} class="border-b border-gray-50 hover:bg-gray-50 transition-colors group">
               <td class="px-5 py-3">
-                <span class={`font-mono text-[10px] px-2 py-1 rounded font-semibold ${
-                  task.source === 'gateway'
-                    ? 'bg-purple-50 text-purple-600'
-                    : 'bg-blue-50 text-blue-600'
-                }`}>
-                  {task.source === 'gateway' ? 'GW' : `#${task.id}`}
+                <span class="font-mono text-[10px] px-2 py-1 rounded font-semibold bg-blue-50 text-blue-600">
+                  #{task.id}
                 </span>
               </td>
               <td class="px-5 py-3">

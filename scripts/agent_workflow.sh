@@ -45,7 +45,7 @@ repl() {
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║  ZimaDev Workflow — Autonomie Complète               ║"
+echo "║  Ageton Workflow — Autonomie Complète               ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo "  Projet : $PROJECT"
 echo "  Ticket : $TICKET"

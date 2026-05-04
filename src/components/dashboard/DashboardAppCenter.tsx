@@ -163,8 +163,8 @@ export default function DashboardAppCenter({ initialProjects }: { initialProject
         const n = Array.isArray(awakened) ? awakened.length : 0;
         alert(
           n > 0
-            ? `Travail lancé sur « ${project.name} ». Directive envoyée à ${n} agent(s).`
-            : `Travail lancé sur « ${project.name} ». Aucun agent n’a confirmé la livraison ; vérifiez la passerelle ou les journaux Forge.`,
+            ? `Travail lancé sur « ${project.name} ». Directive exécutée par ${n} agent(s).`
+            : `Travail lancé sur « ${project.name} ». Aucun agent n’a confirmé l’exécution ; vérifiez Ollama ou les journaux Forge.`,
         );
         await fetchWorkSystem();
       } else {

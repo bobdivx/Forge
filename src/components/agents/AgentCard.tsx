@@ -26,6 +26,9 @@ type Agent = {
     ok: boolean;
     error?: string;
   };
+  raw?: {
+    disabledInDb?: boolean;
+  };
 };
 
 type Props = {
@@ -51,119 +54,168 @@ export default function AgentCard({
 }: Props) {
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-  const isWorking = stats.running > 0 || agent.status === 'actif';
-  const isHealthy = agent.sanity?.ok;
-  
-  let statusLabel = wakeStatusLabel || "ACTIF";
-  let statusCls = "bg-emerald-50 text-emerald-700 border-emerald-100";
-  let dotCls = "bg-emerald-500";
+  const pendingPct = stats.total > 0 ? Math.round((stats.pending / stats.total) * 100) : 0;
+  const failedPct = stats.total > 0 ? Math.round((stats.failed / stats.total) * 100) : 0;
+  const isRunning = stats.running > 0 || Boolean(agent.currentWork);
+  const isWorking = isRunning || agent.status === 'actif';
+  const isDisabled = agent.raw?.disabledInDb || /désactiv|desactiv/i.test(agent.status);
+  const activityScore = stats.running * 6 + stats.pending * 2 + stats.completed + (commandBusy ? 3 : 0);
 
-  if (isWorking) {
-    statusLabel = wakeStatusLabel || "EN TRAVAIL";
-    statusCls = "bg-blue-50 text-blue-700 border-blue-100";
-    dotCls = "bg-blue-500 animate-pulse";
-  } else if (!isHealthy) {
-    statusLabel = wakeStatusLabel || "CRÉÉ";
-    statusCls = "bg-amber-50 text-amber-700 border-amber-100";
-    dotCls = "bg-amber-500";
+  let stateLabel = 'Veille';
+  let statusCls = 'border-gray-200 bg-gray-50 text-gray-500';
+  let dotCls = 'bg-gray-300';
+  let glowCls = 'opacity-0';
+
+  if (isDisabled) {
+    stateLabel = 'Désactivé';
+    statusCls = 'border-gray-200 bg-gray-100 text-gray-400';
+    dotCls = 'bg-gray-300';
+  } else if (isRunning) {
+    stateLabel = 'En mission';
+    statusCls = 'border-blue-200 bg-blue-50 text-blue-700';
+    dotCls = 'bg-blue-500 animate-ping';
+    glowCls = 'opacity-100';
+  } else if (isWorking) {
+    stateLabel = 'Disponible';
+    statusCls = 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    dotCls = 'bg-emerald-500 animate-pulse';
+    glowCls = 'opacity-70';
+  } else if (stats.pending > 0) {
+    stateLabel = 'File active';
+    statusCls = 'border-amber-200 bg-amber-50 text-amber-700';
+    dotCls = 'bg-amber-500';
   }
 
   const swarmHref = `/swarm/${encodeURIComponent(agent.id)}`;
 
   return (
-    <div class={`group flex flex-col overflow-hidden rounded-[2.5rem] border transition-all duration-500 ${isWorking ? 'border-blue-200 shadow-xl shadow-blue-100/40 bg-blue-50/5' : 'border-gray-100 bg-white hover:border-gray-200 shadow-sm'}`}>
-      <a href={swarmHref} class="block flex-1 p-7 text-inherit no-underline">
-        <div class="mb-6 flex items-start justify-between gap-4">
-          <div class="flex min-w-0 flex-1 items-center gap-5">
+    <div
+      class={`group relative flex min-h-[260px] flex-col overflow-hidden rounded-[1.65rem] border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${
+        isRunning
+          ? 'border-blue-200 shadow-blue-100/70 ring-1 ring-blue-100'
+          : isWorking
+            ? 'border-emerald-200 shadow-emerald-50'
+            : 'border-gray-100 hover:border-gray-200'
+      }`}
+    >
+      <div class={`pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-blue-400/20 blur-2xl transition-opacity duration-500 ${glowCls}`} />
+      <div class="absolute inset-x-0 top-0 h-1 bg-gray-100">
+        <div
+          class={`h-full rounded-r-full transition-all duration-700 ${
+            isRunning ? 'bg-blue-500 shadow-[0_0_16px_rgba(59,130,246,0.7)]' : isWorking ? 'bg-emerald-500' : 'bg-gray-300'
+          }`}
+          style={{ width: `${Math.min(100, Math.max(8, activityScore * 8))}%` }}
+        />
+      </div>
+
+      <a href={swarmHref} class="block flex-1 p-4 pb-3 text-inherit no-underline">
+        <div class="mb-3 flex items-start justify-between gap-3">
+          <div class="flex min-w-0 flex-1 items-center gap-3">
             <div class="relative shrink-0">
-              <div class="absolute inset-0 bg-blue-500/10 rounded-full scale-110 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-              <TeamAvatar profile={teamProfile} size="lg" class="shadow-lg ring-4 ring-white relative z-10" />
-              <div class={`absolute -bottom-1 -right-1 h-4.5 w-4.5 rounded-full border-4 border-white z-20 ${dotCls}`} />
+              <div class={`absolute inset-0 scale-125 rounded-full bg-blue-500/20 blur-md transition-opacity ${glowCls}`} />
+              <TeamAvatar profile={teamProfile} size="md" class="relative z-10 shadow-sm ring-4 ring-white" />
+              <div class={`absolute -bottom-0.5 -right-0.5 z-20 h-3.5 w-3.5 rounded-full border-[3px] border-white ${dotCls}`} />
             </div>
             <div class="min-w-0 flex-1">
-              <div class={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[9px] font-black tracking-widest mb-2.5 ${statusCls}`}>
-                {statusLabel}
+              <div class={`mb-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${statusCls}`}>
+                {stateLabel}
               </div>
-              <h3 class="truncate text-lg font-black text-gray-900 transition-colors group-hover:text-blue-600">
+              <h3 class="truncate text-sm font-black text-gray-900 transition-colors group-hover:text-[#175B37]">
                 {teamProfile.displayName}
               </h3>
-              <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-1">{teamProfile.role}</p>
+              <p class="mt-1 truncate text-[9px] font-bold uppercase tracking-widest text-gray-400">{teamProfile.role}</p>
             </div>
+          </div>
+          {isRunning && (
+            <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-600 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-white shadow-sm">
+              Live
+            </span>
+          )}
+        </div>
+
+        <div class="mb-3 flex items-center justify-between gap-2 rounded-2xl border border-gray-100 bg-gray-50/70 px-3 py-2">
+          <div class="min-w-0">
+            <p class="text-[9px] font-black uppercase tracking-widest text-gray-400">Modèle</p>
+            <p class="truncate text-[11px] font-semibold text-gray-800">{agent.model || 'Auto'}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[9px] font-black uppercase tracking-widest text-gray-400">Activité</p>
+            <p class="text-sm font-black text-gray-900">{activityScore}</p>
           </div>
         </div>
 
-        {teamProfile.bio ? (
-          <p class="mb-6 line-clamp-2 text-xs leading-relaxed text-gray-500 font-medium italic opacity-80">"{teamProfile.bio}"</p>
-        ) : <div class="mb-6 h-[40px]" />}
-
         {(stats.running > 0 || agent.currentWork) && (
-          <div class="mb-5 rounded-2xl border border-blue-100 bg-blue-50/90 px-3 py-2.5 text-left shadow-sm">
-            <p class="text-[9px] font-black uppercase tracking-wider text-blue-700 mb-1">
-              {stats.running > 0 ? 'Travail Forge (AgentTask)' : 'Activité liée'}
+          <div class="mb-3 rounded-2xl border border-blue-100 bg-blue-50/90 px-3 py-2 text-left shadow-sm">
+            <p class="mb-1 text-[9px] font-black uppercase tracking-wider text-blue-700">
+              Mission en cours
             </p>
-            <p class="text-[12px] font-semibold text-gray-900 leading-snug line-clamp-4" title={agent.currentWork?.title || ''}>
+            <p class="line-clamp-2 text-[11px] font-semibold leading-snug text-gray-900" title={agent.currentWork?.title || ''}>
               {agent.currentWork?.title ||
                 (stats.running > 0
                   ? `${stats.running} mission(s) marquée(s) running — ouvrez la chronologie pour le détail`
                   : '—')}
             </p>
             {agent.currentWork?.delegatedAgentId && (
-              <p class="mt-1.5 text-[10px] text-blue-800/80 font-mono truncate" title={agent.currentWork.delegatedAgentId}>
+              <p class="mt-1 truncate font-mono text-[9px] text-blue-800/80" title={agent.currentWork.delegatedAgentId}>
                 Délégué · {agent.currentWork.delegatedAgentId}
               </p>
-            )}
-            {agent.currentWork?.taskId != null && (
-              <p class="mt-1 text-[9px] text-gray-400">Tâche #{agent.currentWork.taskId}</p>
             )}
           </div>
         )}
 
-        <div class="grid grid-cols-3 gap-3 mb-7">
-          <div class="bg-gray-50/50 rounded-2xl p-3 border border-gray-100/50 text-center transition-transform group-hover:-translate-y-0.5">
-            <div class="text-base font-black text-gray-900">{stats.total}</div>
-            <div class="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-1">Missions</div>
+        <div class="mb-3 grid grid-cols-4 gap-1.5">
+          <div class="rounded-xl border border-gray-100 bg-gray-50/80 p-2 text-center">
+            <div class="text-sm font-black text-gray-900">{stats.total}</div>
+            <div class="mt-0.5 text-[7px] font-bold uppercase tracking-widest text-gray-400">Total</div>
           </div>
-          <div class="bg-emerald-50/40 rounded-2xl p-3 border border-emerald-100/50 text-center transition-transform group-hover:-translate-y-0.5 delay-75">
-            <div class="text-base font-black text-emerald-600">{stats.completed}</div>
-            <div class="text-[8px] font-bold text-emerald-400 uppercase tracking-widest mt-1">Succès</div>
+          <div class="rounded-xl border border-blue-100 bg-blue-50/70 p-2 text-center">
+            <div class="text-sm font-black text-blue-600">{stats.running}</div>
+            <div class="mt-0.5 text-[7px] font-bold uppercase tracking-widest text-blue-400">Run</div>
           </div>
-          <div class="bg-rose-50/40 rounded-2xl p-3 border border-rose-100/50 text-center transition-transform group-hover:-translate-y-0.5 delay-150">
-            <div class="text-base font-black text-rose-600">{stats.failed}</div>
-            <div class="text-[8px] font-bold text-rose-400 uppercase tracking-widest mt-1">Échecs</div>
+          <div class="rounded-xl border border-emerald-100 bg-emerald-50/70 p-2 text-center">
+            <div class="text-sm font-black text-emerald-600">{stats.completed}</div>
+            <div class="mt-0.5 text-[7px] font-bold uppercase tracking-widest text-emerald-400">OK</div>
+          </div>
+          <div class="rounded-xl border border-rose-100 bg-rose-50/70 p-2 text-center">
+            <div class="text-sm font-black text-rose-600">{stats.failed}</div>
+            <div class="mt-0.5 text-[7px] font-bold uppercase tracking-widest text-rose-400">Fail</div>
           </div>
         </div>
 
         {stats.total > 0 ? (
-          <div class="mb-2">
-            <div class="flex justify-between items-center mb-2.5">
-              <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">Performance</span>
-              <span class="text-[11px] font-black text-gray-900">{completionPct}%</span>
+          <div>
+            <div class="mb-1.5 flex items-center justify-between">
+              <span class="text-[9px] font-black uppercase tracking-widest text-gray-400">Flux missions</span>
+              <span class="text-[10px] font-black text-gray-900">{completionPct}% OK</span>
             </div>
-            <div class="h-2 w-full bg-gray-100 rounded-full overflow-hidden p-0.5">
-              <div class="h-full bg-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_8px_rgba(16,185,129,0.4)]" style={{ width: `${completionPct}%` }} />
+            <div class="flex h-2 w-full overflow-hidden rounded-full bg-gray-100">
+              <div class="h-full bg-blue-500 transition-all duration-700" style={{ width: `${stats.total > 0 ? Math.round((stats.running / stats.total) * 100) : 0}%` }} />
+              <div class="h-full bg-amber-400 transition-all duration-700" style={{ width: `${pendingPct}%` }} />
+              <div class="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${completionPct}%` }} />
+              <div class="h-full bg-rose-500 transition-all duration-700" style={{ width: `${failedPct}%` }} />
             </div>
           </div>
         ) : (
-          <div class="h-10 flex items-center justify-center">
+          <div class="flex h-8 items-center justify-center">
             <span class="text-[10px] font-bold text-gray-300 uppercase tracking-widest">En attente de mission</span>
           </div>
         )}
 
         {commandMessage && (
-          <div class="mt-4 rounded-xl bg-blue-50/50 p-2 text-center text-[10px] font-medium text-blue-600 border border-blue-100/50 animate-pulse">
+          <div class="mt-3 rounded-xl border border-blue-100/70 bg-blue-50/70 p-2 text-center text-[10px] font-semibold text-blue-600 animate-pulse">
             {commandMessage}
           </div>
         )}
       </a>
 
-      <div class="flex items-center justify-between gap-3 border-t border-gray-50 bg-gray-50/30 px-6 py-4">
-        <div class="flex items-center gap-1.5">
+      <div class="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-3">
+        <div class="flex items-center gap-1">
           {(['start_work', 'stop_work'] as SwarmWorkCommand[]).map((cmd) => (
             <button
               key={cmd}
               onClick={() => onSwarmCommand?.(agent.id, cmd)}
               disabled={commandBusy}
-              class={`p-2 rounded-xl border transition-all ${cmd === 'start_work' ? 'bg-gray-900 border-gray-900 text-white hover:bg-black' : 'bg-white border-gray-200 text-gray-400 hover:text-rose-500 hover:border-rose-200'}`}
+              class={`rounded-xl border p-2 transition-all disabled:opacity-50 ${cmd === 'start_work' ? 'bg-gray-900 border-gray-900 text-white hover:bg-black' : 'bg-white border-gray-200 text-gray-400 hover:text-rose-500 hover:border-rose-200'}`}
               title={cmd === 'start_work' ? 'Lancer une mission' : 'Arrêter'}
             >
               {cmd === 'start_work' ? (
@@ -174,14 +226,14 @@ export default function AgentCard({
             </button>
           ))}
         </div>
-        <div class="flex flex-col items-end">
-          <div class="text-[10px] font-black text-gray-900">{((agent.totalTokens ?? 0) / 1000).toFixed(1)}K tokens</div>
-          <div class="mt-1" onClick={e => e.preventDefault()}>
+        <div class="flex min-w-0 flex-col items-end">
+          <div class="max-w-[160px] truncate text-[9px] font-black text-gray-400">{wakeStatusLabel || stateLabel}</div>
+          <div class="mt-0.5 max-w-[145px]" onClick={e => e.preventDefault()}>
             <select
-              class="text-[9px] font-mono text-gray-500 bg-transparent border-none outline-none appearance-none cursor-pointer hover:text-gray-900 text-right pr-2"
+              class="max-w-full cursor-pointer appearance-none truncate border-none bg-transparent pr-2 text-right font-mono text-[9px] text-gray-500 outline-none hover:text-gray-900"
               value={agent.model || "Auto"}
-              onChange={e => onModelChange?.(agent.id, e.target.value)}
-              title="Modifier le modèle (nécessite une sauvegarde globale)"
+              onChange={(e) => onModelChange?.(agent.id, (e.currentTarget as HTMLSelectElement).value)}
+              title="Modifier le modèle"
             >
               <option value={agent.model}>{agent.model || "Modèle"}</option>
               <option value="Auto">Auto (Recommandé)</option>

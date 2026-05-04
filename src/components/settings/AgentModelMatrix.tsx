@@ -2,16 +2,9 @@ import { useState, useEffect } from 'preact/hooks';
 
 type ModelRow = {
   agentId: string;
-  openAiTarget: string;
   backendModel: string;
   enabled: boolean;
-  inGatewayRegistry: boolean;
-  inV1Models: boolean;
   ollamaPresent: boolean | null;
-  sanity?: {
-    ok: boolean;
-    error?: string;
-  };
 };
 
 type PingResult = { ok: boolean; latencyMs: number; error?: string };
@@ -29,7 +22,7 @@ export default function AgentModelMatrix() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch('/api/zimaos-models');
+      const res = await fetch('/api/forge-agent-models');
       const json = await res.json();
       setData(json);
     } catch (e) {
@@ -77,10 +70,10 @@ export default function AgentModelMatrix() {
   async function pingAgent(row: ModelRow) {
     setPinging((p) => ({ ...p, [row.agentId]: true }));
     try {
-      const res = await fetch('/api/zimaos-model-ping', {
+      const res = await fetch('/api/forge-agent-model-ping', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ openAiModel: row.openAiTarget, backendModel: row.backendModel }),
+        body: JSON.stringify({ model: row.backendModel }),
       });
       const json = await res.json();
       setPings((p) => ({ ...p, [row.agentId]: json }));
@@ -97,16 +90,23 @@ export default function AgentModelMatrix() {
     loadModels();
   }, []);
 
-  if (loading) return <div class="p-12 text-center text-gray-400 animate-pulse font-medium">Synchronisation avec ZimaOS...</div>;
+  if (loading) return <div class="p-12 text-center text-gray-400 animate-pulse font-medium">Chargement des modèles agents...</div>;
   if (!data) return null;
 
   return (
     <div class="space-y-8">
+      <div class="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs text-blue-900 leading-relaxed">
+        Cette vue lit les fiches <span class="font-mono">AgentInstruction</span> déjà présentes dans Forge. Les compteurs ne
+        veulent pas dire que tu as tout configuré manuellement : ils indiquent combien de fiches agents existent en base
+        et combien ont déjà un modèle LLM renseigné.
+      </div>
+
       {/* Header avec bouton global */}
       <div class="flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
-          <StatCard label="Total Agents" value={data.rows.length} color="blue" />
-          <StatCard label="Opérationnels" value={data.rows.filter((r: any) => r.backendModel).length} color="green" />
+          <StatCard label="Fiches agents Forge" value={data.rows.length} color="blue" />
+          <StatCard label="Avec modèle défini" value={data.rows.filter((r: any) => r.backendModel).length} color="green" />
+          <StatCard label="Confirmés Ollama" value={data.rows.filter((r: any) => r.ollamaPresent === true).length} color="amber" />
         </div>
 
         <div class="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100">
@@ -127,7 +127,7 @@ export default function AgentModelMatrix() {
                 const res = await fetch('/api/apply-default-model', { method: 'POST' });
                 const data = await res.json();
                 alert(data.message);
-                load(); // Reload matrix
+                load();
               } finally {
                 setSavingDefault(false);
               }
@@ -194,13 +194,15 @@ export default function AgentModelMatrix() {
                   {state !== "ACTIF" ? (
                     <span class="text-[10px] font-bold text-rose-300">MODÈLE MANQUANT</span>
                   ) : (
-                    <span class="text-[10px] font-bold text-gray-300">OPÉRATIONNEL</span>
+                    <span class="text-[10px] font-bold text-gray-300">
+                      {row.ollamaPresent === false ? 'ABSENT OLLAMA' : 'MODÈLE DÉFINI'}
+                    </span>
                   )}
                 </div>
                 
                 {ping && !ping.ok && (
                   <div class="mt-2 text-[9px] text-rose-500 font-bold bg-rose-50 p-1.5 rounded-lg border border-rose-100">
-                    ERREUR: {ping.error?.includes('404') ? 'Modèle non reconnu par le NAS' : ping.error}
+                    ERREUR: {ping.error?.includes('404') ? 'Modèle non reconnu par Ollama' : ping.error}
                   </div>
                 )}
               </div>

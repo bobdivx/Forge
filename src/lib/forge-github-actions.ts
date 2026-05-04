@@ -89,10 +89,8 @@ type DbProject = {
 };
 
 async function selectProjectsForMonitoring(
-  db: {
-    select: () => { from: (t: unknown) => { where?: (c: unknown) => Promise<DbProject[]> } | Promise<DbProject[]> };
-  },
-  Project: { id: unknown; swarmEnabled: unknown },
+  db: any,
+  Project: any,
   scope?: GithubMonitoringScope,
 ): Promise<DbProject[]> {
   if (scope?.projectId != null) {
@@ -202,7 +200,7 @@ export async function checkGithubActionsForProjects(scope?: GithubMonitoringScop
         headers: {
           'Authorization': `token ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'ZimaDev'
+          'User-Agent': 'Ageton'
         }
       });
 
@@ -239,7 +237,7 @@ export async function checkGithubActionsForProjects(scope?: GithubMonitoringScop
                   headers: {
                     'Authorization': `token ${githubToken}`,
                     'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'ZimaDev'
+                    'User-Agent': 'Ageton'
                   }
                 });
                 if (jobsRes.ok) {
@@ -252,7 +250,7 @@ export async function checkGithubActionsForProjects(scope?: GithubMonitoringScop
                       headers: {
                         'Authorization': `token ${githubToken}`,
                         'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'ZimaDev'
+                        'User-Agent': 'Ageton'
                       }
                     });
                     
@@ -338,7 +336,7 @@ export async function checkGithubPullRequestsForProjects(scope?: GithubMonitorin
         headers: {
           'Authorization': `token ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'ZimaDev'
+          'User-Agent': 'Ageton'
         }
       });
 

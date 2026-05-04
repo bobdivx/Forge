@@ -16,7 +16,7 @@ export const GET: APIRoute = async ({ request }) => {
       headers: {
         'Authorization': `token ${githubToken}`,
         'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'ZimaDev-App'
+        'User-Agent': 'Ageton-App'
       }
     });
 

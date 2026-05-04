@@ -7,3 +7,8 @@ declare namespace App {
     };
   }
 }
+
+declare module 'ssh2' {
+  const value: any;
+  export default value;
+}

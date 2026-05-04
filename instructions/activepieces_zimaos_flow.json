@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1",
-  "displayName": "ZimaDev ZimaOS Orchestrator",
+  "displayName": "Ageton ZimaOS Orchestrator",
   "description": "Déclenche la création d'application et le démarrage de l'orchestrateur ZimaOS/Ollama.",
   "trigger": {
     "name": "manual_trigger",

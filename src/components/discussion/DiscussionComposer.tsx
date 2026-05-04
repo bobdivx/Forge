@@ -202,6 +202,81 @@ export default function DiscussionComposer() {
     setError(null);
   };
 
+  const buildAssistantMessage = (data: any, steps: NonNullable<ChatMessage['steps']>): ChatMessage => {
+    const strictModeStep = steps.find((s) => s?.type === 'policy' && s?.label === 'strict_mode');
+    const strictAuditStep = steps.find((s) => s?.type === 'policy' && s?.label === 'strict_audit');
+    const modeRaw = String(strictModeStep?.payload || 'off').toLowerCase();
+    const mode: PolicyBadgeState['mode'] = modeRaw === 'warn' || modeRaw === 'enforce' ? modeRaw : 'off';
+    const auditRaw = String(strictAuditStep?.payload || '').toLowerCase();
+    const state: PolicyBadgeState['state'] =
+      auditRaw === 'compliant' ? 'compliant' : auditRaw === 'non_compliant' ? 'non_compliant' : 'idle';
+    setPolicyBadge({ mode, state });
+
+    return {
+      id: `${Date.now()}-ack`,
+      role: 'assistant',
+      text: data?.result?.reply || data.message || 'Réponse Forge reçue.',
+      at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      remediation: data.remediation,
+      isAck: false,
+      policy: { mode, state },
+      steps,
+      turnId: typeof data?.turnId === 'string' ? data.turnId : undefined,
+    };
+  };
+
+  const sendWithStream = async (payload: Record<string, unknown>): Promise<any> => {
+    const res = await fetch('/api/forge-chat-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(typeof data?.error === 'string' ? data.error : `Erreur stream (${res.status})`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalData: any = null;
+    let eventName = 'message';
+    const streamedSteps: Array<Record<string, unknown>> = [];
+
+    const consumeBlock = (block: string) => {
+      const lines = block.split(/\r?\n/);
+      let dataRaw = '';
+      eventName = 'message';
+      for (const line of lines) {
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        if (line.startsWith('data:')) dataRaw += line.slice(5).trim();
+      }
+      if (!dataRaw) return;
+      const data = JSON.parse(dataRaw);
+      if (eventName === 'step') {
+        streamedSteps.push(data);
+        setCurrentSteps([...streamedSteps]);
+      } else if (eventName === 'done') {
+        finalData = data;
+      } else if (eventName === 'error') {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Erreur stream');
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split(/\n\n/);
+      buffer = parts.pop() || '';
+      for (const part of parts) consumeBlock(part);
+    }
+    if (buffer.trim()) consumeBlock(buffer);
+    if (!finalData) throw new Error('Réponse stream incomplète');
+    return { ...finalData, steps: finalData.steps || streamedSteps };
+  };
+
   const send = async () => {
     if (!agentId || !message.trim() || sending || sessionUnavailable) return;
     const text = message.trim();
@@ -223,54 +298,12 @@ export default function DiscussionComposer() {
         projectId: projectId ? parseInt(projectId, 10) : undefined,
         requestId: requestId ? parseInt(requestId, 10) : undefined
       };
-      const res = await fetch('/api/forge-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      let data: any = {};
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error(`Réponse non-JSON du serveur (${res.status}): ${text.slice(0, 100)}...`);
-      }
-
-      if (!res.ok) {
-        const errText = typeof data?.error === 'string' ? data.error : `Erreur gateway (${res.status})`;
-        setError(errText);
-        setChat(c => [...c, {
-          id: `${Date.now()}-err`,
-          role: 'system',
-          text: `Erreur d'envoi: ${errText}`,
-          at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          remediation: data?.remediation,
-        }]);
-        return;
-      }
+      setCurrentSteps([]);
+      const data = await sendWithStream(payload);
       
-      const steps = Array.isArray(data?.steps) ? data.steps as Array<Record<string, unknown>> : [];
-      const strictModeStep = steps.find((s) => s?.type === 'policy' && s?.label === 'strict_mode');
-      const strictAuditStep = steps.find((s) => s?.type === 'policy' && s?.label === 'strict_audit');
-      const modeRaw = String(strictModeStep?.payload || 'off').toLowerCase();
-      const mode: PolicyBadgeState['mode'] = modeRaw === 'warn' || modeRaw === 'enforce' ? modeRaw : 'off';
-      const auditRaw = String(strictAuditStep?.payload || '').toLowerCase();
-      const state: PolicyBadgeState['state'] =
-        auditRaw === 'compliant' ? 'compliant' : auditRaw === 'non_compliant' ? 'non_compliant' : 'idle';
-      const ackMsg: ChatMessage = {
-        id: `${Date.now()}-ack`,
-        role: 'assistant',
-        text: data?.result?.reply || data.message || 'Réponse Forge reçue.',
-        at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        remediation: data.remediation,
-        isAck: false,
-        policy: { mode, state },
-        steps: data.steps,
-      };
+      const steps = Array.isArray(data?.steps) ? data.steps as NonNullable<ChatMessage['steps']> : [];
+      const ackMsg = buildAssistantMessage(data, steps);
       setChat(c => [...c, ackMsg]);
-      setPolicyBadge({ mode, state });
     } catch (err) {
       setChat(c => [...c, {
         id: `${Date.now()}-err`,

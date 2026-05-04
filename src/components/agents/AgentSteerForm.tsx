@@ -6,7 +6,7 @@ interface Model {
   provider: string;
 }
 interface Props {
-  sessionKey: string;
+  agentId: string;
   currentModel: string;
 }
 
@@ -28,7 +28,7 @@ function dedupeModelsById(list: unknown[]): Model[] {
   return out;
 }
 
-export default function AgentSteerForm({ sessionKey, currentModel }: Props) {
+export default function AgentSteerForm({ agentId, currentModel }: Props) {
   const [models, setModels] = useState<Model[]>([]);
   const [selectedModel, setSelectedModel] = useState(currentModel);
   const [loading, setLoading] = useState(false);
@@ -52,10 +52,10 @@ export default function AgentSteerForm({ sessionKey, currentModel }: Props) {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/zimaos-steer', {
+      const res = await fetch('/api/agent-model-cascade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionKey, model: selectedModel }),
+        body: JSON.stringify({ agentId, model: selectedModel, cascadeToSubagents: true }),
       });
       const data = await res.json();
       setMessage(

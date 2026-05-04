@@ -40,12 +40,11 @@ function readApiError(data: Record<string, unknown> | null | undefined, fallback
 
 type Props = {
   initialTasks: MissionTask[];
-  sessionKey: string;
   /** Si renseigné, resynchronise le tableau avec `/api/swarm-agent-panel` (poll + événement forge-swarm-refresh). */
   syncAgentId?: string;
 };
 
-export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgentId }: Props) {
+export default function AgentMissionJournal({ initialTasks, syncAgentId }: Props) {
   const [tasks, setTasks] = useState<MissionTask[]>(initialTasks);
   const [openId, setOpenId] = useState<number | null>(null);
   const [editTask, setEditTask] = useState('');
@@ -56,12 +55,6 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
   const [deleting, setDeleting] = useState(false);
   const [forcing, setForcing] = useState(false);
   const [banner, setBanner] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  /** Clé exacte pour sessions_send (souvent ≠ nom d’agent dans l’URL). */
-  const [dispatchSessionKey, setDispatchSessionKey] = useState(sessionKey);
-
-  useEffect(() => {
-    if (openId === null) setDispatchSessionKey(sessionKey);
-  }, [sessionKey, openId]);
 
   useEffect(() => {
     if (!syncAgentId) return;
@@ -95,7 +88,6 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
     setEditInput(t.input ?? '');
     setEditOutput(t.output ?? '');
     setEditStatus(t.status || 'pending');
-    setDispatchSessionKey(sessionKey);
     setBanner(null);
   };
 
@@ -164,21 +156,13 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
 
   const forceDispatch = async () => {
     if (openId == null) return;
-    const key = dispatchSessionKey.trim();
-    if (!key) {
-      setBanner({
-        type: 'err',
-        text: 'Indiquez la clé de session ZimaOS (ex. copie depuis la liste des sessions / agents).',
-      });
-      return;
-    }
     setForcing(true);
     setBanner(null);
     try {
       const res = await fetch('/api/agent-task-redispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: openId, sessionKey: key }),
+        body: JSON.stringify({ taskId: openId }),
       });
       const rawText = await res.text();
       let data: Record<string, unknown> = {};
@@ -202,7 +186,7 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
       }
       setBanner({
         type: 'ok',
-        text: typeof data.message === 'string' ? data.message : 'Relance envoyée à ZimaOS.',
+        text: typeof data.message === 'string' ? data.message : "Relance exécutée par l'orchestrateur Forge.",
       });
     } catch {
       setBanner({ type: 'err', text: 'Erreur réseau' });
@@ -355,22 +339,10 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
                 </select>
               </div>
 
-              <div>
-                <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">
-                  Clé session ZimaOS (sessions_send)
-                </label>
-                <input
-                  type="text"
-                  class="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-800 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none"
-                  value={dispatchSessionKey}
-                  onInput={(e) => setDispatchSessionKey((e.target as HTMLInputElement).value)}
-                  placeholder="ex. telegram:g-agent-… ou clé retournée par le gateway"
-                />
-                <p class="text-[10px] text-gray-500 mt-1">
-                  <span class="font-semibold text-gray-600">Forcer la demande</span> envoie titre + consigne vers cette
-                  session et passe le statut en « running » si le gateway accepte l’envoi.
-                </p>
-              </div>
+              <p class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] text-amber-900">
+                <span class="font-semibold">Forcer la demande</span> exécute titre + consigne via l’orchestrateur Forge
+                et met à jour cette tâche avec la réponse de l’agent.
+              </p>
             </div>
 
             <div class="sticky bottom-0 bg-gray-50 border-t border-gray-100 px-6 py-4 flex flex-wrap gap-2 justify-end">
@@ -384,7 +356,7 @@ export default function AgentMissionJournal({ initialTasks, sessionKey, syncAgen
               <button
                 type="button"
                 class="px-4 py-2 text-sm rounded-lg border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                disabled={forcing || !dispatchSessionKey.trim()}
+                disabled={forcing}
                 onClick={() => void forceDispatch()}
               >
                 {forcing ? 'Envoi…' : 'Forcer la demande'}

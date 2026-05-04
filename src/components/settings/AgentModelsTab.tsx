@@ -7,7 +7,7 @@ export default function AgentModelsTab() {
         <div>
           <h2 class="text-lg font-bold text-gray-900 mb-1">Modèles agents</h2>
           <p class="text-xs text-gray-500 max-w-2xl">
-            Gestion centralisée de l'équipe d'agents. Chaque carte reflète l'état réel de synchronisation avec ZimaOS.
+            Gestion centralisée de l’équipe d’agents. Chaque carte reflète le modèle LLM configuré dans Forge et vérifié côté Ollama.
           </p>
         </div>
         <a

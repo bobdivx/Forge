@@ -131,7 +131,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
       });
       const data = (await res.json().catch(() => ({}))) as ProbePayload;
       if (!res.ok) {
-        setProbeError('Échec du diagnostic ZimaOS.');
+        setProbeError('Échec du diagnostic infra NAS/Docker.');
         return;
       }
       setProbe(data);
@@ -226,7 +226,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
         <div class="mb-8 space-y-4">
           <h3 class="text-sm font-bold text-gray-900 border-b border-gray-100 pb-2">Diagnostics complets</h3>
 
-          {/* Test Communication ZimaOS */}
+          {/* Test communication infra */}
           <div class="bg-gray-50 border border-gray-200 rounded-xl p-4">
             <div class="flex items-center gap-3 flex-wrap mb-2">
               <button
@@ -235,7 +235,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
                 class="text-xs font-semibold px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
                 disabled={testingProbe}
               >
-                {testingProbe ? 'Diagnostic…' : 'Tester communication ZimaOS'}
+                {testingProbe ? 'Diagnostic…' : 'Tester l’infra NAS/Docker'}
               </button>
               {probeError && <span class="text-xs text-red-700">{probeError}</span>}
             </div>
@@ -284,7 +284,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
                     </span>
                   </div>
                   <div class="rounded-lg border border-gray-200 bg-white p-2">
-                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">ZimaOS</p>
+                    <p class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Infra NAS/Docker</p>
                     <p class="font-mono break-all text-gray-800">{networkMatrix.zimaosRuntime?.resolvedBaseUrl || '—'}</p>
                     <span class={`inline-flex mt-1 px-2 py-0.5 rounded-full border ${sourceBadgeClass(networkMatrix.zimaosRuntime?.source)}`}>
                       source: {networkMatrix.zimaosRuntime?.source || '—'}
@@ -305,7 +305,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
                       Forge /login: {networkMatrix.probes?.forgeLogin?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.forgeLogin?.status ?? 0})
                     </span>
                     <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.zimaosHealth?.ok)}`}>
-                      Runtime ZimaOS /health: {networkMatrix.probes?.zimaosHealth?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.zimaosHealth?.status ?? 0})
+                      Infra /health: {networkMatrix.probes?.zimaosHealth?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.zimaosHealth?.status ?? 0})
                     </span>
                     <span class={`inline-flex px-2 py-0.5 rounded-full border ${probeBadgeClass(networkMatrix.probes?.ollamaTags?.ok)}`}>
                       Ollama /api/tags: {networkMatrix.probes?.ollamaTags?.ok ? 'OK' : 'KO'} ({networkMatrix.probes?.ollamaTags?.status ?? 0})
@@ -361,7 +361,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
               {healthProbe?.attempted && !dockerUnavailable && (
                 <div class="border-t border-current/10 pt-3 mt-2 space-y-2">
                   <p class="font-semibold">
-                    ZimaOS (Docker){' '}
+                    Conteneur Docker{' '}
                     {healthProbe.containerName ? <span class="font-mono font-normal">· {healthProbe.containerName}</span> : null}
                   </p>
                   {healthProbe.dockerError && (
@@ -400,7 +400,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
                   )}
                   {!healthProbe.pathExistsInContainer && healthProbe.attempted && healthProbe.containerName && (
                     <p class="text-[11px]">
-                      Ajustez le compose ZimaOS ou le « Répertoire des applications » pour qu’il corresponde à une{' '}
+                      Ajustez le compose Docker ou le « Répertoire des applications » pour qu’il corresponde à une{' '}
                       <span class="font-mono">Destination</span> listée ci-dessus.
                     </p>
                   )}
@@ -415,7 +415,7 @@ export default function MaintenanceTab({ onSync, syncing, message, settings, rep
             <div class="min-w-0">
               <h4 class="text-sm font-medium text-gray-900">Assistant de configuration</h4>
               <p class="text-[10px] text-gray-400 mt-1">
-                Rouvrir le guide (ZimaOS, dépôts, jetons). Utile après un changement de NAS ou de conteneurs.
+                Rouvrir le guide (infra NAS/Docker, dépôts, jetons). Utile après un changement de NAS ou de conteneurs.
               </p>
             </div>
             <button

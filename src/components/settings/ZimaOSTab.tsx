@@ -7,9 +7,9 @@ import ZimaOSForgeAuditPanel from './ZimaOSForgeAuditPanel';
 type Config = {
   zimaosAccessMode: string;
   zimaosRuntimeUrl: string;
-  /** Nom du conteneur Docker (Sandbox) où tournent les agents (ex: zimaos-runtime). */
+  /** Nom du conteneur Docker cible pour les vérifications infra. */
   zimaosContainerName: string;
-  /** URL du service Gateway sur l'hôte ZimaOS. */
+  /** URL éventuelle du service infra sur l'hôte ZimaOS/NAS. */
   zimaosGatewayUrl: string;
   zimaosHost: string;
   zimaosSshPort: string;
@@ -182,13 +182,14 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
       <ZimaOSForgeAuditPanel />
 
       <p class="text-xs text-gray-500">
-        Onglet dédié à la communication ZimaDev ↔ ZimaOS. Choisissez le mode local Docker ou distant SSH. En Docker sur
-        le NAS, Forge utilise la CLI <span class="font-mono">docker</span> vers le socket de l’hôte (pas seulement le
-        mode privilégié) pour lister les montages du sandbox — voir le compose « Forge (NAS) » :{' '}
+        Onglet dédié à l’infrastructure NAS/Docker utilisée par Forge pour les dossiers d’applications, volumes,
+        conteneurs et accès SSH. Les agents, tâches et sous-agents restent pilotés par Forge avec Ollama. En Docker sur
+        le NAS, Forge utilise la CLI <span class="font-mono">docker</span> vers le socket de l’hôte pour lister les
+        montages et dossiers utiles — voir le compose « Forge (NAS) » :{' '}
         <span class="font-mono">docker.sock</span> + image avec <span class="font-mono">docker-cli</span>.
       </p>
 
-      <FormField label="Mode d’accès ZimaOS">
+      <FormField label="Mode d’accès infra">
         <select
           class={inputCls}
           value={mode}
@@ -205,8 +206,8 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
       </FormField>
 
       <FormField
-        label="URL runtime ZimaOS"
-        hint="URL joignable depuis le conteneur ZimaDev. Exemple Docker local: http://host.docker.internal:24190"
+        label="URL service infra NAS/Docker"
+        hint="Optionnel. URL joignable depuis le conteneur Ageton pour les contrôles infra, pas pour piloter les agents."
       >
         <input
           type="url"
@@ -217,8 +218,8 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
       </FormField>
 
       <FormField
-        label="Nom du conteneur d’exécution (Sandbox)"
-        hint="Le nom du conteneur géré par ZimaOS dans lequel les agents travaillent (ex: zimaos-runtime). Requis pour les vérifications de montages."
+        label="Nom du conteneur Docker cible"
+        hint="Nom du conteneur à inspecter pour vérifier les montages, volumes et dossiers d’applications."
       >
         <input
           type="text"
@@ -231,7 +232,7 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
       {mode === 'remote_ssh' && (
         <div class="rounded-xl border border-gray-200 bg-gray-50/70 p-4 space-y-3">
           <p class="text-xs font-semibold text-gray-700">Accès distant SSH</p>
-          <FormField label="Hôte ZimaOS (IP/FQDN)">
+          <FormField label="Hôte NAS / Docker (IP/FQDN)">
             <input
               type="text"
               class={inputCls}
@@ -302,7 +303,7 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
                     class={inputCls}
                     value={settings.zimaosSshKeyPath}
                     onInput={(e) => setSettings({ ...settings, zimaosSshKeyPath: (e.target as HTMLInputElement).value })}
-                    placeholder="/run/secrets/zimadev_ssh_key"
+                    placeholder="/run/secrets/ageton_ssh_key"
                   />
                 </FormField>
                 <FormField label="Contenu clé privée (DB)" hint="Collez ici le contenu de votre clé ---BEGIN OPENSSH PRIVATE KEY---">
@@ -378,7 +379,7 @@ export default function ZimaOSTab({ settings, setSettings, onSave, saving, messa
 
 
 
-      <SaveRow message={message} saving={saving} onSave={onSave} label="Sauvegarder ZimaOS" />
+      <SaveRow message={message} saving={saving} onSave={onSave} label="Sauvegarder l’infra Docker" />
     </div>
   );
 }

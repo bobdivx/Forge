@@ -1,12 +1,8 @@
 // @ts-nocheck
 import type { APIRoute } from 'astro';
-import { db, AgentMessage, AgentTask, desc } from 'astro:db';
-import {
-  fetchZimaOSSessionsPayload,
-  normalizeZimaOSSessions,
-  mapSessionToAgentRow,
-} from '../../lib/zimaos-gateway';
-import { buildEdgesFromSessions, shortSwarmLabel } from '../../lib/swarm-interactions';
+import { db, AgentMessage, AgentTask, AgentInstruction, desc } from 'astro:db';
+import { FORGE_PROJECT_CHILD_TOKEN } from '../../lib/forge-project-scoped-agents';
+import { shortSwarmLabel } from '../../lib/swarm-interactions';
 
 function ts(d: Date | number | null | undefined): number {
   if (d == null) return 0;
@@ -21,32 +17,49 @@ function fmt(d: Date | number | null | undefined): string {
   return date.toLocaleString('fr-FR');
 }
 
-export const GET: APIRoute = async ({ locals }) => {
-  const email = locals.user?.email;
-
-  let sessions: unknown[] = [];
-  let gatewayError: string | null = null;
-  const gw = await fetchZimaOSSessionsPayload(email);
-  if (gw.ok) {
-    sessions = normalizeZimaOSSessions(gw.data);
-  } else {
-    gatewayError = gw.error || 'Gateway indisponible';
-  }
-
-  const rows = sessions.map(mapSessionToAgentRow);
-  rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs);
-  const activeCount = rows.filter((r) => r.status === 'actif').length;
-  const edges = buildEdgesFromSessions(sessions);
-
+export const GET: APIRoute = async () => {
+  let instructions = [];
   let messages = [];
   let tasks = [];
+  let edges = [];
+  const agentIds = new Set<string>();
+
+  try {
+    instructions = await db.select().from(AgentInstruction);
+    for (const a of instructions) {
+      const id = String(a.agentId || '').trim();
+      if (id) agentIds.add(id);
+      const idx = id.indexOf(FORGE_PROJECT_CHILD_TOKEN);
+      if (idx > 0) {
+        const parent = id.slice(0, idx);
+        edges.push({
+          from: parent,
+          to: id,
+          fromLabel: shortSwarmLabel(parent),
+          toLabel: shortSwarmLabel(id),
+          kind: 'subagent',
+          atLabel: fmt(a.updatedAt),
+          at: ts(a.updatedAt),
+        });
+      }
+    }
+  } catch {
+    /* table absente ou DB off */
+  }
   try {
     messages = await db.select().from(AgentMessage).orderBy(desc(AgentMessage.timestamp)).limit(120);
+    for (const m of messages) {
+      if (m.fromAgent) agentIds.add(String(m.fromAgent));
+      if (m.toAgent) agentIds.add(String(m.toAgent));
+    }
   } catch {
     /* table absente ou DB off */
   }
   try {
     tasks = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(120);
+    for (const t of tasks) {
+      if (t.agentId) agentIds.add(String(t.agentId));
+    }
   } catch {
     /* */
   }
@@ -61,7 +74,7 @@ export const GET: APIRoute = async ({ locals }) => {
       to: e.to,
       fromLabel: e.fromLabel,
       toLabel: e.toLabel,
-      summary: 'Lien principal → sub-agent (session ZimaOS)',
+      summary: 'Lien agent parent → sous-agent applicatif Forge',
       at: e.at,
       atLabel: e.atLabel,
     });
@@ -101,25 +114,15 @@ export const GET: APIRoute = async ({ locals }) => {
 
   return new Response(
     JSON.stringify({
-      gatewayError,
       stats: {
-        totalSessions: rows.length,
-        activeCount,
-        idleCount: Math.max(0, rows.length - activeCount),
-        uniqueAgents: new Set(rows.map((r) => r.name)).size,
+        totalSessions: instructions.length,
+        activeCount: instructions.filter((a) => Number(a.enabled) === 1).length,
+        idleCount: instructions.filter((a) => Number(a.enabled) !== 1).length,
+        uniqueAgents: agentIds.size,
         edgeCount: edges.length,
         messageCount: messages.length,
         taskCount: tasks.length,
       },
-      sessions: rows.slice(0, 40).map((r) => ({
-        id: r.id,
-        name: r.name,
-        shortLabel: shortSwarmLabel(r.id),
-        status: r.status,
-        model: r.model,
-        lastSeen: r.lastSeen,
-        lastSeenMs: r.lastSeenMs,
-      })),
       edges,
       timeline,
     }),

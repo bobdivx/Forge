@@ -44,12 +44,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return new Response(
         JSON.stringify({
           ok: true,
-          messages: local.reverse().map((m) => ({
-            id: `forge-msg-${m.id}`,
-            role: m.role,
-            text: m.content,
-            at: new Date(m.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          })),
+          messages: local.reverse().map((m) => {
+            let meta: Record<string, unknown> = {};
+            try {
+              meta = m.meta ? JSON.parse(m.meta) as Record<string, unknown> : {};
+            } catch {}
+            return {
+              id: `forge-msg-${m.id}`,
+              role: m.role,
+              text: m.content,
+              at: new Date(m.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              steps: Array.isArray(meta.steps) ? meta.steps : undefined,
+              turnId: typeof meta.turnId === 'string' ? meta.turnId : undefined,
+            };
+          }),
           selectedSessionKey: sessionKey,
           source: 'forge',
         }),

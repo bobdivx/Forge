@@ -4,9 +4,7 @@ import AgentActivityChart from './AgentActivityChart';
 import TabBar from '../ui/TabBar';
 import {
   buildAgentTeamProfile,
-  mergeZimaOSTeamProfile,
   type AgentTeamProfile,
-  type ZimaOSAgentProfileRow,
 } from '../../lib/agent-profile';
 import { buildSwarmWorkDirective, type SwarmWorkCommand } from '../../lib/forge-agent-protocol';
 
@@ -36,7 +34,6 @@ type Agent = {
 };
 
 type ActivationAdvice = {
-  gatewayReadOnly?: boolean;
   message?: string;
 };
 
@@ -110,7 +107,6 @@ function buildChartData(agents: Agent[], taskStats: Record<string, TaskStats>, t
 
 export default function AgentsGrid() {
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [ocProfiles, setOcProfiles] = useState<Record<string, ZimaOSAgentProfileRow>>({});
   const [taskStats, setTaskStats] = useState<Record<string, TaskStats>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,20 +187,12 @@ export default function AgentsGrid() {
 
   useEffect(() => {
     const load = () => {
-      Promise.all([fetch('/api/agents'), fetch('/api/zimaos-agent-profiles')])
-        .then(([r1, r2]) => Promise.all([r1.json(), r2.json().catch(() => ({}))]))
-        .then(([data, pr]) => {
+      fetch('/api/agents')
+        .then((r) => r.json())
+        .then((data) => {
           setAgents(Array.isArray(data.agents) ? data.agents : Array.isArray(data) ? data : []);
           setTaskStats(data.taskStats ?? {});
           setActivationAdvice(data.activationAdvice && typeof data.activationAdvice === 'object' ? data.activationAdvice : null);
-          
-          if (pr?.profiles && typeof pr.profiles === 'object') {
-            const next: Record<string, ZimaOSAgentProfileRow> = {};
-            for (const [k, v] of Object.entries(pr.profiles as Record<string, unknown>)) {
-              if (v && typeof v === 'object') next[k] = v as ZimaOSAgentProfileRow;
-            }
-            setOcProfiles(next);
-          }
         })
         .catch(() => setError('Erreur de communication avec le coordinateur Forge.'))
         .finally(() => setLoading(false));
@@ -227,10 +215,10 @@ export default function AgentsGrid() {
         .then((rows) => {
           const values = Array.isArray(rows)
             ? rows
-                .map((m: { id?: string; name?: string }) => String(m.id || m.name || '').replace(/^zimaos\//i, '').trim())
+                .map((m: { id?: string; name?: string }) => String(m.id || m.name || '').replace(/^[a-z0-9_-]+\//i, '').trim())
                 .filter(Boolean)
             : [];
-          const merged = [...new Set(values)].sort((a, b) => a.localeCompare(b));
+          const merged = Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
           setAvailableModels(merged);
           if (!newAgentModel && merged.length > 0) setNewAgentModel(merged[0]);
         })
@@ -288,13 +276,13 @@ export default function AgentsGrid() {
     try {
       const versionHint = command === 'start_work' ? await buildVersionUpdateDirective() : '';
       const directive = `${buildSwarmWorkDirective(command, 'direct')}${versionHint}`;
-      const r = await fetch('/api/zimaos-directive', {
+      const r = await fetch('/api/forge-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionKey: agentId,
+          sessionId: `forge-command-${agentId}`,
+          agentId,
           message: directive,
-          timeoutSeconds: 90,
         }),
       });
       const data = await r.json().catch(() => ({}));
@@ -364,15 +352,21 @@ export default function AgentsGrid() {
     }
   };
 
-  const wakeZimaOSAgents = async () => {
+  const wakeForgeAgents = async () => {
     setWakeBusy(true);
     setWakeMsg('Lancement du swarm en cours...');
     try {
-      const r = await fetch('/api/zimaos-wake-agents', { method: 'POST' });
+      const r = await fetch('/api/work-system', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start' }),
+      });
       const data = await r.json().catch(() => ({}));
-      const sentCount = Array.isArray(data?.sent) ? data.sent.length : 0;
-      const failedCount = Array.isArray(data?.failed) ? data.failed.length : 0;
-      if (!r.ok && r.status !== 207) {
+      const awakened = data?.workCycle?.wakeReport?.awakened;
+      const failed = data?.workCycle?.wakeReport?.failed;
+      const sentCount = Array.isArray(awakened) ? awakened.length : 0;
+      const failedCount = Array.isArray(failed) ? failed.length : 0;
+      if (!r.ok) {
         setWakeMsg(typeof data?.error === 'string' ? data.error : 'Lancement impossible');
         return;
       }
@@ -411,16 +405,26 @@ export default function AgentsGrid() {
   const teamProfiles = useMemo(() => {
     const map: Record<string, AgentTeamProfile> = {};
     for (const a of agents) {
-      map[a.id] = mergeZimaOSTeamProfile(a, ocProfiles[a.id] ?? null);
+      map[a.id] = buildAgentTeamProfile(a);
     }
     return map;
-  }, [agents, ocProfiles]);
+  }, [agents]);
 
   const activeCount = agents.filter((a) => a.status === 'actif').length;
+  const runningCount = agents.filter((a) => (taskStats[a.id]?.running ?? 0) > 0 || a.currentWork).length;
+  const pendingCount = Object.values(taskStats).reduce((sum, s) => sum + (s.pending ?? 0), 0);
   const { barData, doughnutData } = buildChartData(agents, taskStats, teamProfiles);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const rankAgent = (a: Agent) => {
+      const stats = taskStats[a.id];
+      const running = stats?.running ?? 0;
+      const pending = stats?.pending ?? 0;
+      const completed = stats?.completed ?? 0;
+      const disabled = a.raw?.disabledInDb ? -1000 : 0;
+      return disabled + running * 1000 + (a.currentWork ? 500 : 0) + (a.status === 'actif' ? 250 : 0) + pending * 20 + completed;
+    };
     return agents.filter((a) => {
       if (filter === 'active' && a.status !== 'actif') return false;
       if (filter === 'idle' && a.status === 'actif') return false;
@@ -435,8 +439,8 @@ export default function AgentsGrid() {
         p.role.toLowerCase().includes(q) ||
         (p.bio && p.bio.toLowerCase().includes(q))
       );
-    });
-  }, [agents, filter, query, teamProfiles]);
+    }).sort((a, b) => rankAgent(b) - rankAgent(a) || a.id.localeCompare(b.id));
+  }, [agents, filter, query, taskStats, teamProfiles]);
 
   if (loading) {
     return (
@@ -457,7 +461,48 @@ export default function AgentsGrid() {
 
   return (
     <div class="space-y-8">
-      <AgentActivityChart barData={barData} doughnutData={doughnutData} />
+      <div class="overflow-hidden rounded-[1.75rem] border border-[#175B37]/10 bg-gradient-to-br from-white via-[#F7FBF8] to-[#E9F3EB] p-5 shadow-sm">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0">
+            <div class="mb-2 inline-flex items-center gap-2 rounded-full border border-[#175B37]/15 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#175B37]">
+              <span class="relative flex h-2 w-2">
+                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#3BAE61] opacity-75" />
+                <span class="relative inline-flex h-2 w-2 rounded-full bg-[#3BAE61]" />
+              </span>
+              Radar agents Forge
+            </div>
+            <h4 class="text-xl font-black text-gray-900">Activité de l’équipe en temps réel</h4>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">
+              Les agents en mission sont triés en premier. Les cartes affichent la mission courante, la file de tâches et
+              la présence du modèle LLM sans dépendre d’un runtime externe.
+            </p>
+          </div>
+          <div class="grid grid-cols-3 gap-2 sm:min-w-[420px]">
+            <div class="rounded-2xl border border-white/70 bg-white/80 p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-blue-600">{runningCount}</p>
+              <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-gray-400">En mission</p>
+            </div>
+            <div class="rounded-2xl border border-white/70 bg-white/80 p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-[#175B37]">{activeCount}</p>
+              <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-gray-400">Disponibles</p>
+            </div>
+            <div class="rounded-2xl border border-white/70 bg-white/80 p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-amber-600">{pendingCount}</p>
+              <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-gray-400">En attente</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <details class="group rounded-[1.5rem] border border-gray-100 bg-white shadow-sm">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold text-gray-900 [&::-webkit-details-marker]:hidden">
+          <span>Graphiques d’activité</span>
+          <span class="text-xs font-semibold text-gray-400 transition group-open:rotate-180">⌄</span>
+        </summary>
+        <div class="border-t border-gray-100 p-4">
+          <AgentActivityChart barData={barData} doughnutData={doughnutData} />
+        </div>
+      </details>
 
       {appVersion?.updateAvailable && appVersion.latestVersion && appVersion.currentVersion && (
         <div class="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
@@ -487,7 +532,7 @@ export default function AgentsGrid() {
           <span class="font-semibold" style={{ color: '#3BAE61' }}>
             {activeCount}
           </span>{' '}
-          opérationnel(s)
+          disponible(s), <span class="font-semibold text-blue-600">{runningCount}</span> en mission
         </span>
         <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
           <div class="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm">
@@ -504,7 +549,7 @@ export default function AgentsGrid() {
           </div>
           <button
             type="button"
-            onClick={() => void wakeZimaOSAgents()}
+            onClick={() => void wakeForgeAgents()}
             disabled={wakeBusy}
             class="rounded-full border border-[#175B37]/20 bg-[#175B37] px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -591,21 +636,32 @@ export default function AgentsGrid() {
       </div>
 
       {filtered.length > 0 ? (
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <>
+          <div class="flex items-center justify-between md:hidden">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+              Balayez pour parcourir les agents
+            </p>
+            <span class="rounded-full border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-500">
+              {filtered.length} cartes
+            </span>
+          </div>
+          <div class="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-4">
           {filtered.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              taskStats={taskStats[agent.id]}
-              teamProfile={teamProfiles[agent.id]!}
-              onSwarmCommand={sendSwarmCommand}
-              commandBusy={Boolean(commandBusyByAgent[agent.id])}
-              commandMessage={commandMsgByAgent[agent.id] ?? null}
-              wakeStatusLabel={getWakeStatusLabel(agent)}
-              onModelChange={handleModelChange}
-            />
+            <div key={agent.id} class="w-[82vw] max-w-[22rem] shrink-0 snap-start md:w-auto md:max-w-none">
+              <AgentCard
+                agent={agent}
+                taskStats={taskStats[agent.id]}
+                teamProfile={teamProfiles[agent.id]!}
+                onSwarmCommand={sendSwarmCommand}
+                commandBusy={Boolean(commandBusyByAgent[agent.id])}
+                commandMessage={commandMsgByAgent[agent.id] ?? null}
+                wakeStatusLabel={getWakeStatusLabel(agent)}
+                onModelChange={handleModelChange}
+              />
+            </div>
           ))}
-        </div>
+          </div>
+        </>
       ) : (
         <div class="rounded-[1.5rem] border border-gray-100 bg-white p-12 text-center shadow-sm">
           <p class="text-sm text-gray-500">

@@ -97,9 +97,6 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     return json({ error: 'JSON invalide' }, 400);
   }
   const sessionKey = String(body.sessionKey || '').trim();
-  if (!sessionKey) {
-    return json({ error: 'sessionKey requis (session ZimaOS cible)' }, 400);
-  }
 
   const result = await runMissionRedispatch({
     taskId: id,
@@ -120,7 +117,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
   return json({
     ok: true,
-    message: 'Directive de relance acceptée (traitement asynchrone ou synchrone selon le gateway).',
+    message: "Mission exécutée par l'orchestrateur Forge.",
     task: result.task,
   });
 };

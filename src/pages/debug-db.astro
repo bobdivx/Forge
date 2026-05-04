@@ -4,6 +4,7 @@ import { loadAstroDb } from '../lib/load-astro-db';
 
 const dbData = await loadAstroDb();
 const keys = Object.keys(dbData);
+const dbExports = dbData as Record<string, unknown>;
 ---
 
 <html>
@@ -11,7 +12,7 @@ const keys = Object.keys(dbData);
     <h1>Debug Astro DB Exports</h1>
     <ul>
         {keys.map(k => (
-            <li>{k}: {typeof dbData[k]}</li>
+            <li>{k}: {typeof dbExports[k]}</li>
         ))}
     </ul>
     <pre>{JSON.stringify(keys, null, 2)}</pre>

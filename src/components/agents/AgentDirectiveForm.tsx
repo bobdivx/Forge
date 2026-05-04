@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 
-export default function AgentDirectiveForm({ sessionKey }: { sessionKey: string }) {
+export default function AgentDirectiveForm({ agentId }: { agentId: string }) {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -11,21 +11,25 @@ export default function AgentDirectiveForm({ sessionKey }: { sessionKey: string 
       setMsg({ type: 'err', text: 'Saisissez une directive.' });
       return;
     }
-    if (!sessionKey) {
-      setMsg({ type: 'err', text: 'Session inconnue.' });
+    if (!agentId) {
+      setMsg({ type: 'err', text: 'Agent Forge inconnu.' });
       return;
     }
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch('/api/zimaos-directive', {
+      const res = await fetch('/api/forge-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionKey, message }),
+        body: JSON.stringify({
+          sessionId: `forge-directive-${agentId}`,
+          agentId,
+          message,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMsg({ type: 'err', text: typeof data.error === 'string' ? data.error : 'Envoi refusé par le gateway' });
+        setMsg({ type: 'err', text: typeof data.error === 'string' ? data.error : 'Directive refusée par Forge' });
         return;
       }
       const result = data.result as Record<string, unknown> | undefined;
@@ -59,13 +63,13 @@ export default function AgentDirectiveForm({ sessionKey }: { sessionKey: string 
         <svg class="w-4 h-4 shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
-        <h3 class="font-semibold text-gray-900 text-sm">Contrôle session</h3>
+        <h3 class="font-semibold text-gray-900 text-sm">Contrôle agent Forge</h3>
       </div>
       <div class="px-6 py-5 space-y-4">
         <p class="text-[11px] text-gray-500 leading-relaxed">
-          Envoie un message dans la session ZimaOS{' '}
+          Envoie une directive à l’orchestrateur Forge pour{' '}
           <span class="font-mono text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 break-all">
-            {sessionKey}
+            {agentId}
           </span>
         </p>
         <textarea

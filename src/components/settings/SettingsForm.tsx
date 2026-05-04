@@ -22,6 +22,7 @@ type Config = {
   githubWebhookSecret: string;
   forgeApiToken: string;
   zimaosRuntimeUrl: string;
+  zimaosGatewayUrl: string;
   zimaosAccessMode: string;
   zimaosHost: string;
   zimaosSshPort: string;
@@ -44,7 +45,7 @@ type AuthState = {
 
 const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
-  { id: 'zimaos', label: 'ZIMAOS' },
+  { id: 'zimaos', label: 'Infra NAS/Docker' },
   { id: 'ollama', label: 'Ollama' },
   { id: 'integration', label: 'Docker & Chemins' },
   { id: 'api', label: 'Jetons API' },
@@ -68,6 +69,7 @@ export default function SettingsForm() {
     githubWebhookSecret: '',
     forgeApiToken: '',
     zimaosRuntimeUrl: '',
+    zimaosGatewayUrl: '',
     zimaosAccessMode: 'local_docker',
     zimaosHost: '',
     zimaosSshPort: '22',

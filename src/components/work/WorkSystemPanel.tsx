@@ -14,7 +14,7 @@ type WorkSystemStatus = {
 type WorkCycleResult = {
   ok: boolean;
   budgetBlocked?: string;
-  gatewayErrors?: string[];
+  forgeErrors?: string[];
   wakeReport?: {
     targeted: number;
     awakened: string[];
@@ -274,9 +274,9 @@ export default function WorkSystemPanel() {
               ) : null}
             </ul>
           ) : null}
-          {lastWorkCycle.gatewayErrors?.length ? (
+          {lastWorkCycle.forgeErrors?.length ? (
             <p class="mt-2 text-[11px] text-rose-800">
-              <span class="font-semibold">Erreurs liaison / passerelle :</span> {lastWorkCycle.gatewayErrors.join(' · ')}
+              <span class="font-semibold">Erreurs orchestrateur Forge :</span> {lastWorkCycle.forgeErrors.join(' · ')}
             </p>
           ) : null}
         </div>

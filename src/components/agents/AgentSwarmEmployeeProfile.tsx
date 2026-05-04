@@ -19,11 +19,7 @@ type SubRow = {
 type Props = {
   teamProfile: AgentTeamProfile;
   displayCode: string;
-  /** Clé technique de session côté gateway (souvent identique à l’id Forge). */
-  sessionKey: string;
   agentRuntime: Runtime;
-  /** Données live gateway vs instruction Forge en base. */
-  runtimeSource: 'gateway' | 'forge';
   /** Au moins une ligne `AgentInstruction` pour cet id. */
   hasForgeInstruction: boolean;
   subagents: SubRow[];
@@ -38,9 +34,7 @@ function presenceDot(cls: string) {
 export default function AgentSwarmEmployeeProfile({
   teamProfile,
   displayCode,
-  sessionKey,
   agentRuntime,
-  runtimeSource,
   hasForgeInstruction,
   subagents,
   parentAgentId,
@@ -106,12 +100,10 @@ export default function AgentSwarmEmployeeProfile({
                 <span class="text-gray-300" aria-hidden>
                   ·
                 </span>
-                {runtimeSource === 'gateway' ? (
-                  <span>Session gateway (live) : {agentRuntime.status}</span>
-                ) : hasForgeInstruction ? (
+                {hasForgeInstruction ? (
                   <span class="text-gray-600">
                     <strong class="font-semibold text-[#175B37]">Forge</strong> — modèle et activation via l’instruction
-                    (tokens / coût live si le gateway expose une session).
+                    agent en base.
                   </span>
                 ) : (
                   <span class="text-amber-800">
@@ -136,15 +128,7 @@ export default function AgentSwarmEmployeeProfile({
                   <dt class="font-bold uppercase tracking-wider text-gray-400">Identifiant Forge</dt>
                   <dd class="font-mono text-gray-800">{displayCode}</dd>
                 </div>
-                {String(sessionKey || '').trim() !== String(displayCode || '').trim() ? (
-                  <div>
-                    <dt class="font-bold uppercase tracking-wider text-gray-400">Clé session (gateway)</dt>
-                    <dd class="break-all font-mono text-gray-700" title="Identifiant technique côté orchestrateur — peut différer de l’id Forge.">
-                      {sessionKey}
-                    </dd>
-                  </div>
-                ) : null}
-                {!(runtimeSource === 'forge' && hasForgeInstruction) ? (
+                {!hasForgeInstruction ? (
                   <div>
                     <dt class="font-bold uppercase tracking-wider text-gray-400">Modèle (profil)</dt>
                     <dd class="font-mono text-blue-600">{teamProfile.modelShort}</dd>
@@ -156,9 +140,7 @@ export default function AgentSwarmEmployeeProfile({
 
           <div class="grid grid-cols-2 gap-3 rounded-2xl border border-gray-100 bg-white/90 p-4 shadow-inner sm:grid-cols-2 lg:grid-cols-1">
             <div>
-              <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-                {runtimeSource === 'gateway' ? 'Modèle (live)' : 'Modèle (instruction)'}
-              </p>
+              <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Modèle (instruction)</p>
               <p class="mt-1 truncate font-mono text-sm text-blue-600">
                 {String(agentRuntime.model || '—')
                   .split('/')
@@ -167,29 +149,18 @@ export default function AgentSwarmEmployeeProfile({
             </div>
             <div>
               <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Tokens</p>
-              <p class="mt-1 font-mono text-sm text-gray-900">
-                {runtimeSource === 'gateway'
-                  ? agentRuntime.totalTokens.toLocaleString('fr-FR')
-                  : '—'}
-              </p>
+              <p class="mt-1 font-mono text-sm text-gray-900">{agentRuntime.totalTokens.toLocaleString('fr-FR')}</p>
             </div>
             <div>
               <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Coût estimé</p>
               <p class="mt-1 font-mono text-sm" style={{ color: '#3BAE61' }}>
-                {runtimeSource === 'gateway' ? `$${agentRuntime.estimatedCostUsd.toFixed(2)}` : '—'}
+                ${agentRuntime.estimatedCostUsd.toFixed(2)}
               </p>
             </div>
             <div>
-              <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-                {runtimeSource === 'gateway' ? 'Dernière activité (live)' : 'Dernière MAJ instruction'}
-              </p>
+              <p class="text-[9px] font-bold uppercase tracking-wider text-gray-400">Dernière MAJ instruction</p>
               <p class="mt-1 font-mono text-xs text-gray-600">{agentRuntime.lastSeen}</p>
             </div>
-            {runtimeSource === 'forge' && hasForgeInstruction ? (
-              <p class="col-span-2 text-[9px] leading-snug text-gray-400">
-                Tokens / coût : affichés quand une session gateway est visible pour cet agent.
-              </p>
-            ) : null}
           </div>
         </div>
       </div>

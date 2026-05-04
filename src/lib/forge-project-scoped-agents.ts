@@ -1,10 +1,9 @@
 /**
  * Agents « projet » Forge : identifiants `PARENT__APP_<jeton>` et lignes `AgentInstruction`.
- * La source de vérité est la base Forge ; le gateway ZimaOS n’intervient que pour le provisioning (push config).
+ * La source de vérité est la base Forge ; l’exécution passe par l’orchestrateur Forge/Ollama.
  */
 import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
-import { provisionAgentInZimaOS } from './zimaos-agent-provision';
 import { insertForgeActivityLog } from './forge-activity-log';
 
 const SUBAGENT_PREFIX = 'APP';
@@ -105,13 +104,6 @@ export async function ensureForgeProjectScopedAgent(params: {
     updatedAt: new Date(),
   });
 
-  const provision = await provisionAgentInZimaOS({
-    agentId,
-    model: String(parent.model || '').trim() || 'qwen2.5:7b',
-    filePath,
-    systemPrompt: prompt,
-  });
-
   await insertForgeActivityLog({
     actorType: 'system',
     actorId: 'work_scheduler',
@@ -122,8 +114,7 @@ export async function ensureForgeProjectScopedAgent(params: {
       parentAgentId,
       projectId: project.id,
       projectName: project.name,
-      provisionOk: provision.ok,
-      provisionSteps: provision.steps,
+      provisionedInForge: true,
     },
   });
 

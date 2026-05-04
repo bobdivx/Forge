@@ -9,8 +9,7 @@ import AgentMissionJournal from '../../components/agents/AgentMissionJournal';
 import AgentSwarmCommandCenter from '../../components/agents/AgentSwarmCommandCenter';
 import AgentSwarmEmployeeProfile from '../../components/agents/AgentSwarmEmployeeProfile';
 import { loadAstroDb } from '../../lib/load-astro-db';
-import { loadSwarmAgentLiveFromGateway } from '../../lib/forge-swarm-page-sessions';
-import { mergeZimaOSTeamProfile, type ZimaOSAgentProfileRow } from '../../lib/agent-profile';
+import { buildAgentTeamProfile } from '../../lib/agent-profile';
 import {
   listForgeProjectScopedChildAgents,
   parseForgeParentAgentId,
@@ -18,19 +17,7 @@ import {
 import { eq } from 'drizzle-orm';
 
 const { id } = Astro.params;
-const email = Astro.locals.user?.email;
 const agentKey = id || '';
-
-let agentInfo = null;
-try {
-  agentInfo = await loadSwarmAgentLiveFromGateway(email, agentKey);
-} catch {
-  /* session live optionnelle — Forge fournit la fiche sans gateway */
-}
-
-/** Clé `sessions_send` (ex. telegram:…) — pas seulement le segment d’URL. */
-/** Clé de session côté gateway si connue ; sinon identique à l’id Forge. */
-const sessionKey = agentInfo?.id || agentKey;
 
 let instructionRow = null;
 let tasks = [];
@@ -58,37 +45,13 @@ const missionTasksJson = tasks.map((t) => ({
   updatedAt: t.updatedAt instanceof Date ? t.updatedAt.toISOString() : String(t.updatedAt),
 }));
 
-const displayName = agentInfo
-  ? agentInfo.name.replace('telegram:g-agent-', '').replace('agent:', '').toUpperCase()
-  : id;
+const displayName = id;
 
 const parentAgentId = parseForgeParentAgentId(agentKey);
 
-let zimaProfileRow: ZimaOSAgentProfileRow | null = null;
-try {
-  const { db, ZimaOSAgentProfile } = await loadAstroDb();
-  for (const key of [sessionKey, agentKey]) {
-    if (!key) continue;
-    const [r] = await db.select().from(ZimaOSAgentProfile).where(eq(ZimaOSAgentProfile.sessionKey, key)).limit(1);
-    if (r) {
-      zimaProfileRow = {
-        sessionKey: r.sessionKey,
-        displayName: r.displayName ?? null,
-        roleTitle: r.roleTitle ?? null,
-        bio: r.bio ?? null,
-        avatarUrl: r.avatarUrl ?? null,
-        avatarEmoji: r.avatarEmoji ?? null,
-      };
-      break;
-    }
-  }
-} catch {
-  /* profil optionnel */
-}
-
 const modelFromInstruction = instructionRow ? String(instructionRow.model || '').trim() : '';
-/** Modèle par défaut affiché / éditable côté Forge (base) — sans instruction, repli sur le modèle gateway si connu. */
-const forgeDefaultModel = modelFromInstruction || (agentInfo?.model ? String(agentInfo.model).trim() : '');
+/** Modèle par défaut affiché / éditable côté Forge (base). */
+const forgeDefaultModel = modelFromInstruction;
 const statusFromInstruction = instructionRow
   ? Number(instructionRow.enabled) === 1
     ? 'actif'
@@ -97,11 +60,11 @@ const statusFromInstruction = instructionRow
 
 const agentLike = {
   id: agentKey,
-  name: agentInfo?.name || displayName || agentKey,
-  status: agentInfo?.status || statusFromInstruction || 'non enregistré en base',
-  model: agentInfo?.model ? String(agentInfo.model) : modelFromInstruction || '—',
+  name: displayName || agentKey,
+  status: statusFromInstruction || 'non enregistré en base',
+  model: modelFromInstruction || '—',
 };
-const teamProfile = mergeZimaOSTeamProfile(agentLike, zimaProfileRow);
+const teamProfile = buildAgentTeamProfile(agentLike);
 
 let subagentsList: { agentId: string; model: string; enabled: number; projectLabel: string }[] = [];
 try {
@@ -121,8 +84,6 @@ function formatInstructionUpdatedAt(v) {
   }
 }
 
-/** Métriques live gateway si disponibles ; sinon état issu de la base Forge (instruction agent). */
-let runtimeSource = 'forge';
 let agentRuntimeJson = {
   status: '—',
   model: '—',
@@ -131,17 +92,7 @@ let agentRuntimeJson = {
   lastSeen: '—',
 };
 
-if (agentInfo) {
-  runtimeSource = 'gateway';
-  agentRuntimeJson = {
-    status: agentInfo.status,
-    model: String(agentInfo.model || '—'),
-    totalTokens: agentInfo.totalTokens ?? 0,
-    estimatedCostUsd: agentInfo.estimatedCostUsd ?? 0,
-    lastSeen: agentInfo.lastSeen,
-  };
-} else if (instructionRow) {
-  runtimeSource = 'forge';
+if (instructionRow) {
   const en = Number(instructionRow.enabled) === 1;
   agentRuntimeJson = {
     status: en ? 'actif (Forge)' : 'désactivé (Forge)',
@@ -151,7 +102,6 @@ if (agentInfo) {
     lastSeen: formatInstructionUpdatedAt(instructionRow.updatedAt),
   };
 } else {
-  runtimeSource = 'forge';
   agentRuntimeJson = {
     status: 'non enregistré',
     model: '—',
@@ -189,9 +139,7 @@ function statusBadge(status: string) {
       client:load
       teamProfile={teamProfile}
       displayCode={id || agentKey}
-      sessionKey={sessionKey}
       agentRuntime={agentRuntimeJson}
-      runtimeSource={runtimeSource}
       hasForgeInstruction={Boolean(instructionRow)}
       subagents={subagentsList}
       parentAgentId={parentAgentId}
@@ -205,7 +153,7 @@ function statusBadge(status: string) {
       subagentCount={subagentsList.length}
     />
 
-    <AgentSwarmCommandCenter client:load agentId={agentKey} sessionKey={sessionKey} />
+    <AgentSwarmCommandCenter client:load agentId={agentKey} />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-5">
@@ -223,7 +171,7 @@ function statusBadge(status: string) {
               </div>
             </div>
           </div>
-          <AgentMissionJournal client:load initialTasks={missionTasksJson} sessionKey={sessionKey} syncAgentId={agentKey} />
+          <AgentMissionJournal client:load initialTasks={missionTasksJson} syncAgentId={agentKey} />
         </div>
 
         <!-- Anomalies -->
@@ -302,14 +250,14 @@ function statusBadge(status: string) {
 
       <!-- Colonne pilotage -->
       <div class="space-y-5">
-        {(agentInfo?.raw?.model != null || instructionRow) && (
+        {instructionRow && (
           <AgentSteerForm
             client:load
-            sessionKey={sessionKey}
-            currentModel={agentInfo?.raw?.model != null ? agentInfo.raw.model : String(instructionRow?.model ?? '')}
+            agentId={agentKey}
+            currentModel={String(instructionRow?.model ?? '')}
           />
         )}
-        {(agentInfo || instructionRow) && <AgentDirectiveForm client:load sessionKey={sessionKey} />}
+        {instructionRow && <AgentDirectiveForm client:load agentId={agentKey} />}
       </div>
     </div>
 

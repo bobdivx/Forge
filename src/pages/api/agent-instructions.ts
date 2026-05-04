@@ -1,11 +1,7 @@
 import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
 import { loadAstroDb } from '../../lib/load-astro-db';
-import {
-  getInitialSystemPrompt,
-} from '../../lib/agent-instruction-defaults';
 import { SWARM_WORK_PROTOCOL_SUMMARY } from '../../lib/forge-agent-protocol';
-import { provisionAgentInZimaOS } from '../../lib/zimaos-agent-provision';
 import { getAllConfig } from '../../lib/config-db';
 
 /** GET  /api/agent-instructions         → liste tous les agents
@@ -55,19 +51,6 @@ export const PUT: APIRoute = async ({ request }) => {
   await db.update(AgentInstruction)
     .set(updateData)
     .where(eq(AgentInstruction.agentId, agentId));
-
-  // Provisioning ZimaOS pour refléter le changement immédiatement
-  if (model !== undefined || systemPrompt !== undefined) {
-    const existing = await db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentId)).limit(1);
-    if (existing.length) {
-      await provisionAgentInZimaOS({
-        agentId: existing[0].agentId,
-        model: existing[0].model,
-        filePath: '',
-        systemPrompt: existing[0].systemPrompt,
-      });
-    }
-  }
 
   return new Response(JSON.stringify({ ok: true, agentId }), {
     headers: { 'Content-Type': 'application/json' },
@@ -119,15 +102,7 @@ export const POST: APIRoute = async ({ request }) => {
     updatedAt: new Date(),
   });
 
-  // Provisioning ZimaOS (Push de la config DB vers le gateway)
-  const provision = await provisionAgentInZimaOS({
-    agentId,
-    model,
-    filePath: '', // On passe vide pour signaler le mode DB
-    systemPrompt: prompt,
-  });
-
-  return new Response(JSON.stringify({ ok: true, agentId, provision }), {
+  return new Response(JSON.stringify({ ok: true, agentId }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });

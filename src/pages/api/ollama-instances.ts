@@ -21,7 +21,16 @@ type OllamaInstanceRow = {
 };
 
 function normalizeBase(url: string): string {
-  return String(url || '').trim().replace(/\/$/, '').replace(/\/v1$/i, '').replace(/\/api$/i, '');
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`;
+  try {
+    const parsed = new URL(withProtocol.replace(/\/v1$/i, '').replace(/\/api$/i, ''));
+    if (parsed.hostname === '0.0.0.0') parsed.hostname = '127.0.0.1';
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return withProtocol.replace(/\/$/, '').replace(/\/v1$/i, '').replace(/\/api$/i, '');
+  }
 }
 
 async function probeOllamaBase(base: string): Promise<OllamaHealthProbe> {

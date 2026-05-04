@@ -242,7 +242,7 @@ export default function IntegrationTab({
                 <datalist id={datalistId}>
                   {suggestions.map((s) => (
                     <option key={s.hostPath} value={s.hostPath}>
-                      {`ZimaOS : ${s.containerPath}`}
+                      {`Conteneur : ${s.containerPath}`}
                     </option>
                   ))}
                 </datalist>
@@ -298,8 +298,8 @@ export default function IntegrationTab({
 
             <div class="pt-2 space-y-2">
               <Field
-                label="Chemin côté agent / conteneur (ZimaOS)"
-                hint="Le bind mount vu depuis Linux dans le conteneur (ex. /mnt/GitHub). Forge traduit les chemins locaux vers cette racine pour les commandes agents. Souvent différent du chemin Windows de la racine hôte. Vide → défaut /mnt/GitHub."
+                label="Chemin côté conteneur Docker"
+                hint="Le bind mount vu depuis Linux dans le conteneur (ex. /mnt/GitHub). Forge traduit les chemins locaux vers cette racine pour les commandes de build et d’inspection. Souvent différent du chemin Windows de la racine hôte. Vide → défaut /mnt/GitHub."
               >
                 <input
                   type="text"

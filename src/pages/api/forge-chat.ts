@@ -31,6 +31,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const { db, ForgeChatSession, ForgeChatMessage, ForgeChatStep } = await loadAstroDb();
     const now = new Date();
+    const turnId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const existing = await db.select().from(ForgeChatSession).where(eq(ForgeChatSession.id, sessionId));
     if (!existing.length) {
       await db.insert(ForgeChatSession).values({
@@ -47,6 +48,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       await db.update(ForgeChatSession).set({ updatedAt: now }).where(eq(ForgeChatSession.id, sessionId));
     }
 
+    // Le polling de la page Discussion lit les steps par session. On repart à zéro
+    // pour éviter d'afficher les anciennes cartes d'activité pendant un nouveau tour.
+    await db.delete(ForgeChatStep).where(eq(ForgeChatStep.sessionId, sessionId));
+
     await db.insert(ForgeChatMessage).values({
       sessionId,
       role: 'user',
@@ -60,7 +65,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       message, 
       modelHint, 
       projectId,
-      sessionId: sessionId 
+      sessionId: sessionId,
+      turnId,
     });
     await db.insert(ForgeChatMessage).values({
       sessionId,
@@ -68,7 +74,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       content: orchestrated.reply,
       provider: orchestrated.provider,
       model: orchestrated.model,
-      meta: orchestrated.toolResult ? JSON.stringify({ toolResult: orchestrated.toolResult }) : null,
+      meta: JSON.stringify({ turnId, steps: orchestrated.steps, toolResult: orchestrated.toolResult || null }),
       createdAt: new Date(),
     });
 
@@ -95,6 +101,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         ok: true,
         via: 'forge-chat',
         sessionId,
+        turnId,
         result: { status: 'completed', reply: orchestrated.reply },
         steps: orchestrated.steps,
       }),
@@ -133,15 +140,23 @@ export const GET: APIRoute = async ({ request, locals }) => {
       JSON.stringify({
         ok: true,
         sessionId,
-        messages: rows.reverse().map((r) => ({
-          id: `forge-msg-${r.id}`,
-          role: r.role,
-          text: r.content,
-          at: new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          meta: r.meta || null,
-          provider: r.provider || null,
-          model: r.model || null,
-        })),
+        messages: rows.reverse().map((r) => {
+          let meta: Record<string, unknown> = {};
+          try {
+            meta = r.meta ? JSON.parse(r.meta) as Record<string, unknown> : {};
+          } catch {}
+          return {
+            id: `forge-msg-${r.id}`,
+            role: r.role,
+            text: r.content,
+            at: new Date(r.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            meta: r.meta || null,
+            provider: r.provider || null,
+            model: r.model || null,
+            steps: Array.isArray(meta.steps) ? meta.steps : undefined,
+            turnId: typeof meta.turnId === 'string' ? meta.turnId : undefined,
+          };
+        }),
         steps,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },

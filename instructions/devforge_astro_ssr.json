@@ -1,5 +1,5 @@
 {
-  "project": "ZimaDev_Astro_SSR",
+  "project": "Ageton_Astro_SSR",
   "engine": "ollama",
   "mode": "SSR",
   "workspace": "media/Github",

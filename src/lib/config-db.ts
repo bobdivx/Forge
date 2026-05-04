@@ -29,7 +29,7 @@ export type ForgeConfig = {
   zimaosSshUser: string;
   /** Auth SSH: key | password (mot de passe non stocké ici). */
   zimaosSshAuth: string;
-  /** Chemin clé privée lisible par le conteneur ZimaDev. */
+  /** Chemin clé privée lisible par le conteneur Ageton. */
   zimaosSshKeyPath: string;
   /** Contenu de la clé privée (si stockée en DB). */
   zimaosSshKeyContent: string;
@@ -124,15 +124,40 @@ const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);
 
 /**
  * Origine HTTP pour l’API Ollama (`GET …/api/tags`).
- * Ordre : Paramètres (`ollamaUrl`) → `OLLAMA_HOST` → `OLLAMA_ORIGIN` → localhost en dev uniquement.
+ * Ordre : Paramètres (`ollamaUrl`) → instance Ollama activée → `OLLAMA_HOST` → `OLLAMA_ORIGIN` → localhost en dev.
  */
 export async function getOllamaOriginResolved(): Promise<string> {
+  const normalizeOrigin = (raw: string): string => {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+    try {
+      const url = new URL(withProtocol);
+      if (url.hostname === '0.0.0.0') url.hostname = '127.0.0.1';
+      return `${url.protocol}//${url.host}`;
+    } catch {
+      return withProtocol.replace(/\/+$/, '');
+    }
+  };
   const fromDb = (await getConfig('ollamaUrl')).trim();
-  return (
-    fromDb ||
+  if (fromDb) return normalizeOrigin(fromDb);
+
+  let fromInstance = '';
+  try {
+    const { db, OllamaInstance } = await loadAstroDb();
+    if (OllamaInstance) {
+      const rows = await db.select().from(OllamaInstance).where(eq(OllamaInstance.enabled, 1)).limit(1);
+      fromInstance = String(rows[0]?.url || '').trim();
+    }
+  } catch {
+    fromInstance = '';
+  }
+  if (fromInstance) return normalizeOrigin(fromInstance);
+
+  return normalizeOrigin(
     process.env.OLLAMA_HOST?.trim() ||
     process.env.OLLAMA_ORIGIN?.trim() ||
-    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : '')
+    (process.env.NODE_ENV !== 'production' ? 'http://127.0.0.1:11434' : ''),
   );
 }
 

@@ -1,15 +1,9 @@
 import type { APIRoute } from 'astro';
 import { eq } from 'drizzle-orm';
-import {
-  fetchZimaOSSessionsPayload,
-  normalizeZimaOSSessions,
-  mapSessionToAgentRow,
-} from '../../lib/zimaos-gateway';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import type { AgentTaskTerminalStatus } from '../../lib/forge-task-status-sync';
 import { finalizeAgentTaskStatus } from '../../lib/forge-task-status-sync';
 import { insertForgeActivityLog } from '../../lib/forge-activity-log';
-import { scanZimaOSForForgeDoneSignals } from '../../lib/forge-zimaos-done-scan';
 
 /** POST { agentId, task, status? } — crée une tâche en base. */
 export const POST: APIRoute = async ({ request }) => {
@@ -83,19 +77,11 @@ type TaskRow = {
   status: string;
   createdAt: string;
   updatedAt: string;
-  source: 'db' | 'gateway';
+  source: 'db';
 };
 
-export const GET: APIRoute = async ({ locals }) => {
-  // Garde-fou d'autonomie:
-  // quand le scheduler est arrêté, on continue à synchroniser les FORGE_DONE
-  // au rythme du journal (throttle interne dans le scanner).
-  await scanZimaOSForForgeDoneSignals().catch(() => {
-    /* scan best-effort */
-  });
-
+export const GET: APIRoute = async () => {
   const { db, AgentTask, desc } = await loadAstroDb();
-  const email = locals.user?.email as string | undefined;
 
   let dbTasks: TaskRow[] = [];
   try {
@@ -113,28 +99,7 @@ export const GET: APIRoute = async ({ locals }) => {
     /* Astro DB indisponible ou table absente */
   }
 
-  const gatewayTasks: TaskRow[] = [];
-  if (email) {
-    const result = await fetchZimaOSSessionsPayload(email);
-    if (result.ok) {
-      const sessions = normalizeZimaOSSessions(result.data) as Record<string, unknown>[];
-      const rows = sessions.map(mapSessionToAgentRow);
-      rows.sort((a, b) => b.lastSeenMs - a.lastSeenMs);
-      for (const r of rows.slice(0, 40)) {
-        gatewayTasks.push({
-          id: `gw-${r.id}`,
-          agentId: r.name,
-          task: `Session ZimaOS · ${r.model !== '—' ? r.model : String(r.id).slice(0, 12)}`,
-          status: r.status === 'actif' ? 'running' : 'success',
-          createdAt: new Date(r.lastSeenMs).toISOString(),
-          updatedAt: new Date(r.lastSeenMs).toISOString(),
-          source: 'gateway',
-        });
-      }
-    }
-  }
-
-  const merged = [...gatewayTasks, ...dbTasks];
+  const merged = [...dbTasks];
   merged.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
@@ -142,7 +107,6 @@ export const GET: APIRoute = async ({ locals }) => {
   return new Response(
     JSON.stringify({
       tasks: merged,
-      gatewayCount: gatewayTasks.length,
       dbCount: dbTasks.length,
     }),
     {

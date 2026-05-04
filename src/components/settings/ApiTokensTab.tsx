@@ -76,15 +76,15 @@ export default function ApiTokensTab({
           <code class="text-gray-500">githubToken</code> et{' '}
           <code class="text-gray-500">vercelToken</code>. Chaque ligne des jetons personnalisés devient une entrée dans{' '}
           <code class="text-gray-500">custom</code> (clé normalisée en MAJUSCULES, ex.{' '}
-          <code class="text-gray-500">ma_cle</code> → <code class="text-gray-500">MA_CLE</code>). Les agents sur le réseau
+          <code class="text-gray-500">ma_cle</code> → <code class="text-gray-500">MA_CLE</code>). Les services sur le réseau
           local récupèrent le tout via{' '}
-          <code class="text-gray-500">GET /api/agent-api-secrets</code> (y compris ZimaOS, voir la doc agents /
+          <code class="text-gray-500">GET /api/agent-api-secrets</code> (voir la doc agents /
           FORGE_API_CONTRACT).
         </p>
         <div class="space-y-4">
           <FormField
             label="Jeton API Forge (agents)"
-            hint="Utilisé par ZimaOS/agents pour appeler les endpoints Forge depuis une machine distante. Header accepté : Authorization: Bearer <token>."
+            hint="Utilisé par les services autorisés pour appeler les endpoints Forge depuis une machine distante. Header accepté : Authorization: Bearer <token>."
           >
             <div class="space-y-2">
               <input

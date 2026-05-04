@@ -111,7 +111,7 @@ export default function AgentInstructionEditor() {
       const nextModelsRaw = Array.isArray(rModels)
         ? rModels
             .map((m: { id?: string; name?: string }) =>
-              String(m.id || m.name || '').replace(/^zimaos\//i, '').trim(),
+              String(m.id || m.name || '').replace(/^[a-z0-9_-]+\//i, '').trim(),
             )
             .filter(Boolean)
         : [];

@@ -67,8 +67,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         pending, 
         recentDone: recentDone.slice(0, 12) 
       },
-      // Mock ZimaOS object for frontend compatibility (deprecated)
-      zimaos: {
+      runtime: {
         matched: !!instruction,
         status: instruction?.enabled ? 'actif' : 'en pause',
         model: instruction?.model || '—',

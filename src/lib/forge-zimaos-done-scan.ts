@@ -105,7 +105,8 @@ export async function scanZimaOSForForgeDoneSignals(
       try {
         // On essaie de trouver le projectId associé à cette session/tâche
         const { db, AgentTask, Request, eq, desc } = await loadAstroDb();
-        const agentId = String(s.agentId || s.sessionKey || '').trim();
+        const session = s as Record<string, unknown>;
+        const agentId = String(session.agentId || session.sessionKey || '').trim();
         
         // On cherche la dernière tâche "running" de cet agent pour deviner le projet
         const runningTasks = await db.select().from(AgentTask)

@@ -9,6 +9,8 @@ export type ForgeOrchestratorInput = {
   modelHint?: string;
   projectId?: number;
   sessionId?: string;
+  turnId?: string;
+  onStep?: (step: ForgeOrchestratorOutput['steps'][0]) => void | Promise<void>;
 };
 
 export type ForgeOrchestratorOutput = {
@@ -25,7 +27,132 @@ type RuleAudit = {
   notes?: string;
 };
 
+function truncateForStep(value: string, max = 1200): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1)}…`;
+}
 
+function countLines(value: string): number {
+  if (!value) return 0;
+  return value.split(/\r?\n/).length;
+}
+
+function stringifyStepPayload(payload: unknown): string {
+  return typeof payload === 'string' ? payload : JSON.stringify(payload);
+}
+
+function buildToolStartStep(toolCall: ForgeToolCall, turnId?: string, stepId?: string): ForgeOrchestratorOutput['steps'][0] {
+  if (toolCall.tool === 'read_file') {
+    return {
+      type: 'file',
+      label: `Lecture ${toolCall.path}`,
+      payload: stringifyStepPayload({ kind: 'read_file', path: toolCall.path, turnId, stepId }),
+      status: 'running',
+    };
+  }
+  if (toolCall.tool === 'write_file') {
+    return {
+      type: 'file',
+      label: `Modification ${toolCall.path}`,
+      payload: stringifyStepPayload({
+        kind: 'write_file',
+        path: toolCall.path,
+        lines: countLines(toolCall.content),
+        preview: truncateForStep(toolCall.content, 800),
+        turnId,
+        stepId,
+      }),
+      status: 'running',
+    };
+  }
+  if (toolCall.tool === 'exec') {
+    const isSearch = /\b(rg|grep|find|select-string)\b/i.test(toolCall.command);
+    return {
+      type: isSearch ? 'search' : 'command',
+      label: `${isSearch ? 'Recherche' : 'Commande'} ${truncateForStep(toolCall.command, 80)}`,
+      payload: stringifyStepPayload({ kind: 'exec', command: toolCall.command, turnId, stepId }),
+      status: 'running',
+    };
+  }
+  if (toolCall.tool === 'update_request_status') {
+    return {
+      type: 'task',
+      label: `Mise à jour demande #${toolCall.requestId}`,
+      payload: stringifyStepPayload({ kind: 'update_request_status', requestId: toolCall.requestId, status: toolCall.status, turnId, stepId }),
+      status: 'running',
+    };
+  }
+  return {
+    type: 'command',
+    label: `Redémarrage ${toolCall.containerName || 'gateway'}`,
+    payload: stringifyStepPayload({ kind: 'restart_gateway', containerName: toolCall.containerName || null, turnId, stepId }),
+    status: 'running',
+  };
+}
+
+function buildToolResultStep(toolCall: ForgeToolCall, toolResult: ForgeToolResult, turnId?: string, stepId?: string): ForgeOrchestratorOutput['steps'][0] {
+  const output = String(toolResult.output || '');
+  const error = String(toolResult.error || '');
+  const basePayload = {
+    kind: toolCall.tool,
+    ok: toolResult.ok,
+    output: truncateForStep(output, 4000),
+    error: truncateForStep(error, 1600),
+    diff: truncateForStep(String(toolResult.diff || ''), 8000),
+    addedLines: toolResult.addedLines,
+    deletedLines: toolResult.deletedLines,
+    durationMs: toolResult.durationMs,
+    exitCode: toolResult.exitCode,
+    turnId,
+    stepId,
+  };
+
+  if (toolCall.tool === 'read_file') {
+    return {
+      type: 'file',
+      label: toolResult.ok ? `Lu ${toolCall.path}` : `Lecture échouée ${toolCall.path}`,
+      payload: stringifyStepPayload({ ...basePayload, path: toolCall.path, lines: countLines(output) }),
+      status: toolResult.ok ? 'completed' : 'failed',
+    };
+  }
+  if (toolCall.tool === 'write_file') {
+    return {
+      type: 'file',
+      label: toolResult.ok ? `Modifié ${toolCall.path}` : `Modification échouée ${toolCall.path}`,
+      payload: stringifyStepPayload({
+        ...basePayload,
+        path: toolCall.path,
+        lines: countLines(toolCall.content),
+        beforeLines: countLines(toolResult.beforeContent || ''),
+        afterLines: countLines(toolResult.afterContent || ''),
+      }),
+      status: toolResult.ok ? 'completed' : 'failed',
+    };
+  }
+  if (toolCall.tool === 'exec') {
+    const isSearch = /\b(rg|grep|find|select-string)\b/i.test(toolCall.command);
+    return {
+      type: isSearch ? 'search' : 'command',
+      label: toolResult.ok ? `${isSearch ? 'Recherche terminée' : 'Commande terminée'}` : `${isSearch ? 'Recherche échouée' : 'Commande échouée'}`,
+      payload: stringifyStepPayload({ ...basePayload, command: toolCall.command }),
+      status: toolResult.ok ? 'completed' : 'failed',
+    };
+  }
+  if (toolCall.tool === 'update_request_status') {
+    return {
+      type: 'task',
+      label: toolResult.ok ? `Demande #${toolCall.requestId} mise à jour` : `Mise à jour demande échouée`,
+      payload: stringifyStepPayload({ ...basePayload, requestId: toolCall.requestId, status: toolCall.status }),
+      status: toolResult.ok ? 'completed' : 'failed',
+    };
+  }
+  return {
+    type: 'command',
+    label: toolResult.ok ? 'Redémarrage terminé' : 'Redémarrage échoué',
+    payload: stringifyStepPayload({ ...basePayload, containerName: toolCall.containerName || null }),
+    status: toolResult.ok ? 'completed' : 'failed',
+  };
+}
 
 async function resolveAvailableModel(preferred: string): Promise<{ origin: string, model: string }> {
   const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
@@ -168,17 +295,31 @@ function extractReasoning(reply: string): { cleaned: string; reasoning: string |
 export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promise<ForgeOrchestratorOutput & { plan?: ForgePlanItem[] | null }> {
   const steps: ForgeOrchestratorOutput['steps'] = [];
   const { db, ForgeChatStep } = await loadAstroDb();
+  const turnId = input.turnId;
 
   const persistStep = async (s: ForgeOrchestratorOutput['steps'][0]) => {
-    steps.push(s);
+    const payload =
+      s.payload && typeof s.payload === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(s.payload);
+              return JSON.stringify({ ...parsed, turnId });
+            } catch {
+              return s.payload;
+            }
+          })()
+        : s.payload;
+    const step = { ...s, payload };
+    steps.push(step);
+    await input.onStep?.(step);
     if (input.sessionId) {
       try {
         await db.insert(ForgeChatStep).values({
           sessionId: input.sessionId,
-          type: s.type,
-          label: s.label,
-          payload: typeof s.payload === 'string' ? s.payload : JSON.stringify(s.payload),
-          status: s.status,
+          type: step.type,
+          label: step.label,
+          payload: typeof step.payload === 'string' ? step.payload : JSON.stringify(step.payload),
+          status: step.status,
           createdAt: new Date(),
         });
       } catch (e) {
@@ -224,7 +365,7 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     const rawReply = typeof (data.message as any)?.content === 'string' ? String((data.message as any).content).trim() : '';
     
     // Extraction des composants
-    let { cleaned, audit } = extractRuleAudit(rawReply);
+    let { cleaned } = extractRuleAudit(rawReply);
     let { cleaned: afterReasoning, reasoning } = extractReasoning(cleaned);
     let { cleaned: afterPlan, plan } = extractForgePlan(afterReasoning);
     const toolCall = parseInlineToolDirective(afterPlan);
@@ -235,18 +376,13 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     if (plan) finalPlan = plan;
 
     if (toolCall) {
-      const label = toolCall.tool === 'exec' ? `Commande: ${(toolCall.command || '').slice(0, 40)}...` : `Tool: ${toolCall.tool}`;
-      await persistStep({ type: 'tool', label, payload: JSON.stringify(toolCall), status: 'running' });
+      const stepId = `${turnId || 'turn'}-tool-${turn}-${Date.now()}`;
+      await persistStep(buildToolStartStep(toolCall, turnId, stepId));
       
       const toolResult = await runForgeTool(toolCall);
       lastToolResult = toolResult;
       
-      await persistStep({
-        type: 'tool',
-        label: toolResult.ok ? 'Action terminée' : 'Échec de l\'action',
-        payload: toolResult.ok ? (String(toolResult.output || '').slice(0, 1000) || 'ok') : toolResult.error || 'error',
-        status: toolResult.ok ? 'completed' : 'failed',
-      });
+      await persistStep(buildToolResultStep(toolCall, toolResult, turnId, stepId));
 
       // On boucle avec le résultat de l'outil
       currentMessages.push({ role: 'assistant', content: rawReply });

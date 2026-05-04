@@ -18,115 +18,264 @@ interface Props {
   currentSteps?: any[];
 }
 
-function StepLog({ steps }: { steps: ChatMessage['steps'] }) {
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const [groupExpanded, setGroupExpanded] = useState(false);
-  if (!steps || steps.length === 0) return null;
+type StepItem = NonNullable<ChatMessage['steps']>[number] & {
+  id?: number;
+  createdAt?: string;
+};
 
-  const getIcon = (s: any) => {
-    const l = s.label?.toLowerCase() || '';
-    if (s.type === 'thought' || l.includes('thought') || l.includes('réfléchi')) return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
-    );
-    if (l.includes('explor')) return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-    );
-    if (l.includes('modif') || l.includes('edit')) return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-    );
-    if (l.includes('command') || l.includes('ran') || s.type === 'tool') return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-    );
-    if (s.type === 'llm' || l.includes('plan')) return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-    );
-    return (
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-    );
-  };
+type ParsedPayload = Record<string, unknown> | null;
 
-  const getLabel = (s: any) => {
-    if (s.label?.toLowerCase().includes('plan_detected')) return 'Plan de travail détecté';
-    if (s.label?.toLowerCase().includes('ollama_chat')) return 'Génération de la réponse';
-    return s.label;
-  };
+function parseStepPayload(payload: unknown): ParsedPayload {
+  if (!payload || payload === 'ok' || payload === 'running') return null;
+  if (typeof payload === 'object') return payload as ParsedPayload;
+  if (typeof payload !== 'string') return null;
+  try {
+    const parsed = JSON.parse(payload);
+    return parsed && typeof parsed === 'object' ? parsed as ParsedPayload : null;
+  } catch {
+    return null;
+  }
+}
 
-  const visibleSteps = steps.filter(s => s.type !== 'policy' || s.label === 'plan_detected');
-  
-  // Groupement des outils consécutifs pour éviter le bruit
-  const toolSteps = visibleSteps.filter(s => s.type === 'tool');
-  const otherSteps = visibleSteps.filter(s => s.type !== 'tool');
+function payloadText(payload: unknown, parsed: ParsedPayload): string {
+  if (parsed) {
+    const diff = typeof parsed.diff === 'string' ? parsed.diff : '';
+    const output = typeof parsed.output === 'string' ? parsed.output : '';
+    const error = typeof parsed.error === 'string' ? parsed.error : '';
+    const preview = typeof parsed.preview === 'string' ? parsed.preview : '';
+    return diff || output || error || preview;
+  }
+  return typeof payload === 'string' && payload !== 'ok' && payload !== 'running' ? payload : '';
+}
+
+function basename(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() || path;
+}
+
+function StepIcon({ step }: { step: StepItem }) {
+  const label = String(step.label || '').toLowerCase();
+  if (step.type === 'thought') {
+    return <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>;
+  }
+  if (step.type === 'file' || label.includes('lecture') || label.includes('modif')) {
+    return <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>;
+  }
+  if (step.type === 'command' || step.type === 'tool' || label.includes('commande')) {
+    return <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+  }
+  if (step.type === 'search' || label.includes('recherche')) {
+    return <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>;
+  }
+  if (step.type === 'task' || label.includes('plan')) {
+    return <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 8l2 2 4-4" /></svg>;
+  }
+  return <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+}
+
+function stepTitle(step: StepItem, parsed: ParsedPayload): string {
+  const label = String(step.label || '');
+  if (label.toLowerCase().includes('plan_detected')) return 'Plan de travail détecté';
+  if (label.toLowerCase().includes('ollama_chat')) return step.status === 'running' ? 'Génère la réponse' : 'Réponse générée';
+  if (step.type === 'thought') return 'Réflexion de l’agent';
+  if (parsed?.path && typeof parsed.path === 'string') {
+    const file = basename(parsed.path);
+    const added = typeof parsed.addedLines === 'number' ? parsed.addedLines : 0;
+    const deleted = typeof parsed.deletedLines === 'number' ? parsed.deletedLines : 0;
+    const lines = added || deleted ? ` +${added} -${deleted}` : typeof parsed.lines === 'number' && parsed.lines > 0 ? ` +${parsed.lines}` : '';
+    if (parsed.kind === 'write_file') return `${file}${lines}`;
+    if (parsed.kind === 'read_file') return `Lecture ${file}`;
+  }
+  if (parsed?.command && typeof parsed.command === 'string') {
+    if (step.type === 'search') return step.status === 'running' ? 'Recherche dans le projet' : 'Recherche terminée';
+    return step.status === 'running' ? 'Lance une commande' : label || 'Commande terminée';
+  }
+  return label || 'Étape agent';
+}
+
+function stepSubtitle(step: StepItem, parsed: ParsedPayload): string {
+  if (parsed?.path && typeof parsed.path === 'string') return parsed.path;
+  if (parsed?.command && typeof parsed.command === 'string') return parsed.command;
+  if (step.type === 'llm') return String(step.payload || '').replace(/^"|"$/g, '');
+  return '';
+}
+
+function statusLabel(status: string): string {
+  if (status === 'running') return 'en cours';
+  if (status === 'failed') return 'erreur';
+  return 'terminé';
+}
+
+function statusClass(status: string): string {
+  if (status === 'running') return 'border-blue-200 bg-blue-50 text-blue-700';
+  if (status === 'failed') return 'border-red-200 bg-red-50 text-red-700';
+  return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
+function stepIdentity(step: StepItem, fallback: number): string {
+  const parsed = parseStepPayload(step.payload);
+  const id = parsed?.stepId;
+  return typeof id === 'string' && id ? id : `${fallback}-${step.type}-${step.label}`;
+}
+
+function coalesceSteps(steps: StepItem[]): StepItem[] {
+  const order: string[] = [];
+  const byId = new Map<string, StepItem>();
+  steps.forEach((step, idx) => {
+    const id = stepIdentity(step, idx);
+    if (!byId.has(id)) order.push(id);
+    byId.set(id, step);
+  });
+  return order.map((id) => byId.get(id)).filter(Boolean) as StepItem[];
+}
+
+function DiffBlock({ diff }: { diff: string }) {
+  return (
+    <pre class="custom-scrollbar max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+      {diff.split('\n').map((line, idx) => {
+        const cls = line.startsWith('+++') || line.startsWith('---')
+          ? 'text-gray-400'
+          : line.startsWith('+')
+            ? 'bg-emerald-950/60 text-emerald-200'
+            : line.startsWith('-')
+              ? 'bg-red-950/60 text-red-200'
+              : 'text-gray-200';
+        return <span key={idx} class={`block px-1 ${cls}`}>{line || ' '}</span>;
+      })}
+    </pre>
+  );
+}
+
+function StepCard({
+  step,
+  index,
+  expanded,
+  onToggle,
+  copyToClipboard,
+}: {
+  step: StepItem;
+  index: number;
+  expanded: boolean;
+  onToggle: () => void;
+  copyToClipboard: (text: string) => Promise<void>;
+}) {
+  const parsed = parseStepPayload(step.payload);
+  const detail = payloadText(step.payload, parsed);
+  const title = stepTitle(step, parsed);
+  const subtitle = stepSubtitle(step, parsed);
+  const hasDetail = detail.length > 0;
+  const hasDiff = typeof parsed?.diff === 'string' && parsed.diff.length > 0;
+  const durationMs = typeof parsed?.durationMs === 'number' ? parsed.durationMs : null;
+  const exitCode = typeof parsed?.exitCode === 'number' ? parsed.exitCode : null;
+  const accentClass = step.status === 'failed' ? 'border-l-red-400' : step.status === 'running' ? 'border-l-blue-400' : 'border-l-emerald-400';
+  const iconClass = step.status === 'failed' ? 'text-red-600 bg-red-50' : step.status === 'running' ? 'text-blue-600 bg-blue-50' : 'text-gray-600 bg-gray-50';
 
   return (
-    <div class="mt-4 space-y-2 border-l-2 border-gray-100 pl-3">
-      {otherSteps.map((s, idx) => {
-        const isExpanded = expandedIdx === idx;
-        const isThought = s.type === 'thought';
-        const hasPayload = s.payload && s.payload !== 'ok' && s.payload !== 'running';
-        
-        return (
-          <div key={idx} class={`group flex flex-col gap-1 ${isThought ? 'bg-amber-50/50 rounded-lg p-2 border border-amber-100/50 mb-2' : ''}`}>
-            <div 
-              class={`flex cursor-pointer items-center gap-2 text-[12px] transition-colors ${isExpanded ? (isThought ? 'text-amber-700' : 'text-blue-600') : 'text-gray-500 hover:text-gray-800'}`}
-              onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-            >
-              <span class={`flex h-4 w-4 items-center justify-center rounded ${isThought ? 'bg-amber-100 text-amber-600' : 'bg-gray-50 group-hover:bg-gray-100'}`}>
-                {getIcon(s)}
-              </span>
-              <span class={`flex-1 truncate font-mono ${isThought ? 'font-semibold italic' : ''}`}>
-                {getLabel(s)}
-                {!isExpanded && hasPayload && (
-                  <span class="ml-2 text-gray-300 opacity-60">({(s.payload as string).slice(0, 40)}...)</span>
-                )}
-              </span>
-              {hasPayload && (
-                <svg class={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-            </div>
-            
-            {(isExpanded || isThought) && hasPayload && (
-              <div class={`mb-2 ml-6 mt-1 overflow-hidden rounded-lg border p-2 shadow-inner ${isThought ? 'bg-white border-amber-50' : 'bg-gray-50/50 border-gray-100'}`}>
-                <pre class={`max-h-60 overflow-y-auto font-mono text-[11px] leading-relaxed ${isThought ? 'text-amber-800/80 whitespace-pre-wrap' : 'text-gray-600'}`}>
-                  {s.payload}
-                </pre>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {toolSteps.length > 0 && (
-        <div class="mt-2">
-          <button 
-            onClick={() => setGroupExpanded(!groupExpanded)}
-            class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <span class="flex h-4 w-4 items-center justify-center rounded bg-gray-100">
-               <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+    <div class={`overflow-hidden rounded-xl border border-gray-200 border-l-4 ${accentClass} bg-white shadow-sm`}>
+      <button
+        type="button"
+        class="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+        onClick={hasDetail ? onToggle : undefined}
+      >
+        <span class={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${iconClass}`}>
+          <StepIcon step={step} />
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="flex min-w-0 items-center gap-2">
+            <span class="truncate font-mono text-[12px] font-semibold text-gray-800">{title}</span>
+            <span class={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusClass(step.status)}`}>
+              {statusLabel(step.status)}
             </span>
-            {toolSteps.length} Action{toolSteps.length > 1 ? 's' : ''} technique{toolSteps.length > 1 ? 's' : ''}
-            <svg class={`h-3 w-3 transition-transform ${groupExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          
-          {groupExpanded && (
-            <div class="mt-2 space-y-1.5 ml-2 border-l border-gray-200 pl-3 animate-fade-in">
-              {toolSteps.map((s, idx) => (
-                <div key={idx} class="text-[11px] text-gray-500 font-mono flex items-center gap-2">
-                   <span class={`w-1.5 h-1.5 rounded-full ${s.status === 'completed' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                   {getLabel(s)}
-                   {s.payload && s.payload !== 'ok' && (
-                     <span class="text-gray-300 italic truncate">({(s.payload as string).slice(0, 50)})</span>
-                   )}
-                </div>
-              ))}
+          </span>
+          {subtitle ? (
+            <span class="mt-0.5 block truncate font-mono text-[11px] text-gray-400">{subtitle}</span>
+          ) : null}
+          {durationMs !== null || exitCode !== null ? (
+            <span class="mt-1 flex flex-wrap gap-2 font-mono text-[10px] text-gray-400">
+              {exitCode !== null ? <span>exit {exitCode}</span> : null}
+              {durationMs !== null ? <span>{durationMs} ms</span> : null}
+            </span>
+          ) : null}
+        </span>
+        {hasDetail ? (
+          <svg class={`mt-1 h-4 w-4 shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+          </svg>
+        ) : null}
+      </button>
+      {hasDetail && expanded ? (
+        <div class="border-t border-gray-100 bg-gray-950 px-3 py-2">
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <span class="font-mono text-[10px] uppercase tracking-widest text-gray-500">{hasDiff ? 'diff' : 'sortie'}</span>
+            <div class="flex items-center gap-2">
+              {subtitle ? (
+                <button
+                  type="button"
+                  class="rounded border border-gray-800 px-2 py-0.5 font-mono text-[10px] text-gray-400 hover:border-gray-600 hover:text-gray-200"
+                  onClick={() => copyToClipboard(subtitle)}
+                >
+                  copier cible
+                </button>
+              ) : null}
+              <button
+                type="button"
+                class="rounded border border-gray-800 px-2 py-0.5 font-mono text-[10px] text-gray-400 hover:border-gray-600 hover:text-gray-200"
+                onClick={() => copyToClipboard(detail)}
+              >
+                copier
+              </button>
+              <span class="font-mono text-[10px] text-gray-600">step #{index + 1}</span>
             </div>
+          </div>
+          {hasDiff ? (
+            <DiffBlock diff={detail} />
+          ) : (
+            <pre class="custom-scrollbar max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-gray-100">{detail}</pre>
           )}
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+function StepLog({ steps, copyToClipboard }: { steps: ChatMessage['steps']; copyToClipboard: (text: string) => Promise<void> }) {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [allExpanded, setAllExpanded] = useState(false);
+  if (!steps || steps.length === 0) return null;
+
+  const visibleSteps = coalesceSteps(steps.filter((s) => s.type !== 'policy' || s.label === 'plan_detected') as StepItem[]);
+  if (visibleSteps.length === 0) return null;
+
+  const runningCount = visibleSteps.filter((s) => s.status === 'running').length;
+  const failedCount = visibleSteps.filter((s) => s.status === 'failed').length;
+
+  return (
+    <div class="mt-4 space-y-2">
+      <div class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+        <span class="h-px flex-1 bg-gray-100" />
+        <span>{visibleSteps.length} étape{visibleSteps.length > 1 ? 's' : ''}</span>
+        {runningCount > 0 ? <span class="text-blue-500">{runningCount} en cours</span> : null}
+        {failedCount > 0 ? <span class="text-red-500">{failedCount} erreur{failedCount > 1 ? 's' : ''}</span> : null}
+        <button
+          type="button"
+          class="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] text-gray-400 hover:text-gray-700"
+          onClick={() => setAllExpanded((v) => !v)}
+        >
+          {allExpanded ? 'plier' : 'déplier'}
+        </button>
+        <span class="h-px flex-1 bg-gray-100" />
+      </div>
+      <div class="space-y-2">
+        {visibleSteps.map((step, idx) => (
+          <StepCard
+            key={stepIdentity(step, idx)}
+            step={step}
+            index={idx}
+            expanded={allExpanded || expandedIdx === idx || step.type === 'thought' || step.status === 'failed'}
+            onToggle={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
+            copyToClipboard={copyToClipboard}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -202,7 +351,7 @@ export default function ChatThread({
                     
                     <Markdown content={m.text} />
                     
-                    {m.steps && <StepLog steps={m.steps} />}
+                    {m.steps && <StepLog steps={m.steps} copyToClipboard={copyToClipboard} />}
                     
                     {m.role === 'assistant' && m.policy && m.policy.mode !== 'off' ? (
                       <div class="mt-4 flex items-center gap-2">
@@ -233,7 +382,7 @@ export default function ChatThread({
                 </div>
                 {currentSteps && currentSteps.length > 0 && (
                   <div class="animate-fade-in">
-                    <StepLog steps={currentSteps} />
+                    <StepLog steps={currentSteps} copyToClipboard={copyToClipboard} />
                   </div>
                 )}
               </div>

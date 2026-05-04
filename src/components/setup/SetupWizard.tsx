@@ -234,7 +234,7 @@ export default function SetupWizard() {
   return (
     <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
       <div class="px-6 sm:px-8 pt-8 pb-4 border-b border-gray-100">
-        <h1 class="text-2xl font-bold text-gray-900 mb-1">Bienvenue sur ZimaDev</h1>
+        <h1 class="text-2xl font-bold text-gray-900 mb-1">Bienvenue sur Ageton</h1>
         <p class="text-sm text-gray-500">
           Assistant de configuration initiale pour ZimaOS, Docker, Ollama et vos clés API. Vous pourrez tout modifier dans{' '}
           <span class="font-medium text-gray-700">Paramètres</span>.
@@ -361,7 +361,7 @@ export default function SetupWizard() {
                     class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20 font-mono"
                     value={cfg.zimaosSshKeyPath}
                     onInput={(e) => merge({ zimaosSshKeyPath: (e.target as HTMLInputElement).value })}
-                    placeholder="/run/secrets/zimadev_ssh_key"
+                    placeholder="/run/secrets/ageton_ssh_key"
                   />
                 </FormField>
               </>

@@ -136,13 +136,8 @@ export default function MobileMenu({
                 style="background:white;border-bottom:1px solid #E5E7EB"
               >
                 <div class="flex items-center gap-3">
-                  <div
-                    class="w-8 h-8 rounded-full border-[3px] flex items-center justify-center"
-                    style="border-color:#3BAE61"
-                  >
-                    <div class="w-3 h-3 rounded-full" style="background:#175B37"></div>
-                  </div>
-                  <span class="text-lg font-bold text-gray-900">ZimaDev</span>
+                  <img src="/brand/logo.png" alt="Logo Ageton" class="h-8 w-8 rounded-full object-contain" />
+                  <span class="text-lg font-bold text-gray-900">Ageton</span>
                 </div>
                 <button
                   type="button"
@@ -209,7 +204,7 @@ export default function MobileMenu({
                 </div>
               </nav>
 
-              {/* ZimaOS runtime banner at bottom */}
+              {/* Docker supervision shortcut */}
               <div class="p-4">
                 <div
                   class="rounded-2xl p-4 text-white relative overflow-hidden"
@@ -220,15 +215,15 @@ export default function MobileMenu({
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
                   </div>
-                  <p class="text-sm font-semibold mb-0.5">Accéder au runtime ZimaOS</p>
-                  <p class="text-[11px] mb-3" style="color:rgba(255,255,255,0.7)">Ollama + Docker en natif</p>
+                  <p class="text-sm font-semibold mb-0.5">Supervision Docker</p>
+                  <p class="text-[11px] mb-3" style="color:rgba(255,255,255,0.7)">Conteneurs et dossiers d’applications</p>
                   <a
-                    href="/settings"
+                    href="/docker"
                     onClick={closeDrawer}
                     class="block w-full py-1.5 text-center text-xs font-semibold rounded-full transition-opacity hover:opacity-90"
                     style="background:#175B37;color:white"
                   >
-                    Ouvrir
+                    Voir Docker
                   </a>
                 </div>
               </div>

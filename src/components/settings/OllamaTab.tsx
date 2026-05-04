@@ -22,7 +22,7 @@ export default function OllamaTab() {
   const [instances, setInstances] = useState<OllamaInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [compatibility, setCompatibility] = useState<Record<string, { ok: boolean; testedAt?: string }>>({});
+  const [compatibility, setCompatibility] = useState<Record<string, { ok: boolean; testedAt?: string; disabledManually?: boolean }>>({});
   const [testingModel, setTestingModel] = useState<string | null>(null);
   
   const [newName, setNewName] = useState('');

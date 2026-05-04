@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath } from './forge-repos';
-import { invokeZimaOSSessionsSend, resolveSessionsSendKey } from './zimaos-gateway';
+import { runForgeAgentMessage } from './forge-agent-task-runner';
 
 const MAX_SEND = 120_000;
 
@@ -36,16 +36,8 @@ async function buildMissionBody(params: {
   return `${header}${body}`.slice(0, MAX_SEND);
 }
 
-async function sendWithFallbacks(sessionKey: string, message: string) {
-  let r = await invokeZimaOSSessionsSend({ sessionKey, message, asyncDelivery: false });
-  if (!r.ok) {
-    r = await invokeZimaOSSessionsSend({ sessionKey, message, asyncDelivery: true });
-  }
-  return r;
-}
-
 /**
- * Relance une ligne AgentTask (Forge) vers la session agent via la passerelle (`sessions_send`), avec résolution de clé.
+ * Relance une ligne AgentTask via l'orchestrateur Forge natif.
  */
 export async function runMissionRedispatch(params: {
   taskId: number;
@@ -64,33 +56,21 @@ export async function runMissionRedispatch(params: {
     projectId: row.projectId as number | null | undefined,
   });
 
-  let sent = await sendWithFallbacks(params.sessionKey, message);
-
-  if (!sent.ok) {
-    const resolved = await resolveSessionsSendKey(params.email, [params.sessionKey, row.agentId]);
-    if (resolved && resolved !== params.sessionKey) {
-      sent = await sendWithFallbacks(resolved, message);
-    }
-  }
-
-  if (!sent.ok) {
+  const run = await runForgeAgentMessage({
+    agentId: row.agentId,
+    message,
+    projectId: row.projectId as number | null | undefined,
+    taskId: params.taskId,
+    actorId: params.email,
+    source: 'redispatch',
+    sessionId: String(params.sessionKey || '').trim() || undefined,
+  });
+  if (!run.ok) {
     return {
       ok: false,
-      error: sent.error || 'Envoi impossible',
-      detail: sent.detail,
-      hint:
-        'Si « Envoyer directive » fonctionne sur cette page, la clé session ci-dessus doit être la même. Sinon : gateway.tools.allow, token, ZIMAOS_GATEWAY_URL depuis l’hôte Forge.',
+      error: run.error || 'Exécution Forge impossible',
+      hint: "Vérifiez le modèle de l'agent, Ollama et les journaux de l'orchestrateur Forge.",
     };
-  }
-
-  const now = new Date();
-  try {
-    await db
-      .update(AgentTask)
-      .set({ status: 'running', updatedAt: now })
-      .where(eq(AgentTask.id, params.taskId));
-  } catch {
-    /* ignore */
   }
 
   const [updated] = await db.select().from(AgentTask).where(eq(AgentTask.id, params.taskId)).limit(1);

@@ -18,7 +18,7 @@
 
 _FORGE_AUTH_TOKEN="${FORGE_API_TOKEN:-${FORGE_AGENT_TOKEN:-}}"
 
-# 1. Tenter de lire directement depuis la base SQLite si accessible (cas ZimaDev complet)
+# 1. Tenter de lire directement depuis la base SQLite si accessible (cas Ageton complet)
 _DB_PATH="$(dirname "${BASH_SOURCE[0]}")/../.astro/content.db"
 if [ -z "${FORGE_HOOK_BASE_URL:-}" ] && [ -f "$_DB_PATH" ] && command -v python3 >/dev/null 2>&1; then
   _FP="$(python3 -c "import sqlite3; db=sqlite3.connect('$_DB_PATH'); row=db.execute('SELECT value FROM Config WHERE key=\"forgePublicUrl\"').fetchone(); print(row[0] if row else '')" 2>/dev/null || true)"

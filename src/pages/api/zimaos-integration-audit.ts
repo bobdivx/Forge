@@ -10,7 +10,7 @@ import {
 
 /**
  * Audit statique de la surface ZimaOS dans le dépôt + rappel du contrat d’intégration.
- * À utiliser uniquement depuis l’interface Forge (Paramètres → ZIMAOS).
+ * À utiliser uniquement depuis l’interface Forge (Paramètres → Infra NAS/Docker).
  */
 export const GET: APIRoute = async ({ locals }) => {
   if (!locals.user?.email) {

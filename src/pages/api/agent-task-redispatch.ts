@@ -10,7 +10,7 @@ function json(data: unknown, status = 200) {
 
 /**
  * Relance une mission (évite tout conflit de route avec POST /api/agent-tasks qui crée une tâche).
- * Corps : { taskId: number, sessionKey: string }
+ * Corps : { taskId: number, sessionKey?: string }
  */
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!locals.user?.email) {
@@ -30,10 +30,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!Number.isFinite(taskId) || taskId < 1) {
     return json({ error: 'taskId numérique requis' }, 400);
   }
-  if (!sessionKey) {
-    return json({ error: 'sessionKey requis' }, 400);
-  }
-
   const result = await runMissionRedispatch({
     taskId,
     sessionKey,
@@ -53,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   return json({
     ok: true,
-    message: 'Directive de relance acceptée (traitement asynchrone ou synchrone selon le gateway).',
+    message: "Mission exécutée par l'orchestrateur Forge.",
     task: result.task,
   });
 };

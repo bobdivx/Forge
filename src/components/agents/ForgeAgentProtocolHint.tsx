@@ -10,9 +10,11 @@ export default function ForgeAgentProtocolHint() {
       </summary>
       <div class="mt-4 space-y-3 border-t border-gray-100 pt-3 text-xs leading-relaxed">
         <p class="text-gray-600">
-          Forge envoie les missions avec une ligne <strong class="text-gray-900">FORGE_DONE</strong> à produire en fin de réponse.
-          Le serveur Forge interroge régulièrement ZimaOS, détecte cette ligne et met à jour la <strong class="text-gray-900">AgentTask</strong> + le carnet (demandes <code class="font-mono text-[#175B37]">[ForgeRequest #N]</code>) sans appel HTTP manuel.
-          Les appels <code class="font-mono text-gray-500">PUT /api/agent-tasks</code> restent possibles mais ne sont plus obligatoires.
+          Forge exécute les missions via son orchestrateur interne, enregistre la réponse dans{' '}
+          <strong class="text-gray-900">AgentTask</strong> et synchronise le carnet (demandes{' '}
+          <code class="font-mono text-[#175B37]">[ForgeRequest #N]</code>) depuis sa base. Les appels{' '}
+          <code class="font-mono text-gray-500">PUT /api/agent-tasks</code> restent possibles pour les scripts externes,
+          mais le flux normal ne dépend pas d’un runtime agent hors Forge.
         </p>
 
         <div>
@@ -36,7 +38,7 @@ Content-Type: application/json
   "output": "Résumé optionnel pour l’historique Forge"
 }`}</pre>
           <p class="mt-2 text-gray-500">
-            Utile si tu scripts hors ZimaOS. Sinon, priorité à la ligne <code class="font-mono text-[#175B37]">FORGE_DONE</code> détectée par Forge.
+            Utile si tu scripts depuis une machine du LAN. Sinon, priorité au flux interne Forge/Ollama.
           </p>
         </div>
 
@@ -50,12 +52,13 @@ Content-Type: application/json
         </div>
 
         <p class="border-t border-gray-100 pt-3 text-gray-600">
-          Côté humain, la chronologie des événements automatiques (dispatch, <span class="font-mono text-[#175B37]">FORGE_DONE</span>, sync carnet) est visible sur la page{' '}
+          Côté humain, la chronologie des événements automatiques (dispatch, exécution, sync carnet) est visible sur la page{' '}
           <a href="/agents#swarm-flux" class="text-[#175B37] underline decoration-[#175B37]/40 hover:text-[#134a2d]">Chronologie Forge</a> (page Équipe).
         </p>
 
         <p class="text-gray-500">
-          Pour rappel : ce endpoint est destiné aux appels serveur/agents depuis le LAN ; vérifie que la gateway Forge et le token sont corrects si tu appelles depuis un autre conteneur.
+          Pour rappel : ce endpoint est destiné aux appels serveur/agents depuis le LAN ; vérifie le jeton Forge si tu
+          appelles depuis un autre conteneur.
         </p>
       </div>
     </details>

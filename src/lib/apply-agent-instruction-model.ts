@@ -1,11 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
-import { provisionAgentInZimaOS } from './zimaos-agent-provision';
 import { getAllConfig } from './config-db';
 import { SWARM_WORK_PROTOCOL_SUMMARY } from './forge-agent-protocol';
 
 /**
- * Crée ou met à jour l’instruction agent et pousse le provisioning ZimaOS.
+ * Crée ou met à jour l’instruction agent dans la base Forge.
  */
 export async function applyAgentInstructionModel(agentIdRaw: string, modelRaw: string): Promise<void> {
   const agentId = String(agentIdRaw || '').trim();
@@ -45,10 +44,4 @@ export async function applyAgentInstructionModel(agentIdRaw: string, modelRaw: s
 
   const row = await db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentId)).limit(1);
   if (!row.length) throw new Error('Lecture instruction après écriture impossible');
-  await provisionAgentInZimaOS({
-    agentId: row[0].agentId,
-    model: row[0].model,
-    filePath: '',
-    systemPrompt: row[0].systemPrompt,
-  });
 }

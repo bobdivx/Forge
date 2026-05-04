@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 type Stats = { totalSessions: number; activeCount: number; idleCount: number; uniqueAgents: number; edgeCount: number; messageCount: number; taskCount: number; };
 type Edge = { from: string; to: string; fromLabel: string; toLabel: string; kind: string; atLabel: string; };
 type Event = { id: string; kind: 'topology' | 'message' | 'task'; from: string; to: string; fromLabel: string; toLabel: string; summary: string; at: number; atLabel: string; };
-type Payload = { gatewayError: string | null; stats: Stats; edges: Edge[]; timeline: Event[]; };
+type Payload = { stats: Stats; edges: Edge[]; timeline: Event[]; };
 
 const FILTERS: { id: 'all' | 'topology' | 'message' | 'task'; label: string }[] = [
   { id: 'all', label: 'Tout' },
@@ -39,7 +39,6 @@ export default function SwarmInteractionsBoard() {
       .then((d: Payload & { error?: string }) => {
         if (d.error) setError(String(d.error));
         setData({
-          gatewayError: d.gatewayError ?? null,
           stats: d.stats ?? { totalSessions: 0, activeCount: 0, idleCount: 0, uniqueAgents: 0, edgeCount: 0, messageCount: 0, taskCount: 0 },
           edges: Array.isArray(d.edges) ? d.edges : [],
           timeline: Array.isArray(d.timeline) ? d.timeline : [],
@@ -71,7 +70,7 @@ export default function SwarmInteractionsBoard() {
       {/* Stats */}
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: 'Sessions',      val: s.totalSessions, color: '#1F2937' },
+          { label: 'Agents DB',     val: s.totalSessions, color: '#1F2937' },
           { label: 'Actives',       val: s.activeCount,   color: '#3BAE61' },
           { label: 'Liens',         val: s.edgeCount,     color: '#8B5CF6' },
           { label: 'Messages (DB)', val: s.messageCount,  color: '#0EA5E9' },
@@ -91,7 +90,7 @@ export default function SwarmInteractionsBoard() {
           <div>
             <h3 class="text-base font-bold text-gray-900">Interactions entre agents</h3>
             <p class="text-xs text-gray-400 mt-0.5 max-w-2xl">
-              Fil unifié : sessions internes, messages <span class="font-mono text-gray-500">AgentMessage</span>, et missions <span class="font-mono text-gray-500">AgentTask</span>.
+              Fil unifié : agents Forge, messages <span class="font-mono text-gray-500">AgentMessage</span>, et missions <span class="font-mono text-gray-500">AgentTask</span>.
             </p>
           </div>
           <div class="flex flex-wrap gap-2">

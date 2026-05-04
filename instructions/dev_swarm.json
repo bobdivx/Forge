@@ -1,5 +1,5 @@
 {
-  "system_name": "ZimaDev_Ollama_Swarm",
+  "system_name": "Ageton_Ollama_Swarm",
   "engine": "ollama",
   "workspace_path": "media/Github",
   "dashboard_path": ".",

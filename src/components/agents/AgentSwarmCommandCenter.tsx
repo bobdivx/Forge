@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 
-type ZimaOSMsg = { role: string; preview: string; at: string };
-type ZimaOSPanel = {
+type ForgeRuntimeMsg = { role: string; preview: string; at: string };
+type ForgeRuntimePanel = {
   matched: boolean;
-  sessionKey: string | null;
   status: string | null;
   model: string | null;
   lastSeen: string | null;
-  messages: ZimaOSMsg[];
+  messages: ForgeRuntimeMsg[];
 };
 type MissionTask = {
   id: number;
@@ -26,8 +25,8 @@ type ProjectOption = { id: number; name: string; path: string; swarmEnabled: num
 type PanelPayload = {
   ok?: boolean;
   error?: string;
-  gatewayError?: string | null;
-  zimaos?: ZimaOSPanel;
+  forgeError?: string | null;
+  runtime?: ForgeRuntimePanel;
   buckets?: { running: MissionTask[]; pending: MissionTask[]; recentDone: MissionTask[] };
 };
 
@@ -50,11 +49,9 @@ function roleLabel(role: string) {
 
 type Props = {
   agentId: string;
-  /** Clé d'accès si connue. */
-  sessionKey: string;
 };
 
-export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) {
+export default function AgentSwarmCommandCenter({ agentId }: Props) {
   const [panel, setPanel] = useState<PanelPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
@@ -107,7 +104,7 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
     return () => window.removeEventListener('forge-swarm-refresh', onRefresh as EventListener);
   }, [agentId, load]);
 
-  const oc = panel?.zimaos;
+  const oc = panel?.runtime;
   const buckets = panel?.buckets ?? { running: [], pending: [], recentDone: [] };
   const lastAssistant = [...(oc?.messages ?? [])].reverse().find((m) => {
     const r = String(m.role || '').toLowerCase();
@@ -143,11 +140,10 @@ export default function AgentSwarmCommandCenter({ agentId, sessionKey }: Props) 
       const taskRow = data.task;
       let dispatchErr: string | null = null;
       if (sendNow && taskRow?.id) {
-        // Envoi interne Forge Orchestrator (pas ZimaOS Gateway)
         const rd = await fetch('/api/agent-task-redispatch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ taskId: taskRow.id, sessionKey }),
+          body: JSON.stringify({ taskId: taskRow.id }),
         });
         const rdJson = (await rd.json().catch(() => ({}))) as { error?: string };
         if (!rd.ok) dispatchErr = rdJson.error || `Erreur d'orchestration HTTP ${rd.status}`;
