@@ -3,7 +3,7 @@ import {
   fetchZimaOSSessionsForDiscussion,
   resolveBestZimaOSSessionForKey,
   pickLatestAssistantMessage,
-} from '../../lib/discussion-zimaos-session';
+} from '../../lib/discussion-forge-session';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

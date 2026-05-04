@@ -118,7 +118,7 @@ export default function AgentSidebar({
             >
               <option value="">Modèle...</option>
               {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
-              {!availableModels.includes(a.model) && a.model && <option value={a.model}>{a.model}</option>}
+              {!availableModels.includes(a.model) && a.model && <option value={a.model} disabled>{a.model} indisponible</option>}
             </select>
           </div>
         </div>

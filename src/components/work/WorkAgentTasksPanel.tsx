@@ -10,8 +10,6 @@ type TaskRow = {
   updatedAt: string;
 };
 
-const CONFIRM_ALL = 'SUPPRIMER_TOUTES_LES_AGENT_TASKS';
-
 function statusCls(s: string): string {
   const x = String(s || '').toLowerCase();
   if (x === 'running') return 'bg-emerald-50 text-emerald-700';
@@ -27,7 +25,6 @@ export default function WorkAgentTasksPanel() {
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [purgeScope, setPurgeScope] = useState<'pending' | 'finished' | 'all' | null>(null);
-  const [confirmAll, setConfirmAll] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,11 +91,9 @@ export default function WorkAgentTasksPanel() {
     setMsg(null);
     try {
       const body: Record<string, unknown> = { action: 'deleteTasks', scope: purgeScope };
-      if (purgeScope === 'all') body.confirm = confirmAll.trim();
       const d = await postAction(body);
       setMsg({ type: 'ok', text: d.message || 'Suppression effectuée.' });
       setPurgeScope(null);
-      setConfirmAll('');
       await load();
     } catch (e) {
       setMsg({ type: 'err', text: e instanceof Error ? e.message : String(e) });
@@ -259,20 +254,8 @@ export default function WorkAgentTasksPanel() {
               {purgeScope === 'finished' &&
                 `Cela enlève ${finishedCount} entrée(s) completed / failed / cancelled.`}
               {purgeScope === 'all' &&
-                'Efface tout le journal des tâches agents. Irréversible. Pour confirmer, copiez la phrase exacte ci-dessous.'}
+                'Efface tout le journal des tâches agents. Cette action est irréversible.'}
             </p>
-            {purgeScope === 'all' ? (
-              <div>
-                <label class="block text-[11px] font-medium text-gray-500 mb-1">Confirmation</label>
-                <input
-                  type="text"
-                  class="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#175B37]/30"
-                  placeholder={CONFIRM_ALL}
-                  value={confirmAll}
-                  onInput={(e) => setConfirmAll((e.target as HTMLInputElement).value)}
-                />
-              </div>
-            ) : null}
             <div class="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -280,7 +263,6 @@ export default function WorkAgentTasksPanel() {
                 disabled={busy === 'purge'}
                 onClick={() => {
                   setPurgeScope(null);
-                  setConfirmAll('');
                 }}
               >
                 Annuler
@@ -290,9 +272,7 @@ export default function WorkAgentTasksPanel() {
                 class={`rounded-full px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 ${
                   purgeScope === 'all' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-700 hover:bg-amber-800'
                 }`}
-                disabled={
-                  busy === 'purge' || (purgeScope === 'all' && confirmAll.trim() !== CONFIRM_ALL)
-                }
+                disabled={busy === 'purge'}
                 onClick={() => void executePurge()}
               >
                 {busy === 'purge' ? 'Suppression…' : 'Confirmer'}

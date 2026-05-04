@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { spawn } from 'child_process';
 import { isValidAppName } from '../../lib/auth';
-import { getZimaOSToken } from '../../lib/zimaos-gateway';
+import { getZimaOSToken } from '../../lib/forge-gateway';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const data = await request.json();

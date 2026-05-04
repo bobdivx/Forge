@@ -5,7 +5,7 @@ import {
   fetchZimaOSSessionsForDiscussion,
   resolveBestZimaOSSessionForKey,
   buildZimaOSDiscussionHistory,
-} from '../../lib/discussion-zimaos-session';
+} from '../../lib/discussion-forge-session';
 
 /**
  * POST : historique user + assistant pour une session ZimaOS (réhydrate Discussion après F5).

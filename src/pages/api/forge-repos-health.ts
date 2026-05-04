@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getForgeReposRootHealth } from '../../lib/forge-repos-health';
 import { getConfig } from '../../lib/config-db';
-import { probeZimaOSContainerPath } from '../../lib/zimaos-docker-mounts';
+import { probeZimaOSContainerPath } from '../../lib/forge-docker-mounts';
 
 export type BindMountSuggestion = {
   /** Chemin sur l’hôte Docker (à utiliser pour forgeReposRoot si Forge tourne sur cet hôte) */

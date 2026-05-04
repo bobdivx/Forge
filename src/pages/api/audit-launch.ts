@@ -11,10 +11,10 @@ import {
   getZimaOSGatewayBaseUrl,
   getZimaOSToken,
   getGatewayAuthHeaders,
-} from '../../lib/zimaos-gateway';
+} from '../../lib/forge-gateway';
 import { getOllamaOriginResolved } from '../../lib/config-db';
 import { getForgeHookBaseUrl } from '../../lib/forge-hook-base-url';
-import { attemptZimaOSPreRepair } from './_zimaos-pre-repair';
+import { attemptZimaOSPreRepair } from './_forge-pre-repair';
 
 const execFileAsync = promisify(execFile);
 

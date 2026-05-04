@@ -4,7 +4,7 @@ import { loadAstroDb } from '../../lib/load-astro-db';
 import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
 import { getPrimaryDevServerStatus } from '../../lib/dev-server-status';
 import { getWorkSystemStatus } from '../../lib/forge-work-scheduler';
-import { fetchZimaOSSessionsPayload, normalizeZimaOSSessions } from '../../lib/zimaos-gateway';
+import { fetchZimaOSSessionsPayload, normalizeZimaOSSessions } from '../../lib/forge-gateway';
 
 type ProjectRow = {
   id: number;

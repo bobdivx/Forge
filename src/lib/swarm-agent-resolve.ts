@@ -1,4 +1,4 @@
-import { mapSessionToAgentRow } from './zimaos-gateway';
+import { mapSessionToAgentRow } from './forge-gateway';
 
 /**
  * Trouve la session ZimaOS brute correspondant à l’id d’URL swarm (ex. CHEF_TECHNIQUE).

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { logForgeZimaOS } from '../../lib/forge-zimaos-console';
+import { logForge } from '../../lib/forge-console';
 
 type Kpi = { label: string; value: number | string; sub?: string; color: 'blue' | 'violet' | 'amber'; icon: string };
 
@@ -74,7 +74,7 @@ export default function DashboardKpis({ serverProjectTotal }: DashboardKpisProps
         }
         const dbg = agentData.zimaosDebug;
         if (dbg && typeof dbg === 'object') {
-          logForgeZimaOS('GET /api/agents (tableau KPIs)', {
+          logForge('GET /api/agents (tableau KPIs)', {
             ...dbg,
             agentsCount: agents.length,
             gatewayError: gwErr || null,

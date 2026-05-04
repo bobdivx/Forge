@@ -3,7 +3,7 @@ import TabBar from '../ui/TabBar';
 import AccountTab from './AccountTab';
 import ApiTokensTab, { type CustomTokenRow } from './ApiTokensTab';
 import IntegrationTab from './IntegrationTab';
-import ZimaOSTab from './ZimaOSTab';
+import ForgeRuntimeTab from './ForgeRuntimeTab';
 import AgentModelsTab from './AgentModelsTab';
 import OllamaTab from './OllamaTab';
 import MaintenanceTab from './MaintenanceTab';
@@ -361,7 +361,7 @@ export default function SettingsForm() {
           />
         )}
         {activeTab === 'zimaos' && (
-          <ZimaOSTab
+          <ForgeRuntimeTab
             settings={settings}
             setSettings={(c) => setSettings(c as unknown as Config)}
             onSave={save}

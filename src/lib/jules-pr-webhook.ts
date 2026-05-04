@@ -4,7 +4,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { loadAstroDb } from './load-astro-db';
 import { getForgeHookBaseUrl } from './forge-hook-base-url';
-import { invokeZimaOSSessionsSend, resolveSessionsSendKey } from './zimaos-gateway';
+import { invokeZimaOSSessionsSend, resolveSessionsSendKey } from './forge-gateway';
 
 export function verifyGithubSignature256(
   secret: string,

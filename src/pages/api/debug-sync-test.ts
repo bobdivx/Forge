@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
-import { performZimaOSAgentsSync } from './zimaos-sync-agents';
-import { getZimaOSInfraClient } from '../../lib/zimaos-infra-client';
+import { performZimaOSAgentsSync } from './forge-sync-agents';
+import { getZimaOSInfraClient } from '../../lib/forge-infra-client';
 
 export const GET: APIRoute = async () => {
   console.log('[DEBUG] Lancement de la synchronisation forcée via API...');

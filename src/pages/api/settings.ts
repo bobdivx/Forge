@@ -2,8 +2,8 @@ import type { APIRoute } from 'astro';
 import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
-import { inferZimaOSBackedPathDefaults } from '../../lib/zimaos-path-defaults';
-import { resetZimaOSInfraClient } from '../../lib/zimaos-infra-client';
+import { inferZimaOSBackedPathDefaults } from '../../lib/forge-path-defaults';
+import { resetZimaOSInfraClient } from '../../lib/forge-infra-client';
 
 export const GET: APIRoute = async () => {
   const config = await getAllConfig();

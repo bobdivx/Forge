@@ -4,7 +4,7 @@ import { loadAstroDb } from '../../lib/load-astro-db';
 import {
   fetchZimaOSSessionsPayload,
   normalizeZimaOSSessions,
-} from '../../lib/zimaos-gateway';
+} from '../../lib/forge-gateway';
 
 function countRunningSessions(sessions: unknown[]): number {
   return sessions.filter((s) => {

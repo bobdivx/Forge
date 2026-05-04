@@ -1,4 +1,4 @@
-import { getZimaOSInfraClient } from './zimaos-infra-client';
+import { getZimaOSInfraClient } from './forge-infra-client';
 import { loadAstroDb } from './load-astro-db';
 
 export type ForgeToolCall =

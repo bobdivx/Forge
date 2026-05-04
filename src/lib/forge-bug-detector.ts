@@ -12,7 +12,7 @@ import path from 'path';
 import { loadAstroDb } from './load-astro-db';
 import { listRepoProjectPaths } from './forge-repos';
 import { devPidsDir, readAppDashboardConfig } from './project-app-config';
-import { invokeZimaOSSessionsSend } from './zimaos-gateway';
+import { invokeZimaOSSessionsSend } from './forge-gateway';
 
 // ── Patterns d'erreur ────────────────────────────────────────────────────────
 

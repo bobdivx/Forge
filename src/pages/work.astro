@@ -104,6 +104,9 @@ function issueActivityLabel(issue, task) {
 const openIssues       = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
 const openDeps         = deps.filter(d => d.status === 'open' || d.status === 'in_progress');
 const pendingRequests  = requests.filter(r => r.status === 'pending' || r.status === 'in_progress');
+const finishedRequests = requests.filter(r => r.status === 'completed' || r.status === 'rejected');
+const finishedIssues   = issues.filter(i => i.status === 'resolved' || i.status === 'wont_fix');
+const finishedDeps     = deps.filter(d => d.status === 'installed' || d.status === 'rejected');
 
 function statusBadge(status: string) {
   const s = String(status ?? '').toLowerCase();
@@ -132,6 +135,23 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
       const item = window.__workData[type + 's']?.find(x => x.id === id)
                 ?? window.__workData[type]?.find(x => x.id === id);
       if (item && window.__openWorkDetailModal) window.__openWorkDetailModal(item);
+    };
+    window.__deleteWorkItems = async function(itemType, scope, count, label) {
+      if (!count) return;
+      const suffix = scope === 'all' ? 'toutes les entrées' : 'ce lot';
+      if (!window.confirm(`Supprimer ${suffix} ${label} (${count}) ?`)) return;
+      try {
+        const res = await fetch('/api/work-items-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deleteWorkItems', itemType, scope }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+        window.location.reload();
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : String(e));
+      }
     };
   </script>
 
@@ -194,6 +214,24 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
           href="/agents#swarm-flux"
           class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 mr-2"
         >Chronologie Forge</a>
+        <button
+          type="button"
+          disabled={pendingRequests.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('request', 'active', ${pendingRequests.length}, 'demandes en attente')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-40"
+        >Supprimer lot ({pendingRequests.length})</button>
+        <button
+          type="button"
+          disabled={finishedRequests.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('request', 'finished', ${finishedRequests.length}, 'demandes terminées')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >Terminées ({finishedRequests.length})</button>
+        <button
+          type="button"
+          disabled={requests.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('request', 'all', ${requests.length}, 'demandes')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+        >Tout supprimer</button>
         <button
           type="button"
           onclick="window.__openWorkModal && window.__openWorkModal('request')"
@@ -263,6 +301,24 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
           <span class="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-medium">{openIssues.length} ouverts</span>
         )}
         <div class="flex-1"></div>
+        <button
+          type="button"
+          disabled={openIssues.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'active', ${openIssues.length}, 'bugs ouverts')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+        >Supprimer lot ({openIssues.length})</button>
+        <button
+          type="button"
+          disabled={finishedIssues.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'finished', ${finishedIssues.length}, 'bugs clôturés')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >Clôturés ({finishedIssues.length})</button>
+        <button
+          type="button"
+          disabled={issues.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'all', ${issues.length}, 'bugs')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+        >Tout supprimer</button>
         <button
           type="button"
           onclick="window.__openWorkModal && window.__openWorkModal('issue')"
@@ -341,6 +397,24 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
           <span class="text-xs bg-blue-50 text-blue-500 px-2 py-0.5 rounded-full font-medium">{openDeps.length} à traiter</span>
         )}
         <div class="flex-1"></div>
+        <button
+          type="button"
+          disabled={openDeps.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('dep', 'active', ${openDeps.length}, 'demandes de dépendances ouvertes')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40"
+        >Supprimer lot ({openDeps.length})</button>
+        <button
+          type="button"
+          disabled={finishedDeps.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('dep', 'finished', ${finishedDeps.length}, 'dépendances traitées')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+        >Traitées ({finishedDeps.length})</button>
+        <button
+          type="button"
+          disabled={deps.length === 0}
+          onclick={`window.__deleteWorkItems && window.__deleteWorkItems('dep', 'all', ${deps.length}, 'demandes de dépendances')`}
+          class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+        >Tout supprimer</button>
         <button
           type="button"
           onclick="window.__openWorkModal && window.__openWorkModal('dep')"

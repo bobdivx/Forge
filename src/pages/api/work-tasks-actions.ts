@@ -18,8 +18,6 @@ function json(data: unknown, status = 200) {
 const STATUS_PENDING = ['pending', 'bug'] as const;
 const STATUS_FINISHED = ['completed', 'failed', 'cancelled'] as const;
 
-const CONFIRM_DELETE_ALL = 'SUPPRIMER_TOUTES_LES_AGENT_TASKS';
-
 /** Liste des AgentTask (base uniquement) pour la page Travail. */
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user?.email) {
@@ -53,7 +51,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
  * POST — actions sur les AgentTask.
  * { action: 'dispatchQueue' } — même effet qu'un tick : file carnet + pending.
  * { action: 'dispatchTask', taskId: number } — envoi d'une tâche précise (pending/bug).
- * { action: 'deleteTasks', scope: 'pending' | 'finished' | 'all', confirm?: string }
+ * { action: 'deleteTasks', scope: 'pending' | 'finished' | 'all' }
  */
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!locals.user?.email) {
@@ -66,7 +64,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
     action?: string;
     taskId?: unknown;
     scope?: string;
-    confirm?: string;
   };
   try {
     body = await request.json();
@@ -103,15 +100,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const scope = String(body.scope || '').trim() as 'pending' | 'finished' | 'all';
     if (!['pending', 'finished', 'all'].includes(scope)) {
       return json({ error: 'scope attendu : pending | finished | all' }, 400);
-    }
-    if (scope === 'all' && String(body.confirm || '').trim() !== CONFIRM_DELETE_ALL) {
-      return json(
-        {
-          error: `Pour tout supprimer, envoyez confirm: "${CONFIRM_DELETE_ALL}"`,
-          hint: CONFIRM_DELETE_ALL,
-        },
-        400,
-      );
     }
 
     try {

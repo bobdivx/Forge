@@ -7,7 +7,7 @@ import {
   getZimaOSGatewayCandidateBases,
   getZimaOSClientDebugMeta,
   fetchZimaOSJson,
-} from '../../lib/zimaos-gateway';
+} from '../../lib/forge-gateway';
 
 type ValueSource = 'env' | 'database' | 'fallback';
 

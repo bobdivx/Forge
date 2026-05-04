@@ -1,23 +1,13 @@
 import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { FORGE_DEFAULT_AGENT_MODELS } from '../../lib/agent-model-defaults';
+import { getSelectableOllamaModels } from '../../lib/ollama-model-availability';
 
 type ModelEntry = { id: string; name: string; ownedBy: string };
 
-function isSelectableOllamaModel(
-  modelId: string,
-  compatibility: Record<string, { ok?: boolean; disabledManually?: boolean }>,
-): boolean {
-  const c = compatibility[modelId];
-  if (!c) return true;
-  if (c.disabledManually) return false;
-  if (c.ok === false) return false;
-  return true;
-}
-
 export const GET: APIRoute = async ({ request }) => {
   try {
-    const { db, AgentModel, AgentInstruction, Config, like } = await loadAstroDb();
+    const { db, AgentModel, AgentInstruction } = await loadAstroDb();
     const now = new Date();
     const filterActive = new URL(request.url).searchParams.get('filter') === 'active';
 
@@ -77,7 +67,7 @@ export const GET: APIRoute = async ({ request }) => {
     let ollamaTagNames: string[] = [];
     let extraOllamaModels: ModelEntry[] = [];
     try {
-        const ollamaRes = await import('../../lib/zimaos-openai-surface').then(m => m.fetchOllamaTagNames());
+        const ollamaRes = await import('../../lib/forge-openai-surface').then(m => m.fetchOllamaTagNames());
         ollamaTagNames = ollamaRes.names;
         extraOllamaModels = ollamaRes.names.map(name => ({
             id: name,
@@ -90,28 +80,16 @@ export const GET: APIRoute = async ({ request }) => {
 
     // Discussion / sélecteurs : catalogue DB activé ∩ présent sur Ollama, hors désactivés / Forge KO
     if (filterActive) {
-      const compatibility: Record<string, { ok?: boolean; disabledManually?: boolean }> = {};
-      if (Config && like) {
-        try {
-          const rows = await db.select().from(Config).where(like(Config.key, 'compatibility_ollama_%'));
-          for (const row of rows) {
-            const modelName = row.key.replace('compatibility_ollama_', '');
-            try {
-              compatibility[modelName] = JSON.parse(row.value as string);
-            } catch {
-              compatibility[modelName] = { ok: false };
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const selectable = await getSelectableOllamaModels();
+      const selectableEntries = selectable.map((m) => ({
+        id: m.name,
+        name: m.name,
+        ownedBy: m.compatibility?.ok ? 'ollama-forge-ok' : 'ollama-instances',
+      }));
+      const onDisk = new Set(selectable.map((m) => m.name));
+      const pickKnown = (entries: ModelEntry[]) => entries.filter((m) => onDisk.has(m.id));
 
-      const onDisk = new Set(ollamaTagNames);
-      const pick = (entries: ModelEntry[]) =>
-        entries.filter((m) => onDisk.has(m.id) && isSelectableOllamaModel(m.id, compatibility));
-
-      const merged = [...pick(dbEnabled), ...pick(instructionModels)];
+      const merged = [...selectableEntries, ...pickKnown(dbEnabled), ...pickKnown(instructionModels)];
       const uniqueModels = Array.from(new Map(merged.map((m) => [m.id, m])).values()).sort((a, b) =>
         a.id.localeCompare(b.id),
       );

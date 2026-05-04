@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { mapSessionToAgentRow } from './zimaos-gateway';
+import { mapSessionToAgentRow } from './forge-gateway';
 
 /**
  * Déduit la session parente pour une clé sub-agent ZimaOS.

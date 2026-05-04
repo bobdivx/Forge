@@ -71,7 +71,7 @@ export default function DiscussionComposer() {
     Promise.all([
       fetch('/api/discussion-context').then(r => r.json()),
       fetch('/api/agents').then(r => r.json()),
-      fetch('/api/zimaos-agent-profiles').then(r => r.json()).catch(() => ({}))
+      fetch('/api/forge-agent-profiles').then(r => r.json()).catch(() => ({}))
     ]).then(([ctx, a, profData]) => {
       setProjects(Array.isArray(ctx.projects) ? ctx.projects : []);
       setRequests(Array.isArray(ctx.requests) ? ctx.requests : []);
@@ -177,13 +177,13 @@ export default function DiscussionComposer() {
         avatarUrl: profileDraft.avatarUrl.trim() || null,
         avatarEmoji: profileDraft.avatarEmoji.trim() || null,
       };
-      const res = await fetch('/api/zimaos-agent-profiles', {
+      const res = await fetch('/api/forge-agent-profiles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Échec sauvegarde');
-      const updated = await fetch('/api/zimaos-agent-profiles').then(r => r.json());
+      const updated = await fetch('/api/forge-agent-profiles').then(r => r.json());
       setOcProfiles(updated.profiles || {});
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -323,7 +323,7 @@ export default function DiscussionComposer() {
     // et de faire l'appel API pour sauvegarder (non implémenté côté serveur pour le moment ?
     // S'il existe un endpoint, ce serait ici.)
     try {
-       await fetch('/api/zimaos-sync-agents', { method: 'POST' }); // Peut forcer une synchro si besoin.
+       await fetch('/api/forge-sync-agents', { method: 'POST' }); // Peut forcer une synchro si besoin.
     } catch (err) {
        console.error("Erreur sync model change:", err);
     }

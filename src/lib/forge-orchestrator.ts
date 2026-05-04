@@ -1,7 +1,8 @@
-import { getOllamaOriginResolved } from './config-db';
+import { getAllConfig, getOllamaOriginResolved } from './config-db';
 import { buildAgentPolicyContext } from './agent-rules';
 import { runForgeTool, type ForgeToolResult, type ForgeToolCall } from './forge-tool-bus';
 import { loadAstroDb } from './load-astro-db';
+import { getSelectableOllamaModels } from './ollama-model-availability';
 
 export type ForgeOrchestratorInput = {
   agentId: string;
@@ -156,88 +157,26 @@ function buildToolResultStep(toolCall: ForgeToolCall, toolResult: ForgeToolResul
 
 async function resolveAvailableModel(preferred: string): Promise<{ origin: string, model: string }> {
   const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
-  let instances: any[] = [];
-  let compatibleModels: string[] = [];
-  let globalDefault = 'qwen2.5:7b';
-
-  try {
-    const { db, OllamaInstance, Config, eq, like } = await loadAstroDb();
-    if (OllamaInstance) {
-      instances = await db.select().from(OllamaInstance).where(eq(OllamaInstance.enabled, 1));
-    }
-    // Charger les modèles marqués comme compatibles (et non désactivés manuellement)
-    const compatibilityConfigs = await db.select().from(Config).where(like(Config.key, 'compatibility_ollama_%'));
-    compatibleModels = compatibilityConfigs
-      .filter(c => {
-        try {
-          const val = JSON.parse(c.value);
-          return val.ok === true && val.disabledManually !== true;
-        } catch { return false; }
-      })
-      .map(c => c.key.replace('compatibility_ollama_', ''));
-    
-    // Charger le défaut global
-    const defRow = await db.select().from(Config).where(eq(Config.key, 'agentDefaultModel'));
-    if (defRow.length && defRow[0].value && defRow[0].value !== 'Auto') {
-      globalDefault = defRow[0].value;
-    }
-  } catch {}
-  
+  const config = await getAllConfig();
+  const globalDefault = config.agentDefaultModel && config.agentDefaultModel !== 'Auto' ? config.agentDefaultModel : 'qwen2.5:7b';
   const isAuto = !preferred || preferred.toLowerCase() === 'auto';
-  const candidateOrigins = [defaultOrigin];
-  for (const inst of instances) {
-    const url = String(inst.url || '').trim().replace(/\/$/, '');
-    if (url && !candidateOrigins.includes(url)) candidateOrigins.push(url);
+  const selectable = await getSelectableOllamaModels();
+  const byName = new Map(selectable.map((m) => [m.name.toLowerCase(), m]));
+
+  if (!isAuto) {
+    const exact = byName.get(preferred.toLowerCase());
+    if (exact) return { origin: exact.origin, model: exact.name };
   }
 
-  const allFound: Array<{ origin: string, models: string[] }> = [];
-
-  for (const origin of candidateOrigins) {
-    try {
-      const res = await fetch(`${origin}/api/tags`, { signal: AbortSignal.timeout(5_000) });
-      if (!res.ok) continue;
-      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-      const models = Array.isArray(data.models) ? (data.models as Array<Record<string, unknown>>) : [];
-      const names = models.map((m) => String(m.name || m.model || '').trim()).filter(Boolean);
-      
-      if (!isAuto && names.includes(preferred)) {
-        return { origin, model: preferred };
-      }
-      
-      // Si Auto, on cherche en priorité un modèle compatible connu sur cette instance
-      if (isAuto) {
-        for (const comp of compatibleModels) {
-          if (names.includes(comp)) {
-            return { origin, model: comp };
-          }
-        }
-      }
-
-      if (names.length > 0) {
-        allFound.push({ origin, models: names });
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  // Fallback si pas de modèle compatible trouvé ou si preferred non trouvé
-  const fallbacks = isAuto 
-    ? [globalDefault, 'qwen2.5-coder:7b', 'qwen2.5-coder:32b', 'qwen2.5:7b', 'llama3.2:latest']
-    : [preferred, globalDefault, 'qwen2.5:7b', 'llama3.2:latest'];
-
+  const compatible = selectable.find((m) => m.compatibility?.ok === true);
+  const fallbacks = [globalDefault, 'qwen2.5:7b', 'gemma4:latest', 'qwen2.5-coder:7b', 'qwen2.5-coder:32b', 'llama3.2:latest'];
   for (const candidate of fallbacks) {
-    for (const found of allFound) {
-      if (found.models.includes(candidate)) {
-        return { origin: found.origin, model: candidate };
-      }
-    }
+    const match = byName.get(candidate.toLowerCase());
+    if (match) return { origin: match.origin, model: match.name };
   }
 
-  if (allFound.length > 0) {
-    return { origin: allFound[0].origin, model: allFound[0].models[0] };
-  }
-
+  if (compatible) return { origin: compatible.origin, model: compatible.name };
+  if (selectable.length > 0) return { origin: selectable[0].origin, model: selectable[0].name };
   return { origin: defaultOrigin, model: isAuto ? 'qwen2.5:7b' : preferred };
 }
 

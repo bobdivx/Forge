@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getAllConfig } from '../../lib/config-db';
-import { invokeZimaOSAgentTask } from '../../lib/zimaos-gateway';
-import { attemptZimaOSPreRepair } from './_zimaos-pre-repair';
+import { invokeZimaOSAgentTask } from '../../lib/forge-gateway';
+import { attemptZimaOSPreRepair } from './_forge-pre-repair';
 
 export const POST: APIRoute = async () => {
   const preRepair = await attemptZimaOSPreRepair('routine-run');

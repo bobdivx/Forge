@@ -6,7 +6,7 @@ import {
   fetchZimaOSSessionsPayload,
   normalizeZimaOSSessions,
   mapSessionToAgentRow,
-} from './zimaos-gateway';
+} from './forge-gateway';
 import { findRawSessionForSwarmAgentKey } from './swarm-agent-resolve';
 
 export async function loadSwarmAgentLiveFromGateway(

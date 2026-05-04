@@ -11,7 +11,7 @@ export const POST: APIRoute = async () => {
     const defaultModel = config.agentDefaultModel || 'Auto';
 
     const agents = await db.select().from(AgentInstruction);
-    const { provisionAgentInZimaOS } = await import('../../lib/zimaos-agent-provision');
+    const { provisionAgentInZimaOS } = await import('../../lib/forge-agent-provision');
 
     for (const agent of agents) {
       await db.update(AgentInstruction).set({ 

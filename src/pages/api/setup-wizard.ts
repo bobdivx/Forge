@@ -3,9 +3,9 @@ import { getAllConfig, setConfig } from '../../lib/config-db';
 import type { ForgeConfig } from '../../lib/config-db';
 import { readForgeSetupState } from '../../lib/forge-setup';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
-import { inferZimaOSBackedPathDefaults } from '../../lib/zimaos-path-defaults';
+import { inferZimaOSBackedPathDefaults } from '../../lib/forge-path-defaults';
 import { randomBytes } from 'node:crypto';
-import { probeZimaOSContainerPath } from '../../lib/zimaos-docker-mounts';
+import { probeZimaOSContainerPath } from '../../lib/forge-docker-mounts';
 import fs from 'node:fs';
 
 const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
