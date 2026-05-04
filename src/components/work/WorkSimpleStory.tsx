@@ -125,6 +125,10 @@ function GitRepoPanel({ git }: { git: GitSnap | null | undefined }) {
           </li>
         ) : null}
       </ul>
+      <p class="mt-2 text-[10px] leading-snug text-slate-500">
+        Il s’agit du clone tel qu’il est sur cette machine (branche actuellement checkoutée). Une PR GitHub peut viser une
+        autre branche que celle affichée ici.
+      </p>
     </div>
   );
 }
