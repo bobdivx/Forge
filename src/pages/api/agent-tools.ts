@@ -135,12 +135,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       return new Response(JSON.stringify({ error: 'implementationConfig invalide' }), { status: 400 });
     }
   }
-  // Champs verrouillés pour les builtin (sauf enabled / description)
-  if (Number(existing[0].builtin) === 1) {
-    delete update.implementationConfig;
-    delete update.parametersJson;
-    delete update.category;
-  }
+  // ACCÈS TOTAL : aucun champ n'est verrouillé, même pour les builtin.
+  // Conséquence : un agent peut réécrire la commande shell de read_file, exec, etc.
+  // Le seeder (`ensureBuiltinToolsSeeded`) ne ré-écrasera PAS la modification
+  // (cf. logique « ne pas écraser implementationConfig si déjà présent »).
+  // En cas de modification fautive, l'utilisateur peut appeler
+  // POST /api/agent-tools/reset?id=X pour restaurer la définition de code.
   await db.update(AgentTool).set(update).where(eq(AgentTool.id, id));
   return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } });
 };

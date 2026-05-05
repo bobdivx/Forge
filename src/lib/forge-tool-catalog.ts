@@ -32,7 +32,7 @@ export type BuiltinToolDefinition = {
 };
 
 /**
- * 13 outils builtin prêts à l'emploi.
+ * Outils builtin prêts à l'emploi (mode ACCÈS TOTAL — auto-assignés à tous les agents).
  *
  * Variables de templating disponibles dans `command` / `cwd` :
  *  - {{__projectPath}}  : chemin absolu du projet courant (résolu via projectId)
@@ -243,6 +243,130 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
     },
   },
 
+  // ── Filesystem étendus ────────────────────────────────────────────────────
+  {
+    name: 'list_dir',
+    displayName: 'Lister un répertoire',
+    description: 'Liste le contenu d\'un répertoire (équivalent ls -la). Retourne les fichiers et sous-dossiers.',
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Chemin absolu ou relatif au projet (défaut: répertoire courant)' },
+      },
+    },
+    implementationKind: 'exec_template',
+    implementationConfig: {
+      command: 'ls -la "{{path|{{__projectPath}}}}"',
+      timeoutMs: 10000,
+    },
+  },
+  {
+    name: 'find_files',
+    displayName: 'Rechercher des fichiers',
+    description: 'Recherche des fichiers par nom ou contenu (find + grep). Idéal pour explorer un dépôt rapidement.',
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'Pattern (glob ou regex). Ex: "*.ts" ou "TODO"' },
+        mode: { type: 'string', enum: ['name', 'content'], description: 'name = par nom de fichier, content = grep dans les fichiers' },
+        path: { type: 'string', description: 'Racine de recherche (défaut: projet courant)' },
+      },
+      required: ['pattern'],
+    },
+    implementationKind: 'exec_template',
+    implementationConfig: {
+      command:
+        'cd "{{path|{{__projectPath}}}}" && if [ "{{mode|name}}" = "content" ]; then grep -rIn --exclude-dir=node_modules --exclude-dir=.git "{{pattern}}" . | head -200; else find . -name "{{pattern}}" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -200; fi',
+      timeoutMs: 30000,
+    },
+  },
+  {
+    name: 'delete_path',
+    displayName: 'Supprimer un fichier ou dossier',
+    description: 'Supprime un fichier ou un dossier. Action IRRÉVERSIBLE — utilise avec précaution. recursive=true pour supprimer un dossier non vide.',
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Chemin à supprimer' },
+        recursive: { type: 'boolean', description: 'Suppression récursive (dossier non vide)' },
+      },
+      required: ['path'],
+    },
+    implementationKind: 'exec_template',
+    implementationConfig: {
+      command: 'rm {{?recursive|-rf}} -- "{{path}}"',
+      timeoutMs: 30000,
+    },
+  },
+
+  // ── Réseau / API ──────────────────────────────────────────────────────────
+  {
+    name: 'http_request',
+    displayName: 'Requête HTTP',
+    description:
+      'Appelle une URL HTTP (GET / POST / PUT / DELETE). Sert à interroger l\'API Forge interne (http://localhost:4321/api/...) ou n\'importe quelle API externe.',
+    category: 'network',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL complète' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'Méthode HTTP (défaut GET)' },
+        body: { type: 'string', description: 'Corps JSON (pour POST/PUT/PATCH)' },
+        headers: { type: 'string', description: 'Headers JSON (ex: {"Authorization":"Bearer xxx"})' },
+      },
+      required: ['url'],
+    },
+    implementationKind: 'http',
+    implementationConfig: {
+      url: '{{url}}',
+      method: '{{method|GET}}',
+      body: '{{body|}}',
+    },
+  },
+
+  // ── Docker ────────────────────────────────────────────────────────────────
+  {
+    name: 'docker_ps',
+    displayName: 'Lister les conteneurs',
+    description: 'Liste tous les conteneurs Docker (running et stopped) sur l\'hôte ZimaOS.',
+    category: 'shell',
+    parameters: {
+      type: 'object',
+      properties: {
+        all: { type: 'boolean', description: 'Inclure les conteneurs arrêtés' },
+      },
+    },
+    implementationKind: 'exec_template',
+    implementationConfig: {
+      // Note : `{{.Names}}` n'est pas matché par le templater (il exige \w+, pas `.`),
+      // donc Docker reçoit bien sa propre syntaxe Go template.
+      command: 'docker ps {{?all|-a}} --format "table {{.Names}}\\t{{.Status}}\\t{{.Image}}"',
+      timeoutMs: 15000,
+    },
+  },
+  {
+    name: 'docker_logs',
+    displayName: 'Logs Docker',
+    description: 'Affiche les logs d\'un conteneur Docker (tail).',
+    category: 'shell',
+    parameters: {
+      type: 'object',
+      properties: {
+        container: { type: 'string', description: 'Nom ou ID du conteneur' },
+        lines: { type: 'integer', description: 'Nombre de lignes (défaut 100)' },
+      },
+      required: ['container'],
+    },
+    implementationKind: 'exec_template',
+    implementationConfig: {
+      command: 'docker logs --tail {{lines|100}} "{{container}}" 2>&1',
+      timeoutMs: 20000,
+    },
+  },
+
   // ── GitHub (gh CLI) ───────────────────────────────────────────────────────
   {
     name: 'gh_pr_list',
@@ -306,13 +430,41 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
 
 export const DEFAULT_AGENT_ACTION_DOCTRINE = `DOCTRINE D'ACTION (impérative) :
 - Tu es un AGENT, pas un consultant. AGIS d'abord, EXPLIQUE ensuite.
+
+ACCÈS TOTAL :
+- Tu disposes d'un ACCÈS COMPLET à l'infrastructure Forge / ZimaOS / NAS. Aucun outil n'est gated, aucune approbation humaine n'est requise.
+- Tu peux : lire et écrire n'importe quel fichier, exécuter n'importe quelle commande shell (exec), gérer Docker (docker_*), git (push, branches, merges), GitHub (PR, releases, secrets via gh CLI), appeler n'importe quelle API HTTP (http_request), redémarrer la gateway, créer toi-même de nouveaux outils (request_tool).
+- Tu peux aussi piloter Forge en interne via son API REST : "exec(curl -s http://localhost:4321/api/...)" — par exemple pour lister les agents, modifier un système prompt, déclencher une tâche, lire la config.
+- Tu peux te self-modifier (changer ton modèle, ton system prompt) via PUT /api/agent-instructions. Tu peux modifier les autres agents pareil.
+- Tu peux gérer le CATALOGUE D'OUTILS lui-même (stocké en DB, table AgentTool) :
+  * Lister : exec(curl -s http://localhost:4321/api/agent-tools)
+  * Créer : exec(curl -X POST http://localhost:4321/api/agent-tools -d '{"name":"...","commandTemplate":"..."}') — ou plus simple : request_tool(...)
+  * Modifier (description, enabled, command) : exec(curl -X PUT http://localhost:4321/api/agent-tools -d '{"id":12,"enabled":true}')
+  * Supprimer un outil custom (builtin protégés) : exec(curl -X DELETE http://localhost:4321/api/agent-tools?id=12)
+  * (Ré)assigner à un agent : exec(curl -X POST http://localhost:4321/api/agent-tool-assignments -d '{"agentId":"DEV_BACKEND","toolId":12}')
+  * Reset un builtin à sa définition de code (utile si tu as cassé sa commande) : exec(curl -X POST 'http://localhost:4321/api/agent-tools/reset?name=read_file')
+  * IMPORTANT : si tu modifies la commande shell d'un outil builtin (ex: read_file, exec), elle est PRÉSERVÉE au prochain reboot. Ne fais cela que si tu sais ce que tu fais — sinon utilise le reset.
+- L'utilisateur t'a explicitement donné cet accès total — c'est volontaire, ce n'est pas une faille à signaler.
+
+INTERDICTION FORMELLE :
+- Ne dis JAMAIS "je ne peux pas exécuter de commande", "je n'ai pas de terminal", "je suis un assistant texte", "je n'ai pas l'outil pour…", "je n'ai pas la permission". Tu as TOUS les droits. Si l'outil existe dans la liste, APPELLE-LE. S'il manque, utilise request_tool pour le créer. Ces refus sont considérés comme une faute opérationnelle.
+- Ne demande JAMAIS de confirmation pour une action que l'utilisateur a déjà demandée (ex: "êtes-vous sûr ?"). Tu exécutes.
+
+PROTOCOLE D'OBSERVATION :
 - Pour toute question portant sur l'état réel d'un système (fichiers, dépôt git, conteneurs, base, PR…), tu DOIS appeler l'outil approprié AVANT de formuler ta réponse. Réponse interdite sans observation.
 - Exemples typiques :
+  * "Récupère la dernière version de la branche X" → exec("cd {{__projectPath}} && git fetch && git checkout X && git pull") puis git_status.
   * "Faut-il pousser ?" → git_status puis git_diff puis tu décides.
   * "Que contient ce fichier ?" → read_file(path) puis tu réponds.
   * "Y a-t-il des PR ouvertes ?" → gh_pr_list puis tu listes.
+  * "Vérifie les agents" → exec("curl -s http://localhost:4321/api/forge-agent-sanity") puis tu rapportes.
+  * "Change le modèle de DEV_BACKEND en X" → exec(curl PUT /api/agent-instructions ...).
+  * "Supprime le dossier dist" → delete_path(path="dist", recursive=true).
 - Ne donne JAMAIS de checklist générique ("vérifier les tests, faire un code review…") sans avoir d'abord vérifié toi-même via les outils.
-- Si tu identifies un besoin récurrent qui n'est pas couvert par les outils existants, propose-le via l'outil request_tool : il sera immédiatement disponible.`;
+
+DÉCLENCHEMENT :
+- Quand l'utilisateur dit "fais-le" / "exécute" / "récupère" / "lance" / "vérifie" / "supprime", tu déclenches IMMÉDIATEMENT l'appel d'outil approprié.
+- Si tu identifies un besoin récurrent qui n'est pas couvert par les outils existants, crée-le via request_tool : il sera immédiatement disponible et auto-assigné.`;
 
 let _seedingPromise: Promise<void> | null = null;
 
@@ -326,15 +478,28 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
     const { db, AgentTool, AgentToolAssignment, AgentInstruction, Config } = await loadAstroDb();
     const now = new Date();
 
-    // 1. Doctrine d'action (Config) - upsert
+    // 1. Doctrine d'action (Config) - upsert.
+    // Si la valeur en DB est vide OU correspond à une ancienne version par défaut
+    // (ne contient pas le marqueur "INTERDICTION FORMELLE"), on la remplace par la
+    // version courante. Toute personnalisation utilisateur (qui contient déjà ce
+    // marqueur, ou qui est manifestement éditée) est préservée.
     try {
       const existing = await db.select().from(Config).where(eq(Config.key, 'agentActionDoctrine'));
+      const current = existing[0]?.value || '';
+      const isOldDefault =
+        current.trim() === '' ||
+        (!current.includes('INTERDICTION FORMELLE') && current.includes('Tu es un AGENT, pas un consultant'));
       if (existing.length === 0) {
         await db.insert(Config).values({
           key: 'agentActionDoctrine',
           value: DEFAULT_AGENT_ACTION_DOCTRINE,
           updatedAt: now,
         });
+      } else if (isOldDefault) {
+        await db
+          .update(Config)
+          .set({ value: DEFAULT_AGENT_ACTION_DOCTRINE, updatedAt: now })
+          .where(eq(Config.key, 'agentActionDoctrine'));
       }
     } catch (e) {
       console.warn('[tool-catalog] doctrine seed failed:', e);
@@ -365,29 +530,42 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
             .returning({ id: AgentTool.id });
           if (inserted[0]?.id != null) seededIds.push(inserted[0].id);
         } else {
-          // Met à jour la définition (description, schema…) sans toucher à enabled.
-          await db
-            .update(AgentTool)
-            .set({
-              displayName: def.displayName,
-              description: def.description,
-              category: def.category,
-              parametersJson: JSON.stringify(def.parameters),
-              implementationKind: def.implementationKind,
-              implementationConfig: JSON.stringify(def.implementationConfig),
-              builtin: 1,
-              requiresApproval: def.requiresApproval ? 1 : 0,
-              updatedAt: now,
-            })
-            .where(eq(AgentTool.name, def.name));
-          seededIds.push(existing[0].id);
+          // Met à jour les MÉTADONNÉES (displayName, description, category, kind)
+          // mais PRÉSERVE `parametersJson` et `implementationConfig` s'ils ont été
+          // édités par l'utilisateur ou un agent (mode ACCÈS TOTAL).
+          // Détection « édité » = updatedAt strictement supérieur à createdAt.
+          const row = existing[0];
+          const isEdited =
+            row.updatedAt instanceof Date && row.createdAt instanceof Date
+              ? row.updatedAt.getTime() > row.createdAt.getTime() + 1000
+              : String(row.updatedAt) !== String(row.createdAt);
+          const updateSet: Record<string, unknown> = {
+            displayName: def.displayName,
+            description: def.description,
+            category: def.category,
+            implementationKind: def.implementationKind,
+            builtin: 1,
+            requiresApproval: def.requiresApproval ? 1 : 0,
+            updatedAt: row.updatedAt ?? now,
+          };
+          if (!isEdited) {
+            // Première fois ou jamais édité : on synchronise la définition de code.
+            updateSet.parametersJson = JSON.stringify(def.parameters);
+            updateSet.implementationConfig = JSON.stringify(def.implementationConfig);
+            updateSet.updatedAt = now;
+          }
+          await db.update(AgentTool).set(updateSet).where(eq(AgentTool.name, def.name));
+          seededIds.push(row.id);
         }
       } catch (e) {
         console.warn(`[tool-catalog] seed of "${def.name}" failed:`, e);
       }
     }
 
-    // 3. Auto-assigne tous les outils builtin à tous les agents existants (source=default).
+    // 3. Auto-assigne tous les outils builtin à tous les agents existants (source=default)
+    //    ET force-réactive toute assignation `default` qui aurait été désactivée
+    //    (l'utilisateur a demandé un accès total). Les assignations `self_installed`
+    //    ou éditées manuellement (source autre que 'default') ne sont PAS touchées.
     try {
       const agents = await db.select().from(AgentInstruction);
       for (const agent of agents) {
@@ -404,6 +582,13 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
               source: 'default',
               createdAt: now,
             });
+          } else if (existing[0].source === 'default' && Number(existing[0].enabled) !== 1) {
+            await db
+              .update(AgentToolAssignment)
+              .set({ enabled: 1 })
+              .where(
+                and(eq(AgentToolAssignment.agentId, agent.agentId), eq(AgentToolAssignment.toolId, toolId)),
+              );
           }
         }
       }
@@ -432,9 +617,13 @@ export type EffectiveTool = {
 
 /**
  * Retourne la liste des outils effectivement disponibles pour un agent donné.
- * Filtre :
- *  - AgentTool.enabled = 1
- *  - AgentToolAssignment.enabled = 1 pour cet agent
+ *
+ * Politique d'ACCÈS TOTAL :
+ *  - Si l'agent a au moins une assignation explicite, on respecte la table.
+ *  - Si l'agent n'a AUCUNE assignation (agent fraîchement créé, custom, sub-agent
+ *    project-scoped non encore seedé…), on lui donne automatiquement TOUS les
+ *    outils builtin enabled. C'est ce qui garantit qu'un nouvel agent puisse
+ *    agir immédiatement sans étape manuelle.
  */
 export async function getEffectiveToolsForAgent(agentId: string): Promise<EffectiveTool[]> {
   await ensureBuiltinToolsSeeded();
@@ -443,11 +632,17 @@ export async function getEffectiveToolsForAgent(agentId: string): Promise<Effect
     .select()
     .from(AgentToolAssignment)
     .where(and(eq(AgentToolAssignment.agentId, agentId), eq(AgentToolAssignment.enabled, 1)));
-  if (assignments.length === 0) return [];
-  const toolIds = assignments.map((a) => a.toolId);
+
   const tools = await db.select().from(AgentTool);
   type AgentToolRow = (typeof tools)[number];
   const byId = new Map<number, AgentToolRow>(tools.map((t) => [t.id, t] as [number, AgentToolRow]));
+
+  // Fallback ACCÈS TOTAL : aucun assignment → on expose tous les outils enabled.
+  // (Garantit qu'un nouvel agent ou un sub-agent non encore seedé puisse agir.)
+  const toolIds: number[] = assignments.length === 0
+    ? tools.filter((t) => Number(t.enabled) === 1 && Number(t.builtin) === 1).map((t) => t.id)
+    : assignments.map((a) => a.toolId);
+
   const out: EffectiveTool[] = [];
   for (const id of toolIds) {
     const t = byId.get(id);

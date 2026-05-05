@@ -19,6 +19,13 @@ import {
 } from './gemini-provider';
 
 type OllamaToolCall = {
+  /**
+   * Identifiant retourné par le provider (Gemini OpenAI-compat, ou nous-mêmes pour Ollama).
+   * REQUIS sur les tours suivants pour que Gemini puisse rattacher le résultat
+   * du tool (`role: 'tool'` + `tool_call_id`). Sans cet ID → HTTP 400.
+   */
+  id?: string;
+  type?: 'function';
   function?: {
     name?: string;
     arguments?: unknown;
@@ -29,6 +36,8 @@ type OrchestratorMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   tool_calls?: OllamaToolCall[];
+  /** REQUIS sur les messages `role: 'tool'` pour les providers OpenAI-compatibles (Gemini). */
+  tool_call_id?: string;
 };
 
 function coerceArguments(raw: unknown): Record<string, unknown> {
@@ -365,7 +374,23 @@ export async function runForgeOrchestrator(
         messages: currentMessages.map((m) => ({
           role: m.role,
           content: m.content,
-          ...(m.tool_calls ? { tool_calls: m.tool_calls } : {}),
+          ...(m.tool_calls
+            ? {
+                tool_calls: m.tool_calls.map((tc) => ({
+                  id: tc.id,
+                  type: 'function' as const,
+                  function: {
+                    name: tc.function?.name,
+                    // OpenAI exige `arguments` en string JSON.
+                    arguments:
+                      typeof tc.function?.arguments === 'string'
+                        ? tc.function?.arguments
+                        : JSON.stringify(tc.function?.arguments ?? {}),
+                  },
+                })),
+              }
+            : {}),
+          ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
         })),
         tools: geminiTools.length > 0 ? geminiTools : undefined,
         timeoutMs,
@@ -376,7 +401,11 @@ export async function runForgeOrchestrator(
         return { reply: err, provider: 'gemini', model, steps, plan: null };
       }
       rawReply = r.content.trim();
-      nativeToolCalls = (r.toolCalls || []).map((tc) => ({
+      nativeToolCalls = (r.toolCalls || []).map((tc, idx) => ({
+        // Conserve l'ID original (REQUIS pour le tour suivant : tool_call_id).
+        // Si le provider n'en fournit pas, on en synthétise un stable.
+        id: tc.id || `call_${turnId || 'turn'}_${turn}_${idx}`,
+        type: 'function' as const,
         function: {
           name: tc.function?.name,
           arguments: tc.function?.arguments,
@@ -404,7 +433,17 @@ export async function runForgeOrchestrator(
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const msg = (data.message as Record<string, unknown> | undefined) ?? undefined;
       rawReply = typeof msg?.content === 'string' ? String(msg.content).trim() : '';
-      nativeToolCalls = Array.isArray(msg?.tool_calls) ? (msg!.tool_calls as OllamaToolCall[]) : [];
+      const ollamaCalls = Array.isArray(msg?.tool_calls) ? (msg!.tool_calls as OllamaToolCall[]) : [];
+      // Ollama ne fournit jamais d'`id` sur ses tool_calls : on en synthétise un stable
+      // pour pouvoir le re-référencer côté `tool_call_id` au tour suivant.
+      nativeToolCalls = ollamaCalls.map((tc, idx) => ({
+        id: tc.id || `call_${turnId || 'turn'}_${turn}_${idx}`,
+        type: 'function' as const,
+        function: {
+          name: tc.function?.name,
+          arguments: tc.function?.arguments,
+        },
+      }));
     }
 
     // 1) Mode natif : tool_calls Ollama
@@ -420,11 +459,13 @@ export async function runForgeOrchestrator(
         const toolName = String(nativeCall?.function?.name || '').trim();
         const tool = toolsByName.get(toolName);
         const args = coerceArguments(nativeCall?.function?.arguments);
+        const toolCallId = nativeCall.id;
 
         if (!tool) {
           currentMessages.push({
             role: 'tool',
             content: `[ERROR] Outil "${toolName}" non disponible pour ${input.agentId}.`,
+            tool_call_id: toolCallId,
           });
           continue;
         }
@@ -440,6 +481,7 @@ export async function runForgeOrchestrator(
         currentMessages.push({
           role: 'tool',
           content: summarizeToolResultForModel(toolResult),
+          tool_call_id: toolCallId,
         });
       }
       continue;
