@@ -9,6 +9,7 @@ import AppGitPanel from '../../../components/apps/AppGitPanel';
 import AuditLauncher from '../../../components/apps/AuditLauncher';
 import GitHistoryCard from '../../../components/apps/GitHistoryCard';
 import GithubFolderCard from '../../../components/apps/GithubFolderCard';
+import AgentActivityCanvas from '../../../components/apps/AgentActivityCanvas';
 import path from 'path';
 import { db, Project, Request, eq, desc } from 'astro:db';
 import { resolveProjectPathFromDbProject, isSafeRepoDirName } from '../../../lib/forge-repos';
@@ -126,20 +127,106 @@ const app = {
       </div>
     </div>
 
-    <AppProjectOps client:load appName={folderKey} forgeVirtualHost={app.url} />
+    <!-- HERO : ce que les agents ont fait sur ce projet -->
+    <AgentActivityCanvas client:load appName={folderKey} />
 
-    <AppGitPanel
-      client:load
-      appName={folderKey}
-      initialGithubBranchDev={row.githubBranchDev ?? 'dev'}
-      initialGithubBranchProd={row.githubBranchProd ?? 'main'}
-    />
+    <!-- Création rapide de demande -->
+    <ProjectDemandesForm client:load appName={folderKey} />
 
-    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <!-- Sections secondaires : repliées par défaut -->
+    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
+        <span class="flex items-center gap-2">
+          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
+          Demandes utilisateur ({requests.length})
+        </span>
+        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+      </summary>
+      <div class="px-6 pb-6">
+        {requests.length > 0 ? (
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {requests.map((request) => (
+              <article class="border border-gray-100 rounded-xl p-4 bg-gray-50">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-[10px] text-gray-400 font-mono">{request.id}</p>
+                  <span
+                    class={`text-[10px] uppercase font-semibold px-2 py-1 rounded ${
+                      request.status === 'Traite'
+                        ? 'bg-green-50 text-green-600'
+                        : request.status === 'En cours'
+                          ? 'bg-blue-50 text-blue-600'
+                          : request.status === 'Rejetée'
+                            ? 'bg-red-50 text-red-500'
+                            : 'bg-yellow-50 text-yellow-600'
+                    }`}
+                  >
+                    {request.status}
+                  </span>
+                </div>
+                <p class="mt-2 text-sm text-gray-800 font-medium">{request.title}</p>
+                {request.detail && <p class="mt-1.5 text-xs text-gray-400">{request.detail}</p>}
+                <p class="mt-2 text-xs text-gray-400">
+                  Type : <span class="text-gray-600">{request.type}</span>
+                </p>
+                <p class="text-xs text-gray-400">
+                  Agent : <span class="font-mono" style="color:#175B37">{request.agent}</span>
+                </p>
+                <p class="text-xs text-gray-400 mt-2">
+                  {new Date(request.updatedAt).toLocaleString('fr-FR')}
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div class="border border-gray-100 rounded-xl p-4 bg-gray-50 text-sm text-gray-400">
+            Aucune demande enregistrée. Utilisez le formulaire ci-dessus.
+          </div>
+        )}
+      </div>
+    </details>
 
-      <div class="xl:col-span-2 space-y-6">
+    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
+        <span class="flex items-center gap-2">
+          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
+          Audit & exécution
+        </span>
+        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+      </summary>
+      <div class="px-6 pb-6 space-y-5">
+        <AuditLauncher client:load projectName={displayName} projectPath={projectPath} />
+      </div>
+    </details>
+
+    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
+        <span class="flex items-center gap-2">
+          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
+          Serveurs de dev & ports
+        </span>
+        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+      </summary>
+      <div class="px-6 pb-6">
+        <AppProjectOps client:load appName={folderKey} forgeVirtualHost={app.url} />
+      </div>
+    </details>
+
+    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
+        <span class="flex items-center gap-2">
+          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
+          Git & GitHub
+        </span>
+        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+      </summary>
+      <div class="px-6 pb-6 space-y-5">
+        <AppGitPanel
+          client:load
+          appName={folderKey}
+          initialGithubBranchDev={row.githubBranchDev ?? 'dev'}
+          initialGithubBranchProd={row.githubBranchProd ?? 'main'}
+        />
         <GithubFolderCard client:load summary={githubSummary} />
-
         <GitHistoryCard
           client:load
           commits={commits}
@@ -149,57 +236,7 @@ const app = {
           appHttpUrl={`http://${app.url}`}
         />
       </div>
+    </details>
 
-      <!-- Colonne latérale -->
-      <aside class="space-y-5">
-        <AuditLauncher client:load projectName={displayName} projectPath={projectPath} />
-
-        <ProjectDemandesForm client:load appName={folderKey} />
-
-        <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-5">
-          <h3 class="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">File de demandes</h3>
-          {requests.length > 0 ? (
-            <div class="space-y-3">
-              {requests.map((request) => (
-                <article class="border border-gray-100 rounded-xl p-4 bg-gray-50">
-                  <div class="flex items-center justify-between gap-3">
-                    <p class="text-[10px] text-gray-400 font-mono">{request.id}</p>
-                    <span
-                      class={`text-[10px] uppercase font-semibold px-2 py-1 rounded ${
-                        request.status === 'Traite'
-                          ? 'bg-green-50 text-green-600'
-                          : request.status === 'En cours'
-                            ? 'bg-blue-50 text-blue-600'
-                            : request.status === 'Rejetée'
-                              ? 'bg-red-50 text-red-500'
-                              : 'bg-yellow-50 text-yellow-600'
-                      }`}
-                    >
-                      {request.status}
-                    </span>
-                  </div>
-                  <p class="mt-2 text-sm text-gray-800 font-medium">{request.title}</p>
-                  {request.detail && <p class="mt-1.5 text-xs text-gray-400">{request.detail}</p>}
-                  <p class="mt-2 text-xs text-gray-400">
-                    Type : <span class="text-gray-600">{request.type}</span>
-                  </p>
-                  <p class="text-xs text-gray-400">
-                    Agent : <span class="font-mono" style="color:#175B37">{request.agent}</span>
-                  </p>
-                  <p class="text-xs text-gray-400 mt-2">
-                    {new Date(request.updatedAt).toLocaleString('fr-FR')}
-                  </p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div class="border border-gray-100 rounded-xl p-4 bg-gray-50 text-sm text-gray-400">
-              Aucune demande enregistrée. Utilisez le formulaire ci-dessus.
-            </div>
-          )}
-        </section>
-      </aside>
-
-    </div>
   </div>
 </DashboardLayout>

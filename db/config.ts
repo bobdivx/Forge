@@ -448,6 +448,65 @@ const OllamaInstance = defineTable({
 });
 
 /**
+ * Catalogue des outils disponibles pour les agents.
+ * Source de vérité unique : DB. Les outils builtin sont seedés à chaque démarrage.
+ *
+ * implementationKind :
+ *  - "builtin"       : handler TypeScript dans forge-tool-bus.ts (dispatch sur le champ name)
+ *  - "exec_template" : commande shell rendue via templating ({{varName}}) puis infra.exec()
+ *  - "http"          : appel HTTP rendu via templating (réservé / extensions futures)
+ */
+const AgentTool = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Nom technique unique (ex: "git_status", "read_file"). Utilisé par le LLM. */
+    name: column.text({ unique: true }),
+    /** Libellé affiché dans le dashboard. */
+    displayName: column.text(),
+    /** Description fournie au LLM (decisive pour le tool calling). */
+    description: column.text(),
+    /** Catégorie: filesystem | git | github | shell | forge | network | custom */
+    category: column.text({ default: 'custom' }),
+    /** JSON Schema des paramètres acceptés. */
+    parametersJson: column.text({ default: '{"type":"object","properties":{}}' }),
+    /** builtin | exec_template | http */
+    implementationKind: column.text({ default: 'exec_template' }),
+    /** JSON config (ex: { "command": "git status", "cwd": "{{__projectPath}}" }). */
+    implementationConfig: column.text({ default: '{}' }),
+    /** 1 = visible / utilisable, 0 = masqué. */
+    enabled: column.number({ default: 1 }),
+    /** 1 = défini en code (non supprimable), 0 = ajouté via UI ou par un agent. */
+    builtin: column.number({ default: 0 }),
+    /** 1 = chaque appel doit créer un Approval avant exécution. */
+    requiresApproval: column.number({ default: 0 }),
+    /** Agent qui l'a créé (pour les auto-installations). */
+    createdByAgentId: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Liaison N-N entre AgentInstruction et AgentTool.
+ * Quels outils sont disponibles pour quel agent.
+ *
+ * source :
+ *  - "default"        : assignation auto au seed des builtin
+ *  - "manual"         : ajouté via l'UI de configuration de l'agent
+ *  - "self_installed" : auto-assigné après une demande de l'agent (request_tool)
+ */
+const AgentToolAssignment = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    agentId: column.text(),
+    toolId: column.number({ references: () => AgentTool.columns.id }),
+    enabled: column.number({ default: 1 }),
+    source: column.text({ default: 'manual' }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
  * Valeurs de listes pour le Rule Builder (frameworks, UI libs, langues, qualité...).
  */
 const AgentRuleOption = defineTable({
@@ -498,5 +557,7 @@ export default defineDb({
     ForgeChatStep,
     OllamaInstance,
     AgentRuleOption,
+    AgentTool,
+    AgentToolAssignment,
   },
 });

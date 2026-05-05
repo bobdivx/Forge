@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
+import AgentDoctrineEditor from './AgentDoctrineEditor';
+import AgentToolsCatalog from './AgentToolsCatalog';
 
 type Rule = {
   id: string;
@@ -312,6 +314,26 @@ export default function AgentRulesTab() {
 
   return (
     <div class="p-6 space-y-5">
+      <details class="group rounded-xl border border-gray-200 bg-white" open>
+        <summary class="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-bold text-gray-900 [&::-webkit-details-marker]:hidden">
+          <span>Doctrine d'action</span>
+          <span class="text-xs font-semibold text-gray-400 transition group-open:rotate-180">⌄</span>
+        </summary>
+        <div class="border-t border-gray-100 p-4">
+          <AgentDoctrineEditor />
+        </div>
+      </details>
+
+      <details class="group rounded-xl border border-gray-200 bg-white">
+        <summary class="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 text-sm font-bold text-gray-900 [&::-webkit-details-marker]:hidden">
+          <span>Catalogue d'outils</span>
+          <span class="text-xs font-semibold text-gray-400 transition group-open:rotate-180">⌄</span>
+        </summary>
+        <div class="border-t border-gray-100 p-4">
+          <AgentToolsCatalog />
+        </div>
+      </details>
+
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-lg font-bold text-gray-900">Règles agents</h2>

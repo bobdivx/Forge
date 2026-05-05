@@ -1,6 +1,7 @@
 import { loadAstroDb } from './load-astro-db';
 import { eq } from 'drizzle-orm';
 import { getConfig, setConfig } from './config-db';
+import { DEFAULT_AGENT_ACTION_DOCTRINE, type EffectiveTool } from './forge-tool-catalog';
 
 export type AgentRuleCategory =
   | 'framework'
@@ -79,7 +80,51 @@ export async function saveAgentRules(rules: AgentRule[]): Promise<void> {
   await setConfig({ agentPolicyRules: JSON.stringify(rules) });
 }
 
-export async function buildAgentPolicyContext(projectId?: number, agentId?: string): Promise<{
+/** Doctrine d'action — chargée depuis Config.agentActionDoctrine (DB, seedée au boot via ensureBuiltinToolsSeeded). */
+export async function getAgentActionDoctrine(): Promise<string> {
+  const raw = (await getConfig('agentActionDoctrine')).trim();
+  return raw || DEFAULT_AGENT_ACTION_DOCTRINE;
+}
+
+export async function saveAgentActionDoctrine(text: string): Promise<void> {
+  const value = String(text || '').trim() || DEFAULT_AGENT_ACTION_DOCTRINE;
+  await setConfig({ agentActionDoctrine: value });
+}
+
+function formatToolsListForPrompt(tools: EffectiveTool[]): string {
+  if (tools.length === 0) return '';
+  const byCategory = new Map<string, EffectiveTool[]>();
+  for (const t of tools) {
+    const arr = byCategory.get(t.category) || [];
+    arr.push(t);
+    byCategory.set(t.category, arr);
+  }
+  const lines: string[] = ['OUTILS DISPONIBLES (tool calling natif Ollama) :'];
+  const order = ['filesystem', 'git', 'github', 'shell', 'forge', 'network', 'custom'];
+  for (const cat of order) {
+    const arr = byCategory.get(cat);
+    if (!arr || arr.length === 0) continue;
+    lines.push(`\n[${cat}]`);
+    for (const t of arr) {
+      const params = Object.keys(t.parameters?.properties || {});
+      const sig = params.length ? `(${params.join(', ')})` : '()';
+      lines.push(`- ${t.name}${sig} — ${t.description}`);
+    }
+  }
+  lines.push(
+    "\nAppelle ces outils via le mécanisme tool_calls natif d'Ollama. Tu peux enchaîner plusieurs appels avant la réponse finale.",
+  );
+  lines.push(
+    "Fallback (modèles non tool-aware) : émets en fin de message [FORGE_TOOL_EXEC]{\"tool\":\"exec\",\"command\":\"git status\"}",
+  );
+  return lines.join('\n');
+}
+
+export async function buildAgentPolicyContext(
+  projectId?: number,
+  agentId?: string,
+  effectiveTools?: EffectiveTool[],
+): Promise<{
   preferredLanguage: string;
   instructionText: string;
   globalRules: AgentRule[];
@@ -120,6 +165,10 @@ export async function buildAgentPolicyContext(projectId?: number, agentId?: stri
     (r) =>
       `- [${r.scope}${r.projectId != null ? `#${r.projectId}` : ''}] ${r.category}.${r.field} ${r.operator} ${r.value}`,
   );
+
+  const doctrine = await getAgentActionDoctrine();
+  const toolsBlock = formatToolsListForPrompt(effectiveTools || []);
+
   const instructionText = [
     agentPrompt,
     preferredLanguage === 'en'
@@ -133,28 +182,13 @@ export async function buildAgentPolicyContext(projectId?: number, agentId?: stri
       : '',
     ruleLines.length ? `Agent rules:\n${ruleLines.join('\n')}` : '',
     legacyRules ? `Legacy global rules:\n${legacyRules}` : '',
-    `
-CAPABILITIES & FORMATS:
-1. REASONING: Avant d'agir ou de répondre, explique brièvement ta réflexion pour que l'utilisateur comprenne ta démarche.
-
-2. TOOLS: Tu peux interagir avec le système via le format: [FORGE_TOOL_EXEC]{"tool": "...", ...}
-- read_file: {"tool": "read_file", "path": "src/pages/index.astro"}
-- write_file: {"tool": "write_file", "path": "temp.txt", "content": "..."}
-- exec: {"tool": "exec", "command": "ls -la"}
-- update_request_status: {"tool": "update_request_status", "requestId": 1, "status": "completed"}
-Tu peux appeler un seul outil par message. Attends le résultat avant de continuer.
-
-3. PLANNING: Si tu identifies plusieurs tâches, génère un bloc de plan:
-<FORGE_PLAN>
-[
-  {"title": "Tâche 1", "content": "...", "assignee": "DEV_FRONTEND"}
-]
-</FORGE_PLAN>
-`
+    doctrine,
+    toolsBlock,
+    'PLANIFICATION : Si tu identifies plusieurs tâches à créer dans Forge, ajoute en fin de réponse :\n<FORGE_PLAN>\n[{"title": "Tâche 1", "content": "...", "assignee": "DEV_FRONTEND"}]\n</FORGE_PLAN>',
+    "RAISONNEMENT : tu peux émettre un court bloc <thought>...</thought> au début de ta réponse pour expliquer ta démarche. Reste concis.",
   ]
     .filter(Boolean)
     .join('\n\n');
 
   return { preferredLanguage, instructionText, globalRules, scopedRules, strictMode, agentPrompt };
 }
-

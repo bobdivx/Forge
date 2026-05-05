@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import type { AgentRow, Project, RequestItem, isSessionUsable } from './types';
 import TeamAvatar from '../../agents/TeamAvatar';
 import type { AgentTeamProfile } from '../../../lib/agent-profile';
 import { truncateText } from './types';
+import { pickAdequateModel } from '../../../lib/pick-adequate-model';
 
 interface Props {
   agents: AgentRow[];
@@ -28,6 +29,9 @@ export default function AgentSidebar({
   sessionQuery, setSessionQuery, offlineCount, onModelChange
 }: Props) {
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [globalDefaultModel, setGlobalDefaultModel] = useState<string>('');
+  const autoFixedAgentsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetch('/api/models?filter=active')
@@ -41,8 +45,39 @@ export default function AgentSidebar({
           }
         }
       })
+      .catch(() => {})
+      .finally(() => setModelsLoaded(true));
+    fetch('/api/agent-default-model')
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.model) setGlobalDefaultModel(String(j.model));
+      })
       .catch(() => {});
   }, []);
+
+  // Auto-attribution : dès que la liste des modèles dispos est chargée, on
+  // réassigne en silence les agents pointant vers un modèle indisponible
+  // vers un modèle adéquat (rôle-aware), sans laisser le select coincé sur
+  // une option « indisponible ».
+  useEffect(() => {
+    if (!modelsLoaded || availableModels.length === 0) return;
+    for (const a of agents) {
+      const current = String(a.model || '').trim();
+      if (!current || current === '—') continue;
+      if (availableModels.includes(current)) continue;
+      if (autoFixedAgentsRef.current.has(a.id)) continue;
+      const profile = teamProfiles[a.id];
+      const picked = pickAdequateModel(
+        { id: a.id, name: a.name, model: current, role: profile?.role },
+        availableModels,
+        globalDefaultModel || undefined,
+      );
+      if (picked && picked !== current) {
+        autoFixedAgentsRef.current.add(a.id);
+        onModelChange(a.id, picked);
+      }
+    }
+  }, [modelsLoaded, availableModels, agents, teamProfiles, globalDefaultModel, onModelChange]);
   const inputCls = 'w-full rounded-2xl border border-gray-200 bg-gray-50/80 px-3.5 py-2.5 text-sm text-gray-900 shadow-inner shadow-white/40 outline-none transition focus:border-[#175B37] focus:bg-white focus:ring-2 focus:ring-[#175B37]/20';
 
   const isUsable = (a: AgentRow) => {
@@ -111,15 +146,27 @@ export default function AgentSidebar({
               <div class="text-[10px] text-gray-500 truncate font-medium uppercase tracking-tight">{profile?.role || 'Agent'}</div>
               {!isSub && <div class="text-[9px] font-bold mt-0.5 text-gray-400 group-hover:text-gray-600 transition-colors">{a.status}</div>}
             </button>
-            <select 
-              class="mt-1.5 w-full rounded-lg border border-gray-100 bg-white/50 text-[10px] py-1 px-2 outline-none focus:border-[#175B37]/30"
-              value={a.model || ''}
-              onChange={(e) => onModelChange(a.id, (e.target as HTMLSelectElement).value)}
-            >
-              <option value="">Modèle...</option>
-              {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
-              {!availableModels.includes(a.model) && a.model && <option value={a.model} disabled>{a.model} indisponible</option>}
-            </select>
+            {(() => {
+              const currentModel = String(a.model || '').trim();
+              const currentAvailable = currentModel && availableModels.includes(currentModel);
+              const selectValue = currentAvailable ? currentModel : '';
+              const placeholder = !modelsLoaded
+                ? 'Chargement…'
+                : currentModel && currentModel !== '—' && !currentAvailable
+                  ? `Auto (${currentModel} indispo)`
+                  : 'Modèle…';
+              return (
+                <select
+                  class="mt-1.5 w-full rounded-lg border border-gray-100 bg-white/50 text-[10px] py-1 px-2 outline-none focus:border-[#175B37]/30"
+                  value={selectValue}
+                  onChange={(e) => onModelChange(a.id, (e.target as HTMLSelectElement).value)}
+                  title={!currentAvailable && currentModel && currentModel !== '—' ? `Modèle stocké « ${currentModel} » indisponible — réattribution automatique en cours.` : undefined}
+                >
+                  <option value="">{placeholder}</option>
+                  {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              );
+            })()}
           </div>
         </div>
       </li>

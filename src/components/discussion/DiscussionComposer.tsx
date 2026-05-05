@@ -317,15 +317,29 @@ export default function DiscussionComposer() {
   };
 
   const onModelChange = async (targetAgentId: string, newModel: string) => {
-    // Cette fonction permet de changer le modèle de l'agent.
-    // L'idéal est de mettre à jour le state local d'abord
+    // Mise à jour optimiste de l'UI…
     setAgents(prev => prev.map(a => a.id === targetAgentId ? { ...a, model: newModel } : a));
-    // et de faire l'appel API pour sauvegarder (non implémenté côté serveur pour le moment ?
-    // S'il existe un endpoint, ce serait ici.)
+    if (!newModel) return; // simple reset visuel, rien à persister
     try {
-       await fetch('/api/forge-sync-agents', { method: 'POST' }); // Peut forcer une synchro si besoin.
+      const r = await fetch('/api/agent-instructions', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: targetAgentId, model: newModel }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        console.error('Mise à jour du modèle agent impossible:', data?.error || r.statusText);
+        return;
+      }
+      // Re-synchro légère pour rafraîchir d'éventuels champs annexes
+      fetch('/api/agents')
+        .then((res) => res.json())
+        .then((d) => {
+          if (Array.isArray(d?.agents)) setAgents(d.agents);
+        })
+        .catch(() => {});
     } catch (err) {
-       console.error("Erreur sync model change:", err);
+      console.error('Erreur réseau lors du changement de modèle agent:', err);
     }
   };
 

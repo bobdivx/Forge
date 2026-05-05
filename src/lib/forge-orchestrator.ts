@@ -1,8 +1,63 @@
 import { getAllConfig, getOllamaOriginResolved } from './config-db';
 import { buildAgentPolicyContext } from './agent-rules';
-import { runForgeTool, type ForgeToolResult, type ForgeToolCall } from './forge-tool-bus';
+import {
+  runForgeTool,
+  executeDynamicTool,
+  type ForgeToolResult,
+  type ForgeToolCall,
+  type ToolExecutionContext,
+} from './forge-tool-bus';
 import { loadAstroDb } from './load-astro-db';
 import { getSelectableOllamaModels } from './ollama-model-availability';
+import { getEffectiveToolsForAgent, type EffectiveTool } from './forge-tool-catalog';
+
+type OllamaToolCall = {
+  function?: {
+    name?: string;
+    arguments?: unknown;
+  };
+};
+
+type OrchestratorMessage = {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  tool_calls?: OllamaToolCall[];
+};
+
+function coerceArguments(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+    } catch {
+      /* ignore */
+    }
+  }
+  return {};
+}
+
+function summarizeToolResultForModel(result: ForgeToolResult): string {
+  if (result.ok) {
+    const out = String(result.output || '').trim();
+    return out || 'ok';
+  }
+  return `[ERROR] ${String(result.error || 'Outil en échec')}`;
+}
+
+/** Construit le tableau `tools` exposé via l'API native Ollama. */
+function buildOllamaToolSchemas(tools: EffectiveTool[]) {
+  return tools.map((t) => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+}
 
 export type ForgeOrchestratorInput = {
   agentId: string;
@@ -42,120 +97,78 @@ function stringifyStepPayload(payload: unknown): string {
   return typeof payload === 'string' ? payload : JSON.stringify(payload);
 }
 
-function buildToolStartStep(toolCall: ForgeToolCall, turnId?: string, stepId?: string): ForgeOrchestratorOutput['steps'][0] {
-  if (toolCall.tool === 'read_file') {
-    return {
-      type: 'file',
-      label: `Lecture ${toolCall.path}`,
-      payload: stringifyStepPayload({ kind: 'read_file', path: toolCall.path, turnId, stepId }),
-      status: 'running',
-    };
-  }
-  if (toolCall.tool === 'write_file') {
-    return {
-      type: 'file',
-      label: `Modification ${toolCall.path}`,
-      payload: stringifyStepPayload({
-        kind: 'write_file',
-        path: toolCall.path,
-        lines: countLines(toolCall.content),
-        preview: truncateForStep(toolCall.content, 800),
-        turnId,
-        stepId,
-      }),
-      status: 'running',
-    };
-  }
-  if (toolCall.tool === 'exec') {
-    const isSearch = /\b(rg|grep|find|select-string)\b/i.test(toolCall.command);
-    return {
-      type: isSearch ? 'search' : 'command',
-      label: `${isSearch ? 'Recherche' : 'Commande'} ${truncateForStep(toolCall.command, 80)}`,
-      payload: stringifyStepPayload({ kind: 'exec', command: toolCall.command, turnId, stepId }),
-      status: 'running',
-    };
-  }
-  if (toolCall.tool === 'update_request_status') {
-    return {
-      type: 'task',
-      label: `Mise à jour demande #${toolCall.requestId}`,
-      payload: stringifyStepPayload({ kind: 'update_request_status', requestId: toolCall.requestId, status: toolCall.status, turnId, stepId }),
-      status: 'running',
-    };
-  }
+function categorizeStepType(tool: EffectiveTool): string {
+  if (tool.category === 'filesystem') return 'file';
+  if (tool.category === 'forge') return 'task';
+  if (tool.category === 'shell' || tool.category === 'git' || tool.category === 'github') return 'command';
+  return 'command';
+}
+
+function buildDynamicToolStartStep(
+  tool: EffectiveTool,
+  args: Record<string, unknown>,
+  turnId?: string,
+  stepId?: string,
+): ForgeOrchestratorOutput['steps'][0] {
+  const summary = (() => {
+    if (tool.name === 'read_file') return `Lecture ${String(args.path || '')}`;
+    if (tool.name === 'write_file') return `Modification ${String(args.path || '')}`;
+    if (tool.name === 'exec') return `Commande ${truncateForStep(String(args.command || ''), 80)}`;
+    if (tool.name === 'update_request_status') return `Mise à jour demande #${args.requestId}`;
+    if (tool.name === 'restart_gateway') return `Redémarrage ${args.containerName || 'gateway'}`;
+    return `${tool.displayName}${Object.keys(args).length ? ` ${truncateForStep(JSON.stringify(args), 80)}` : ''}`;
+  })();
   return {
-    type: 'command',
-    label: `Redémarrage ${toolCall.containerName || 'gateway'}`,
-    payload: stringifyStepPayload({ kind: 'restart_gateway', containerName: toolCall.containerName || null, turnId, stepId }),
+    type: categorizeStepType(tool),
+    label: summary,
+    payload: stringifyStepPayload({ kind: tool.name, args, turnId, stepId }),
     status: 'running',
   };
 }
 
-function buildToolResultStep(toolCall: ForgeToolCall, toolResult: ForgeToolResult, turnId?: string, stepId?: string): ForgeOrchestratorOutput['steps'][0] {
-  const output = String(toolResult.output || '');
-  const error = String(toolResult.error || '');
+function buildDynamicToolResultStep(
+  tool: EffectiveTool,
+  args: Record<string, unknown>,
+  result: ForgeToolResult,
+  turnId?: string,
+  stepId?: string,
+): ForgeOrchestratorOutput['steps'][0] {
+  const output = String(result.output || '');
+  const error = String(result.error || '');
   const basePayload = {
-    kind: toolCall.tool,
-    ok: toolResult.ok,
+    kind: tool.name,
+    ok: result.ok,
+    args,
     output: truncateForStep(output, 4000),
     error: truncateForStep(error, 1600),
-    diff: truncateForStep(String(toolResult.diff || ''), 8000),
-    addedLines: toolResult.addedLines,
-    deletedLines: toolResult.deletedLines,
-    durationMs: toolResult.durationMs,
-    exitCode: toolResult.exitCode,
+    diff: truncateForStep(String(result.diff || ''), 8000),
+    addedLines: result.addedLines,
+    deletedLines: result.deletedLines,
+    durationMs: result.durationMs,
+    exitCode: result.exitCode,
     turnId,
     stepId,
   };
-
-  if (toolCall.tool === 'read_file') {
-    return {
-      type: 'file',
-      label: toolResult.ok ? `Lu ${toolCall.path}` : `Lecture échouée ${toolCall.path}`,
-      payload: stringifyStepPayload({ ...basePayload, path: toolCall.path, lines: countLines(output) }),
-      status: toolResult.ok ? 'completed' : 'failed',
-    };
-  }
-  if (toolCall.tool === 'write_file') {
-    return {
-      type: 'file',
-      label: toolResult.ok ? `Modifié ${toolCall.path}` : `Modification échouée ${toolCall.path}`,
-      payload: stringifyStepPayload({
-        ...basePayload,
-        path: toolCall.path,
-        lines: countLines(toolCall.content),
-        beforeLines: countLines(toolResult.beforeContent || ''),
-        afterLines: countLines(toolResult.afterContent || ''),
-      }),
-      status: toolResult.ok ? 'completed' : 'failed',
-    };
-  }
-  if (toolCall.tool === 'exec') {
-    const isSearch = /\b(rg|grep|find|select-string)\b/i.test(toolCall.command);
-    return {
-      type: isSearch ? 'search' : 'command',
-      label: toolResult.ok ? `${isSearch ? 'Recherche terminée' : 'Commande terminée'}` : `${isSearch ? 'Recherche échouée' : 'Commande échouée'}`,
-      payload: stringifyStepPayload({ ...basePayload, command: toolCall.command }),
-      status: toolResult.ok ? 'completed' : 'failed',
-    };
-  }
-  if (toolCall.tool === 'update_request_status') {
-    return {
-      type: 'task',
-      label: toolResult.ok ? `Demande #${toolCall.requestId} mise à jour` : `Mise à jour demande échouée`,
-      payload: stringifyStepPayload({ ...basePayload, requestId: toolCall.requestId, status: toolCall.status }),
-      status: toolResult.ok ? 'completed' : 'failed',
-    };
-  }
+  const summary = (() => {
+    const ok = result.ok;
+    if (tool.name === 'read_file') return ok ? `Lu ${String(args.path || '')}` : `Lecture échouée ${String(args.path || '')}`;
+    if (tool.name === 'write_file')
+      return ok ? `Modifié ${String(args.path || '')}` : `Modification échouée ${String(args.path || '')}`;
+    if (tool.name === 'exec') return ok ? 'Commande terminée' : 'Commande échouée';
+    if (tool.name === 'update_request_status')
+      return ok ? `Demande #${args.requestId} mise à jour` : 'Mise à jour demande échouée';
+    if (tool.name === 'restart_gateway') return ok ? 'Redémarrage terminé' : 'Redémarrage échoué';
+    return ok ? `${tool.displayName} ok` : `${tool.displayName} échec`;
+  })();
   return {
-    type: 'command',
-    label: toolResult.ok ? 'Redémarrage terminé' : 'Redémarrage échoué',
-    payload: stringifyStepPayload({ ...basePayload, containerName: toolCall.containerName || null }),
-    status: toolResult.ok ? 'completed' : 'failed',
+    type: categorizeStepType(tool),
+    label: summary,
+    payload: stringifyStepPayload(basePayload),
+    status: result.ok ? 'completed' : 'failed',
   };
 }
 
-async function resolveAvailableModel(preferred: string): Promise<{ origin: string, model: string }> {
+async function resolveAvailableModel(preferred: string): Promise<{ origin: string; model: string }> {
   const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
   const config = await getAllConfig();
   const globalDefault = config.agentDefaultModel && config.agentDefaultModel !== 'Auto' ? config.agentDefaultModel : 'qwen2.5:7b';
@@ -213,25 +226,26 @@ function extractForgePlan(reply: string): { cleaned: string; plan: ForgePlanItem
     const cleaned = String(reply || '').replace(m[0], '').trim();
     return { cleaned, plan };
   } catch {
-    // Fallback parsing simple markdown list if JSON fails
     const cleaned = String(reply || '').replace(m[0], '').trim();
-    const lines = m[1].split('\n').filter(l => l.trim().startsWith('-'));
-    const plan = lines.map(l => ({ title: l.trim().slice(1).trim() }));
+    const lines = m[1].split('\n').filter((l) => l.trim().startsWith('-'));
+    const plan = lines.map((l) => ({ title: l.trim().slice(1).trim() }));
     return { cleaned, plan: plan.length > 0 ? plan : null };
   }
 }
 
 function extractReasoning(reply: string): { cleaned: string; reasoning: string | null } {
-  // On cherche des blocs <thought> ou une section "Réflexion :"
-  const m = String(reply || '').match(/<thought>([\s\S]*?)<\/thought>/i) || 
-            String(reply || '').match(/Réflexion\s*:\s*([\s\S]*?)(?=\n\n|\n\[|$)/i);
+  const m =
+    String(reply || '').match(/<thought>([\s\S]*?)<\/thought>/i) ||
+    String(reply || '').match(/Réflexion\s*:\s*([\s\S]*?)(?=\n\n|\n\[|$)/i);
   if (!m) return { cleaned: String(reply || '').trim(), reasoning: null };
   const reasoning = m[1].trim();
   const cleaned = String(reply || '').replace(m[0], '').trim();
   return { cleaned, reasoning };
 }
 
-export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promise<ForgeOrchestratorOutput & { plan?: ForgePlanItem[] | null }> {
+export async function runForgeOrchestrator(
+  input: ForgeOrchestratorInput,
+): Promise<ForgeOrchestratorOutput & { plan?: ForgePlanItem[] | null }> {
   const steps: ForgeOrchestratorOutput['steps'] = [];
   const { db, ForgeChatStep } = await loadAstroDb();
   const turnId = input.turnId;
@@ -269,28 +283,45 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
 
   const preferredModel = String(input.modelHint || '').trim() || process.env.OLLAMA_MODEL?.trim() || 'llama3.2:latest';
   const { origin, model } = await resolveAvailableModel(preferredModel);
-  const policy = await buildAgentPolicyContext(input.projectId, input.agentId);
+
+  // Charge dynamiquement la liste d'outils disponibles pour cet agent.
+  const effectiveTools = await getEffectiveToolsForAgent(input.agentId);
+  const policy = await buildAgentPolicyContext(input.projectId, input.agentId, effectiveTools);
+  const toolsByName = new Map(effectiveTools.map((t) => [t.name, t]));
+  const ollamaTools = buildOllamaToolSchemas(effectiveTools);
+  const execContext: ToolExecutionContext = { agentId: input.agentId, projectId: input.projectId };
+
   const timeoutMs = 90_000;
-  
-  let currentMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+
+  const currentMessages: OrchestratorMessage[] = [
     ...(policy.instructionText ? [{ role: 'system' as const, content: policy.instructionText }] : []),
     { role: 'user' as const, content: input.message },
   ];
 
   let turn = 0;
-  const maxTurns = 5;
+  const maxTurns = 8;
   let finalReply = '';
   let finalPlan: ForgePlanItem[] | null = null;
   let lastToolResult: ForgeToolResult | undefined;
 
   while (turn < maxTurns) {
     turn++;
-    await persistStep({ type: 'llm', label: turn === 1 ? 'ollama_chat' : `réflexion_tour_${turn}`, payload: model, status: 'running' });
-    
+    await persistStep({
+      type: 'llm',
+      label: turn === 1 ? 'ollama_chat' : `réflexion_tour_${turn}`,
+      payload: model,
+      status: 'running',
+    });
+
     const res = await fetch(`${origin}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, stream: false, messages: currentMessages }),
+      body: JSON.stringify({
+        model,
+        stream: false,
+        messages: currentMessages,
+        tools: ollamaTools.length > 0 ? ollamaTools : undefined,
+      }),
       signal: AbortSignal.timeout(timeoutMs),
     });
 
@@ -301,35 +332,90 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     }
 
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    const rawReply = typeof (data.message as any)?.content === 'string' ? String((data.message as any).content).trim() : '';
-    
-    // Extraction des composants
-    let { cleaned } = extractRuleAudit(rawReply);
-    let { cleaned: afterReasoning, reasoning } = extractReasoning(cleaned);
-    let { cleaned: afterPlan, plan } = extractForgePlan(afterReasoning);
-    const toolCall = parseInlineToolDirective(afterPlan);
+    const msg = (data.message as Record<string, unknown> | undefined) ?? undefined;
+    const rawReply = typeof msg?.content === 'string' ? String(msg.content).trim() : '';
+    const nativeToolCalls: OllamaToolCall[] = Array.isArray(msg?.tool_calls)
+      ? (msg!.tool_calls as OllamaToolCall[])
+      : [];
 
-    if (reasoning) {
-      await persistStep({ type: 'thought', label: 'Réflexion de l\'agent', payload: reasoning, status: 'completed' });
-    }
-    if (plan) finalPlan = plan;
+    // 1) Mode natif : tool_calls Ollama
+    if (nativeToolCalls.length > 0) {
+      currentMessages.push({
+        role: 'assistant',
+        content: rawReply,
+        tool_calls: nativeToolCalls,
+      });
 
-    if (toolCall) {
-      const stepId = `${turnId || 'turn'}-tool-${turn}-${Date.now()}`;
-      await persistStep(buildToolStartStep(toolCall, turnId, stepId));
-      
-      const toolResult = await runForgeTool(toolCall);
-      lastToolResult = toolResult;
-      
-      await persistStep(buildToolResultStep(toolCall, toolResult, turnId, stepId));
+      let executed = 0;
+      for (const nativeCall of nativeToolCalls) {
+        const toolName = String(nativeCall?.function?.name || '').trim();
+        const tool = toolsByName.get(toolName);
+        const args = coerceArguments(nativeCall?.function?.arguments);
 
-      // On boucle avec le résultat de l'outil
-      currentMessages.push({ role: 'assistant', content: rawReply });
-      currentMessages.push({ role: 'user', content: `[TOOL_RESULT]\n${String(toolResult.output || toolResult.error || '')}` });
+        if (!tool) {
+          currentMessages.push({
+            role: 'tool',
+            content: `[ERROR] Outil "${toolName}" non disponible pour ${input.agentId}.`,
+          });
+          continue;
+        }
+
+        const stepId = `${turnId || 'turn'}-tool-${turn}-${++executed}-${Date.now()}`;
+        await persistStep(buildDynamicToolStartStep(tool, args, turnId, stepId));
+
+        const toolResult = await executeDynamicTool(tool, args, execContext);
+        lastToolResult = toolResult;
+
+        await persistStep(buildDynamicToolResultStep(tool, args, toolResult, turnId, stepId));
+
+        currentMessages.push({
+          role: 'tool',
+          content: summarizeToolResultForModel(toolResult),
+        });
+      }
       continue;
     }
 
-    // Pas d'outil, c'est la réponse finale
+    // 2) Fallback texte [FORGE_TOOL_EXEC] (modèles non tool-aware)
+    const { cleaned } = extractRuleAudit(rawReply);
+    const { cleaned: afterReasoning, reasoning } = extractReasoning(cleaned);
+    const { cleaned: afterPlan, plan } = extractForgePlan(afterReasoning);
+    const inlineTool = parseInlineToolDirective(afterPlan);
+
+    if (reasoning) {
+      await persistStep({ type: 'thought', label: "Réflexion de l'agent", payload: reasoning, status: 'completed' });
+    }
+    if (plan) finalPlan = plan;
+
+    if (inlineTool) {
+      const stepId = `${turnId || 'turn'}-tool-${turn}-${Date.now()}`;
+      // Pour le fallback on utilise l'API legacy (5 outils builtin)
+      const tool = toolsByName.get(inlineTool.tool);
+      if (tool) {
+        const args: Record<string, unknown> = { ...inlineTool };
+        delete (args as { tool?: unknown }).tool;
+        await persistStep(buildDynamicToolStartStep(tool, args, turnId, stepId));
+        const toolResult = await executeDynamicTool(tool, args, execContext);
+        lastToolResult = toolResult;
+        await persistStep(buildDynamicToolResultStep(tool, args, toolResult, turnId, stepId));
+        currentMessages.push({ role: 'assistant', content: rawReply });
+        currentMessages.push({ role: 'tool', content: summarizeToolResultForModel(toolResult) });
+        continue;
+      }
+      // Fallback ultime : runForgeTool legacy
+      const toolResult = await runForgeTool(inlineTool, execContext);
+      lastToolResult = toolResult;
+      await persistStep({
+        type: 'command',
+        label: `Outil legacy ${inlineTool.tool}`,
+        payload: stringifyStepPayload({ kind: inlineTool.tool, output: toolResult.output, error: toolResult.error }),
+        status: toolResult.ok ? 'completed' : 'failed',
+      });
+      currentMessages.push({ role: 'assistant', content: rawReply });
+      currentMessages.push({ role: 'tool', content: summarizeToolResultForModel(toolResult) });
+      continue;
+    }
+
     finalReply = afterPlan;
     await persistStep({ type: 'llm', label: 'ollama_chat', payload: 'ok', status: 'completed' });
     break;
@@ -344,4 +430,3 @@ export async function runForgeOrchestrator(input: ForgeOrchestratorInput): Promi
     plan: finalPlan,
   };
 }
-

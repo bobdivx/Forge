@@ -70,6 +70,11 @@ export type ForgeConfig = {
   agentPreferredLanguage: string;
   /** Règles structurées agents (JSON string). */
   agentPolicyRules: string;
+  /**
+   * Doctrine d'action injectée dans le system prompt de tous les agents.
+   * Édité depuis l'onglet "Politique agents".
+   */
+  agentActionDoctrine: string;
   /** Modèle LLM par défaut pour l'équipe (ex: qwen2.5:7b, Auto). */
   agentDefaultModel: string;
   /**
@@ -116,6 +121,7 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
     'Respecter l architecture existante et eviter les regressions.',
   agentPreferredLanguage: 'fr',
   agentPolicyRules: '[]',
+  agentActionDoctrine: '',
   agentDefaultModel: 'Auto',
   workSchedulerDispatchOutsideWindow: 'true',
 };

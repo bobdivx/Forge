@@ -8,6 +8,7 @@ import AgentDirectiveForm from '../../components/agents/AgentDirectiveForm';
 import AgentMissionJournal from '../../components/agents/AgentMissionJournal';
 import AgentSwarmCommandCenter from '../../components/agents/AgentSwarmCommandCenter';
 import AgentSwarmEmployeeProfile from '../../components/agents/AgentSwarmEmployeeProfile';
+import AgentToolsPanel from '../../components/agents/AgentToolsPanel';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { buildAgentTeamProfile } from '../../lib/agent-profile';
 import {
@@ -154,6 +155,8 @@ function statusBadge(status: string) {
     />
 
     <AgentSwarmCommandCenter client:load agentId={agentKey} />
+
+    <AgentToolsPanel client:load agentId={agentKey} />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 space-y-5">

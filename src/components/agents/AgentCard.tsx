@@ -1,4 +1,6 @@
+import { useState } from 'preact/hooks';
 import TeamAvatar from './TeamAvatar';
+import AgentConfigModal from './AgentConfigModal';
 import type { AgentTeamProfile } from '../../lib/agent-profile';
 import type { SwarmWorkCommand } from '../../lib/forge-agent-protocol';
 
@@ -55,6 +57,7 @@ export default function AgentCard({
   onModelChange,
   swarmPulse = false,
 }: Props) {
+  const [configOpen, setConfigOpen] = useState(false);
   const stats = taskStats ?? { total: 0, completed: 0, failed: 0, running: 0, pending: 0 };
   const completionPct = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   const pendingPct = stats.total > 0 ? Math.round((stats.pending / stats.total) * 100) : 0;
@@ -231,6 +234,19 @@ export default function AgentCard({
               )}
             </button>
           ))}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              setConfigOpen(true);
+            }}
+            class="rounded-xl border border-gray-200 bg-white p-2 text-gray-400 transition-all hover:border-[#175B37]/30 hover:text-[#175B37]"
+            title="Configurer cet agent (outils, prompt)"
+          >
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
         </div>
         <div class="flex min-w-0 flex-col items-end">
           <div class="max-w-[160px] truncate text-[9px] font-black text-gray-400">{wakeStatusLabel || stateLabel}</div>
@@ -250,6 +266,7 @@ export default function AgentCard({
           <div class="text-[9px] font-bold text-emerald-500 tabular-nums">${(agent.estimatedCostUsd ?? 0).toFixed(4)}</div>
         </div>
       </div>
+      <AgentConfigModal agentId={agent.id} open={configOpen} onClose={() => setConfigOpen(false)} />
     </div>
   );
 }
