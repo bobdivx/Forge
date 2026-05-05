@@ -6,6 +6,7 @@ import IntegrationTab from './IntegrationTab';
 import ForgeRuntimeTab from './ForgeRuntimeTab';
 import AgentModelsTab from './AgentModelsTab';
 import OllamaTab from './OllamaTab';
+import GeminiTab from './GeminiTab';
 import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
 import AgentRulesTab from './AgentRulesTab';
@@ -47,6 +48,7 @@ const TABS = [
   { id: 'account', label: 'Compte & Sécurité' },
   { id: 'zimaos', label: 'Infra NAS/Docker' },
   { id: 'ollama', label: 'Ollama' },
+  { id: 'gemini', label: 'Gemini' },
   { id: 'integration', label: 'Docker & Chemins' },
   { id: 'api', label: 'Jetons API' },
   { id: 'models', label: 'Modèles agents' },
@@ -371,6 +373,9 @@ export default function SettingsForm() {
         )}
         {activeTab === 'ollama' && (
           <OllamaTab />
+        )}
+        {activeTab === 'gemini' && (
+          <GeminiTab />
         )}
         {activeTab === 'api' && (
           <ApiTokensTab

@@ -61,7 +61,17 @@ export function pickAdequateModel(
   const hint = String(fallbackHint || '').trim();
   if (hint && hint !== 'Auto' && models.includes(hint)) return hint;
 
-  const general = findFirstMatch(models, ['qwen2.5:7b', 'qwen', 'llama3', 'llama', 'mistral', 'gemma', 'phi']);
+  const general = findFirstMatch(models, [
+    'qwen2.5:7b',
+    'qwen',
+    'llama3',
+    'llama',
+    'mistral',
+    'gemma',
+    'phi',
+    'gemini-2.5-flash',
+    'gemini',
+  ]);
   if (general) return general;
 
   return models[0] ?? null;

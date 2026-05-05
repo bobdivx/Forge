@@ -4,6 +4,7 @@ import type { ForgeConfig } from '../../lib/config-db';
 import { validateForgeReposRootForSave } from '../../lib/forge-repos-health';
 import { inferZimaOSBackedPathDefaults } from '../../lib/forge-path-defaults';
 import { resetZimaOSInfraClient } from '../../lib/forge-infra-client';
+import { invalidateGeminiModelsCache } from '../../lib/gemini-provider';
 
 export const GET: APIRoute = async () => {
   const config = await getAllConfig();
@@ -29,6 +30,7 @@ const SECRET_KEYS_NO_EMPTY_OVERWRITE: (keyof ForgeConfig)[] = [
   'forgeApiToken',
   'zimaosSshPassword',
   'zimaosSshKeyContent',
+  'geminiApiKey',
 ];
 
 export const POST: APIRoute = async ({ request }) => {
@@ -57,6 +59,9 @@ export const POST: APIRoute = async ({ request }) => {
       'agentGlobalBuildRules',
       'agentPreferredLanguage',
       'workSchedulerDispatchOutsideWindow',
+      'geminiApiKey',
+      'geminiBaseUrl',
+      'geminiEnabled',
     ];
     for (const key of allowed) {
       if (!(key in data)) continue;
@@ -80,6 +85,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     await setConfig(payload);
     resetZimaOSInfraClient();
+    if ('geminiApiKey' in payload || 'geminiBaseUrl' in payload) {
+      invalidateGeminiModelsCache();
+    }
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,

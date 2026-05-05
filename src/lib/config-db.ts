@@ -82,6 +82,15 @@ export type ForgeConfig = {
    * `false` : hors plage, rien n'est envoyé aux agents (sauf démarrage manuel « Démarrer maintenant »).
    */
   workSchedulerDispatchOutsideWindow: string;
+  /** Clé API Google AI (Gemini). Vide → provider désactivé. */
+  geminiApiKey: string;
+  /**
+   * URL de base pour Gemini (endpoint OpenAI-compatible).
+   * Défaut : `https://generativelanguage.googleapis.com/v1beta/openai`.
+   */
+  geminiBaseUrl: string;
+  /** `true` pour exposer les modèles Gemini aux agents et à l'orchestrateur. */
+  geminiEnabled: string;
 };
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
@@ -124,6 +133,9 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   agentActionDoctrine: '',
   agentDefaultModel: 'Auto',
   workSchedulerDispatchOutsideWindow: 'true',
+  geminiApiKey: '',
+  geminiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+  geminiEnabled: 'false',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);

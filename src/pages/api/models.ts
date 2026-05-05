@@ -2,8 +2,16 @@ import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { FORGE_DEFAULT_AGENT_MODELS } from '../../lib/agent-model-defaults';
 import { getSelectableOllamaModels } from '../../lib/ollama-model-availability';
+import { fetchGeminiAvailableModels, getGeminiConfig } from '../../lib/gemini-provider';
 
 type ModelEntry = { id: string; name: string; ownedBy: string };
+
+async function collectGeminiEntries(): Promise<ModelEntry[]> {
+  const cfg = await getGeminiConfig();
+  if (!cfg.enabled || !cfg.apiKey) return [];
+  const { models } = await fetchGeminiAvailableModels({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl });
+  return models.map((m) => ({ id: m.id, name: m.label || m.id, ownedBy: 'gemini' }));
+}
 
 export const GET: APIRoute = async ({ request }) => {
   try {
@@ -78,6 +86,9 @@ export const GET: APIRoute = async ({ request }) => {
         // ignore if Ollama is unreachable
     }
 
+    // 1bis. Modèles Gemini exposés si activés.
+    const geminiEntries = await collectGeminiEntries();
+
     // Discussion / sélecteurs : catalogue DB activé ∩ présent sur Ollama, hors désactivés / Forge KO
     if (filterActive) {
       const selectable = await getSelectableOllamaModels();
@@ -89,7 +100,12 @@ export const GET: APIRoute = async ({ request }) => {
       const onDisk = new Set(selectable.map((m) => m.name));
       const pickKnown = (entries: ModelEntry[]) => entries.filter((m) => onDisk.has(m.id));
 
-      const merged = [...selectableEntries, ...pickKnown(dbEnabled), ...pickKnown(instructionModels)];
+      const merged = [
+        ...selectableEntries,
+        ...pickKnown(dbEnabled),
+        ...pickKnown(instructionModels),
+        ...geminiEntries,
+      ];
       const uniqueModels = Array.from(new Map(merged.map((m) => [m.id, m])).values()).sort((a, b) =>
         a.id.localeCompare(b.id),
       );
@@ -101,7 +117,7 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     // 2. Fusion unique (par ID) — liste large pour écrans paramètres / matrice
-    const allModels = [...dbEnabled, ...instructionModels, ...extraOllamaModels];
+    const allModels = [...dbEnabled, ...instructionModels, ...extraOllamaModels, ...geminiEntries];
     const uniqueModels = Array.from(new Map(allModels.map(m => [m.id, m])).values());
 
     return new Response(JSON.stringify(uniqueModels), {

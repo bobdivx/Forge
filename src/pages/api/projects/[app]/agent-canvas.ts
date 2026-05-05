@@ -8,7 +8,12 @@ import {
   resolveProjectPathVariants,
   repoSlugFromProject,
 } from '../../../../lib/forge-repos';
-import { getGitCommits, getGitSummary } from '../../../../lib/project-git';
+import {
+  getGitCommits,
+  getGitSummary,
+  getWorkingTreeChanges,
+  type WorkingTreeChange,
+} from '../../../../lib/project-git';
 
 /**
  * Agrège tout ce que les agents ont fait sur un projet :
@@ -29,6 +34,15 @@ type Kind =
   | 'cost'
   | 'run';
 
+type EventBadge = {
+  /** Libellé court (ex: "modèle"). */
+  label: string;
+  /** Valeur affichée dans la pastille (ex: "gemma4:latest"). */
+  value: string;
+  /** Variante visuelle. */
+  tone?: 'neutral' | 'mono' | 'success' | 'warning' | 'danger' | 'info';
+};
+
 type TimelineEvent = {
   id: string;
   kind: Kind;
@@ -47,6 +61,10 @@ type TimelineEvent = {
   files?: string[];
   /** Lien interne ou externe (ouvert avec target=_blank quand http). */
   href?: string | null;
+  /** Pastilles structurées affichées sous le titre (clé/valeur lisibles). */
+  badges?: EventBadge[];
+  /** Référence rapide vers l'entité concernée (ex: "agent_task #50"). */
+  entityRef?: string | null;
   /** Données complémentaires brutes. */
   meta?: Record<string, unknown>;
 };
@@ -103,6 +121,174 @@ function extractFileHints(text: string, max = 8): string[] {
     if (out.size >= max) break;
   }
   return [...out];
+}
+
+/** Libellés humains pour les codes d'action ActivityLog. Fallback : split par ".". */
+const ACTION_LABELS: Record<string, { label: string; tone?: TimelineEvent['tone'] }> = {
+  'swarm.task.executed': { label: 'Tâche exécutée par le swarm', tone: 'info' },
+  'swarm.task.preflight_failed': { label: 'Préflight échoué', tone: 'danger' },
+  'swarm.task.run_failed': { label: 'Exécution échouée', tone: 'danger' },
+  'swarm.task.dispatch_failed': { label: 'Envoi de tâche échoué', tone: 'danger' },
+  'swarm.task.completed_via_zimaos_scan': { label: 'Tâche marquée terminée', tone: 'success' },
+  'swarm.task.status_manual': { label: 'Statut modifié manuellement' },
+  'swarm.task.bulk_deleted': { label: 'Tâches supprimées en lot', tone: 'warning' },
+  'swarm.idle_audit_enqueued': { label: 'Audit idle enfilé' },
+  'swarm.idle_audit_enqueue_failed': { label: 'Audit idle KO', tone: 'danger' },
+  'swarm.issue.task_created': { label: 'Tâche créée pour une issue', tone: 'info' },
+  'swarm.issue.dispatch_failed': { label: 'Dispatch issue échoué', tone: 'danger' },
+  'swarm.request.dispatched': { label: 'Demande envoyée à un agent', tone: 'info' },
+  'swarm.subagent.project_created': { label: 'Sous-agent projet créé', tone: 'success' },
+  'swarm.subagent.project_deleted_idle': { label: 'Sous-agent supprimé (idle)' },
+  'swarm.agent.proposed_duplicate': { label: 'Doublon signalé' },
+  'swarm.agent.proposed_bug': { label: 'Bug signalé', tone: 'warning' },
+  'swarm.agent.proposed_improvement': { label: 'Amélioration proposée' },
+  'swarm.agent.spawned_subagent': { label: 'Sous-agent lancé', tone: 'success' },
+  'swarm.agent.delegated_task': { label: 'Tâche déléguée' },
+  'approval.requested': { label: 'Approbation demandée', tone: 'warning' },
+  'approval.approved': { label: 'Approbation acceptée', tone: 'success' },
+  'approval.rejected': { label: 'Approbation rejetée', tone: 'danger' },
+  'cost.ingested': { label: 'Coût enregistré' },
+  'agent.paused': { label: 'Agent en pause', tone: 'warning' },
+  'agent.resumed': { label: 'Agent relancé', tone: 'success' },
+};
+
+/** Cherche un libellé humain ; sinon renvoie l'action capitalisée. */
+function humanizeAction(action: string): { label: string; tone: TimelineEvent['tone'] } {
+  const known = ACTION_LABELS[action];
+  if (known) return { label: known.label, tone: known.tone ?? 'neutral' };
+  const parts = action.split('.').filter(Boolean);
+  if (parts.length === 0) return { label: action || '—', tone: 'neutral' };
+  const last = parts[parts.length - 1].replace(/_/g, ' ');
+  return {
+    label: last.charAt(0).toUpperCase() + last.slice(1),
+    tone: 'neutral',
+  };
+}
+
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  agent_task: 'tâche',
+  task: 'tâche',
+  project: 'projet',
+  request: 'demande',
+  issue: 'issue',
+  approval: 'approbation',
+  agent: 'agent',
+  cost: 'coût',
+  session: 'session',
+};
+
+function entityRefLabel(entityType: string, entityId: string): string {
+  const key = String(entityType || '').trim();
+  const id = String(entityId || '').trim();
+  const label = ENTITY_TYPE_LABELS[key] ?? key.replace(/_/g, ' ');
+  return id ? `${label} #${id}` : label;
+}
+
+/** Quelques libellés humains pour les clés JSON les plus fréquentes. */
+const KEY_LABELS: Record<string, string> = {
+  source: 'source',
+  status: 'statut',
+  provider: 'fournisseur',
+  model: 'modèle',
+  durationMs: 'durée',
+  duration: 'durée',
+  count: 'nombre',
+  attempts: 'essais',
+  attempt: 'essai',
+  reason: 'raison',
+  package: 'paquet',
+  packageName: 'paquet',
+  versionSpec: 'version',
+  branch: 'branche',
+  url: 'lien',
+  taskId: 'tâche',
+  issueId: 'issue',
+  requestId: 'demande',
+  sessionId: 'session',
+  externalRunId: 'run externe',
+  type: 'type',
+  priority: 'priorité',
+  isDev: 'dev',
+};
+
+const HIDDEN_KEYS = new Set([
+  'agentId',
+  'actorId',
+  'projectId',
+  'entityId',
+  'entityType',
+  'taskPreview',
+  'detail',
+  'details',
+  'message',
+  'error',
+  'stack',
+  'output',
+  'content',
+  'title',
+  'rawDetails',
+  'ts',
+  'timestamp',
+  'createdAt',
+  'updatedAt',
+]);
+
+function readableValue(v: unknown, key: string): string | null {
+  if (v == null) return null;
+  if (typeof v === 'boolean') return v ? 'oui' : 'non';
+  if (typeof v === 'number') {
+    if (key === 'durationMs') return `${(v / 1000).toFixed(1)} s`;
+    if (key === 'costCents') return `${(v / 100).toFixed(2)} €`;
+    return String(v);
+  }
+  if (typeof v === 'string') {
+    const t = v.trim();
+    return t ? t.slice(0, 120) : null;
+  }
+  if (Array.isArray(v)) {
+    if (v.length === 0) return null;
+    return `${v.length} élément${v.length > 1 ? 's' : ''}`;
+  }
+  if (typeof v === 'object') {
+    try {
+      const s = JSON.stringify(v);
+      return s.length > 80 ? `${s.slice(0, 77)}…` : s;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function badgesFromObject(obj: Record<string, unknown>, max = 6): EventBadge[] {
+  const out: EventBadge[] = [];
+  for (const [k, raw] of Object.entries(obj)) {
+    if (HIDDEN_KEYS.has(k)) continue;
+    const v = readableValue(raw, k);
+    if (v == null) continue;
+    out.push({
+      label: KEY_LABELS[k] ?? k,
+      value: v,
+      tone: typeof raw === 'string' && /^[\w./:-]+$/.test(raw) && raw.length <= 32 ? 'mono' : 'neutral',
+    });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function tryParseJson(text: string): { obj: Record<string, unknown> | null; raw: string } {
+  const t = String(text ?? '').trim();
+  if (!t) return { obj: null, raw: '' };
+  if (!(t.startsWith('{') || t.startsWith('['))) return { obj: null, raw: t };
+  try {
+    const parsed = JSON.parse(t);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { obj: parsed as Record<string, unknown>, raw: t };
+    }
+    return { obj: null, raw: t };
+  } catch {
+    return { obj: null, raw: t };
+  }
 }
 
 async function findProjectRow(folderKey: string): Promise<any | null> {
@@ -351,16 +537,32 @@ export const GET: APIRoute = async ({ params, url }) => {
           for (const st of steps) {
             const iso = toIso(st.createdAt);
             const status = String(st.status || 'completed');
+            const { obj: parsedPayload } = tryParseJson(String(st.payload ?? ''));
+            let summary: string | null = null;
+            if (parsedPayload) {
+              const preview =
+                (typeof parsedPayload.text === 'string' && parsedPayload.text) ||
+                (typeof parsedPayload.message === 'string' && parsedPayload.message) ||
+                (typeof parsedPayload.summary === 'string' && parsedPayload.summary) ||
+                (typeof parsedPayload.content === 'string' && parsedPayload.content) ||
+                null;
+              if (preview) summary = tinySummary(preview, 280);
+            } else if (st.payload) {
+              summary = tinySummary(st.payload, 280);
+            }
+            const badges = parsedPayload ? badgesFromObject(parsedPayload, 5) : [];
             events.push({
               id: `step-${st.id}`,
               kind: 'chat_step',
               when: iso,
               actorId: null,
               actorType: 'system',
-              title: `Étape : ${tinySummary(st.label, 140) || st.type}`,
-              summary: st.payload ? tinySummary(st.payload, 280) : null,
+              title: tinySummary(st.label, 140) || String(st.type ?? 'étape'),
+              summary,
               status,
               tone: statusToTone(status),
+              entityRef: `étape ${st.type}`,
+              badges: badges.length ? badges : undefined,
               meta: { stepType: st.type, sessionId: st.sessionId },
             });
           }
@@ -375,16 +577,27 @@ export const GET: APIRoute = async ({ params, url }) => {
           for (const m of messages) {
             const iso = toIso(m.createdAt);
             const role = String(m.role || 'system');
+            const roleLabel =
+              role === 'user'
+                ? 'Message utilisateur'
+                : role === 'assistant'
+                  ? 'Réponse assistant'
+                  : `Message ${role}`;
+            const badges: EventBadge[] = [];
+            if (m.provider) badges.push({ label: 'fournisseur', value: String(m.provider), tone: 'mono' });
+            if (m.model) badges.push({ label: 'modèle', value: String(m.model), tone: 'mono' });
             events.push({
               id: `msg-${m.id}`,
               kind: 'chat_step',
               when: iso,
               actorId: role === 'assistant' ? m.model || 'assistant' : role,
               actorType: role === 'user' ? 'user' : role === 'system' ? 'system' : 'agent',
-              title: `Message ${role}${m.model ? ` (${m.model})` : ''}`,
+              title: roleLabel,
               summary: tinySummary(m.content, 280),
               status: role,
               tone: 'neutral',
+              entityRef: 'chat',
+              badges: badges.length ? badges : undefined,
               meta: { sessionId: m.sessionId, role },
             });
           }
@@ -426,17 +639,40 @@ export const GET: APIRoute = async ({ params, url }) => {
           .limit(80);
         for (const l of logs) {
           const iso = toIso(l.createdAt);
+          const action = String(l.action || '');
+          const { label: actionLabel, tone: actionTone } = humanizeAction(action);
+          const { obj: parsed } = tryParseJson(String(l.details ?? ''));
+
+          let summary: string | null = null;
+          if (parsed) {
+            // Champs porteurs de sens : les utiliser comme résumé.
+            const preview =
+              (typeof parsed.taskPreview === 'string' && parsed.taskPreview) ||
+              (typeof parsed.title === 'string' && parsed.title) ||
+              (typeof parsed.message === 'string' && parsed.message) ||
+              (typeof parsed.reason === 'string' && parsed.reason) ||
+              (typeof parsed.error === 'string' && parsed.error) ||
+              null;
+            if (preview) summary = tinySummary(preview, 280);
+          } else if (l.details) {
+            summary = tinySummary(l.details, 240);
+          }
+
+          const badges = parsed ? badgesFromObject(parsed) : [];
+
           events.push({
             id: `act-${l.id}`,
             kind: 'activity',
             when: iso,
             actorId: l.actorId ?? null,
             actorType: (l.actorType as TimelineEvent['actorType']) ?? 'system',
-            title: `${l.action} (${l.entityType}:${l.entityId})`,
-            summary: l.details ? tinySummary(l.details, 240) : null,
-            status: l.action,
-            tone: 'neutral',
-            meta: { entityType: l.entityType, entityId: l.entityId },
+            title: actionLabel,
+            summary,
+            status: action,
+            tone: actionTone,
+            entityRef: entityRefLabel(String(l.entityType ?? ''), String(l.entityId ?? '')),
+            badges: badges.length ? badges : undefined,
+            meta: { action, entityType: l.entityType, entityId: l.entityId },
           });
           if (l.actorType === 'agent') {
             bumpStat(l.actorId, iso, () => {});
@@ -463,10 +699,17 @@ export const GET: APIRoute = async ({ params, url }) => {
               when: iso,
               actorId: c.agentId ?? null,
               actorType: 'agent',
-              title: `LLM : ${c.provider}/${c.model}`,
-              summary: `${c.inputTokens}+${c.outputTokens} tokens · ${(c.costCents / 100).toFixed(2)} €`,
-              status: 'cost',
+              title: 'Appel LLM facturé',
+              summary: null,
+              status: c.costCents > 0 ? 'facturé' : 'gratuit',
               tone: 'neutral',
+              entityRef: c.taskId ? `tâche #${c.taskId}` : null,
+              badges: [
+                { label: 'fournisseur', value: String(c.provider), tone: 'mono' },
+                { label: 'modèle', value: String(c.model), tone: 'mono' },
+                { label: 'tokens', value: `${c.inputTokens} → ${c.outputTokens}` },
+                { label: 'coût', value: `${(c.costCents / 100).toFixed(2)} €` },
+              ],
               meta: {
                 taskId: c.taskId,
                 provider: c.provider,
@@ -494,17 +737,27 @@ export const GET: APIRoute = async ({ params, url }) => {
           for (const r of runs) {
             const iso = toIso(r.startedAt ?? r.createdAt);
             const status = String(r.status || 'queued');
-            const dur = r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : null;
+            const badges: EventBadge[] = [
+              { label: 'source', value: String(r.source ?? '—') },
+            ];
+            if (r.durationMs) {
+              badges.push({ label: 'durée', value: `${(r.durationMs / 1000).toFixed(1)} s` });
+            }
+            if (r.externalRunId) {
+              badges.push({ label: 'run externe', value: String(r.externalRunId), tone: 'mono' });
+            }
             events.push({
               id: `run-${r.id}`,
               kind: 'run',
               when: iso,
               actorId: r.agentId ?? null,
               actorType: 'agent',
-              title: `Run heartbeat (${r.source}) — ${status}${dur ? ` · ${dur}` : ''}`,
+              title: 'Heartbeat agent',
               summary: r.error ? tinySummary(r.error, 280) : null,
               status,
               tone: statusToTone(status),
+              entityRef: `run #${r.id}`,
+              badges,
               meta: { source: r.source, durationMs: r.durationMs ?? null },
             });
           }
@@ -522,9 +775,70 @@ export const GET: APIRoute = async ({ params, url }) => {
   if (projectPath) {
     const summary = getGitSummary(projectPath);
     gitInfo = { isRepo: summary.isRepo, branch: summary.branch, dirty: summary.dirty };
-    const { commits } = getGitCommits(projectPath, 40);
+
+    // Travail en cours non commité (staged + unstaged + untracked) — épinglé en haut de la timeline.
+    const wt = getWorkingTreeChanges(projectPath);
+    if (wt.isRepo && wt.changes.length > 0) {
+      const counts = { A: 0, M: 0, D: 0, R: 0, C: 0, T: 0, U: 0, X: 0 };
+      for (const f of wt.changes) counts[f.status] = (counts[f.status] ?? 0) + 1;
+      const stagedCount = wt.changes.filter((c) => c.area === 'staged').length;
+      const untrackedCount = wt.changes.filter((c) => c.area === 'untracked').length;
+      const conflictCount = wt.changes.filter((c) => c.area === 'conflict').length;
+      const wipBadges: EventBadge[] = [];
+      if (counts.A) wipBadges.push({ label: 'ajouté', value: String(counts.A), tone: 'success' });
+      if (counts.M) wipBadges.push({ label: 'modifié', value: String(counts.M), tone: 'info' });
+      if (counts.D) wipBadges.push({ label: 'supprimé', value: String(counts.D), tone: 'danger' });
+      if (counts.R) wipBadges.push({ label: 'renommé', value: String(counts.R), tone: 'warning' });
+      if (stagedCount) wipBadges.push({ label: 'staged', value: String(stagedCount), tone: 'mono' });
+      if (untrackedCount) wipBadges.push({ label: 'untracked', value: String(untrackedCount) });
+      if (conflictCount) wipBadges.push({ label: 'conflit', value: String(conflictCount), tone: 'danger' });
+      // Épinglé : on lui donne une date dans le futur proche pour qu'il reste en haut.
+      const wipIso = new Date(Date.now() + 1000).toISOString();
+
+      events.push({
+        id: 'wip-working-tree',
+        kind: 'commit',
+        when: wipIso,
+        actorId: 'working-tree',
+        actorType: 'commit',
+        title: 'Modifications en cours (non commitées)',
+        summary: gitInfo.branch
+          ? `Branche ${gitInfo.branch} — ${wt.changes.length} fichier${wt.changes.length > 1 ? 's' : ''} touché${wt.changes.length > 1 ? 's' : ''} sur disque.`
+          : null,
+        status: 'en cours',
+        tone: conflictCount > 0 ? 'danger' : 'warning',
+        entityRef: `${wt.changes.length} fichier${wt.changes.length > 1 ? 's' : ''}`,
+        badges: wipBadges,
+        meta: {
+          hash: 'WORKING',
+          shortHash: 'WIP',
+          author: 'working-tree',
+          isWorking: true,
+          lastChangeIso: wt.lastChangeIso,
+          files: wt.changes.map((c: WorkingTreeChange) => ({
+            status: c.status,
+            path: c.path,
+            oldPath: c.oldPath,
+            area: c.area,
+          })),
+        },
+      });
+    }
+
+    const { commits } = getGitCommits(projectPath, 40, true);
     for (const c of commits) {
       const iso = c.dateIso || new Date(c.date).toISOString();
+      const fileChanges = Array.isArray(c.files) ? c.files : [];
+      const counts = { A: 0, M: 0, D: 0, R: 0, C: 0, T: 0, U: 0, X: 0 };
+      for (const f of fileChanges) counts[f.status] = (counts[f.status] ?? 0) + 1;
+      const badges: EventBadge[] = [];
+      if (counts.A) badges.push({ label: 'ajouté', value: String(counts.A), tone: 'success' });
+      if (counts.M) badges.push({ label: 'modifié', value: String(counts.M), tone: 'info' });
+      if (counts.D) badges.push({ label: 'supprimé', value: String(counts.D), tone: 'danger' });
+      if (counts.R) badges.push({ label: 'renommé', value: String(counts.R), tone: 'warning' });
+      if (counts.C) badges.push({ label: 'copié', value: String(counts.C) });
+      badges.push({ label: 'sha', value: c.shortHash, tone: 'mono' });
+
       events.push({
         id: `commit-${c.hash}`,
         kind: 'commit',
@@ -536,7 +850,14 @@ export const GET: APIRoute = async ({ params, url }) => {
         status: 'committed',
         tone: 'success',
         href: `/apps/${encodeURIComponent(folderKey)}/logs#commit-${c.shortHash}`,
-        meta: { hash: c.hash, shortHash: c.shortHash, author: c.author },
+        entityRef: `${fileChanges.length} fichier${fileChanges.length > 1 ? 's' : ''}`,
+        badges,
+        meta: {
+          hash: c.hash,
+          shortHash: c.shortHash,
+          author: c.author,
+          files: fileChanges,
+        },
       });
       // On agrège dans la même map d'agents si l'auteur correspond à un agent connu.
       const matchAgent = [...stats.keys()].find(
