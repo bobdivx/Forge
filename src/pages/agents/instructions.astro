@@ -33,6 +33,53 @@ import AgentInstructionEditor from '../../components/agents/AgentInstructionEdit
       </a>
     </div>
 
+    <!-- OpenSpec — même dépôt, flux specs / changes -->
+    <details
+      id="openspec-panel"
+      class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden"
+      open
+    >
+      <summary
+        class="cursor-pointer px-6 py-4 font-semibold text-gray-900 border-b border-gray-100 select-none"
+      >
+        <span class="inline-flex items-center gap-2">
+          <span class="text-[#175B37]">◇</span>
+          OpenSpec — spécifications dans le dépôt
+        </span>
+      </summary>
+      <div class="px-6 py-4 text-sm text-gray-600 space-y-4">
+        <p>
+          Forge suit
+          <a href="https://openspec.dev" class="text-[#175B37] underline hover:no-underline" target="_blank" rel="noopener noreferrer"
+            >OpenSpec</a
+          >
+          : alignement sur l’intent avant le code, specs versionnées avec le projet.
+        </p>
+        <ul class="list-disc list-inside space-y-1 text-gray-700">
+          <li>
+            Specs courantes :
+            <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded break-all">openspec/specs/</code>
+          </li>
+          <li>
+            Propositions en cours :
+            <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded break-all">openspec/changes/&lt;id&gt;/</code>
+            (proposal, design, tasks, deltas)
+          </li>
+        </ul>
+        <p class="text-gray-700">
+          Dans <strong class="font-medium">Cursor</strong>, après redémarrage de l’IDE si besoin :
+          <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">/opsx:propose</code>,
+          <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">/opsx:explore</code>,
+          <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">/opsx:apply</code>,
+          <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">/opsx:archive</code>.
+        </p>
+        <p class="text-xs text-gray-500">
+          Le contexte projet pour les artefacts est dans
+          <code class="bg-gray-100 px-1 rounded break-all">openspec/config.yaml</code>.
+        </p>
+      </div>
+    </details>
+
     <!-- Éditeur -->
     <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
       <AgentInstructionEditor client:load />

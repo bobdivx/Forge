@@ -185,6 +185,12 @@ export async function buildAgentPolicyContext(
     doctrine,
     toolsBlock,
     'PLANIFICATION : Si tu identifies plusieurs tâches à créer dans Forge, ajoute en fin de réponse :\n<FORGE_PLAN>\n[{"title": "Tâche 1", "content": "...", "assignee": "DEV_FRONTEND"}]\n</FORGE_PLAN>',
+    [
+      'OpenSpec (openspec/) : ce dépôt suit OpenSpec (https://openspec.dev).',
+      '- Avant une évolution fonctionnelle substantielle, lis openspec/specs/ pour l’existant.',
+      '- Propose les changements via openspec/changes/<id>/ (proposal, design, tasks, deltas specs/) ; en session Cursor, les commandes /opsx:* et les skills openspec-* sont disponibles.',
+      '- Après livraison, archive la change pour fusionner les specs (CLI : npm run openspec, puis openspec archive selon le flux du projet).',
+    ].join('\n'),
     "RAISONNEMENT : tu peux émettre un court bloc <thought>...</thought> au début de ta réponse pour expliquer ta démarche. Reste concis.",
   ]
     .filter(Boolean)

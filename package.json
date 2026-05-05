@@ -27,7 +27,9 @@
     "test:e2e": "vitest run tests/e2e",
     "db:migrate": "node scripts/migrate-astro-db-columns.mjs",
     "audit:zimaos": "node scripts/audit-zimaos-surface.mjs",
-    "audit:zimaos:json": "node scripts/audit-zimaos-surface.mjs --json"
+    "audit:zimaos:json": "node scripts/audit-zimaos-surface.mjs --json",
+    "openspec": "openspec",
+    "openspec:update": "openspec update"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.60.2",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.6",
+    "@fission-ai/openspec": "^1.3.1",
     "@types/d3-force": "^3.0.10",
     "@types/d3-selection": "^3.0.11",
     "@types/dompurify": "^3.0.5",

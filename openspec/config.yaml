@@ -1,0 +1,20 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+context: |
+  Forge (ce dépôt) : application Astro 6, composants interactifs en Preact uniquement, Tailwind + daisyUI.
+  Données : Astro DB (Drizzle). API dans src/pages/api. Agents Ollama : politique dans src/lib/agent-rules.ts, outils dans src/lib/forge-tool-catalog.ts.
+  Conventions : réponses des agents en français quand les règles le demandent ; éviter les refactors hors scope.
+  OpenSpec : specs vivantes dans openspec/specs/, propositions dans openspec/changes/ ; après livraison, archiver pour fusionner les specs.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

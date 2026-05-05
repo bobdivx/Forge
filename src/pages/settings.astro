@@ -7,9 +7,10 @@ import PageHeader from '../components/ui/PageHeader.astro';
   <div class="max-w-4xl mx-auto space-y-6">
     <PageHeader
       title="Parametres"
-      description="Integration, jetons API, modeles des agents, compte et maintenance."
+      description="Intégration, jetons API, modèles des agents, compte et maintenance. Les spécifications OpenSpec du dépôt (specs versionnées) sont résumées sur Instructions — raccourci OpenSpec ci-dessous."
       actions={[
         { href: '/agents/instructions', label: 'Instructions agents', tone: 'default' },
+        { href: '/agents/instructions#openspec-panel', label: 'OpenSpec', tone: 'default' },
         { href: '/help', label: 'Aide', tone: 'primary' },
       ]}
     />
