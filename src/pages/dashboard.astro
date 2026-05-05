@@ -6,6 +6,8 @@ import DashboardAppCenter from "../components/dashboard/DashboardAppCenter";
 import AppLauncher from "../components/apps/AppLauncher";
 import SyncProjectsButton from "../components/apps/SyncProjectsButton";
 import GithubImportModal from "../components/apps/GithubImportModal";
+import PageHeader from "../components/ui/PageHeader.astro";
+import EmptyStateCard from "../components/ui/EmptyStateCard.astro";
 import { loadAstroDb } from "../lib/load-astro-db";
 
 let projects = [];
@@ -21,24 +23,17 @@ try {
   title="Tableau de bord - Applications"
   currentPath="/dashboard"
 >
-  <div class="flex justify-between items-end mb-8 flex-wrap gap-4">
-    <div>
-      <h1 class="text-4xl font-bold mb-2 text-gray-900">Centre Névralgique</h1>
-      <p class="text-gray-500 text-sm">
-        Gérez vos applications, démarrez/arrêtez les serveurs et surveillez le
-        développement.
-      </p>
-    </div>
-    <div class="flex items-center gap-3">
+  <PageHeader
+    title="Centre Nevralgique"
+    description="Gerez vos applications, demarrez ou arretez vos services, et suivez les actions de vos agents."
+    actions={[
+      { href: '/work', label: 'Carnet de bord', tone: 'default' },
+      { href: '/discussion', label: 'Ouvrir Discussion', tone: 'primary' },
+    ]}
+  />
+  <div class="mb-8 flex flex-wrap items-center gap-3">
       <SyncProjectsButton client:load />
       <GithubImportModal client:load />
-      <a
-        href="/work"
-        class="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium px-5 py-2.5 rounded-full hover:bg-gray-50 transition-colors"
-      >
-        Carnet de bord →
-      </a>
-    </div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -64,36 +59,17 @@ try {
         projects.length > 0 ? (
           <DashboardAppCenter client:load initialProjects={projects} />
         ) : (
-          <div class="bg-white rounded-[1.5rem] shadow-sm p-10 text-center border border-gray-100">
-            <div class="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
-              <svg
-                class="w-8 h-8 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.5"
-                  d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-10.5v9"
-                />
-              </svg>
-            </div>
-            <h3 class="text-gray-900 font-bold text-lg mb-2">
-              Aucune application détectée
-            </h3>
-            <p class="text-gray-500 text-sm max-w-md mx-auto mb-6">
-              Commencez par synchroniser vos dépôts Git existants ou demandez à
-              l'IA d'en créer une nouvelle.
-            </p>
+          <EmptyStateCard
+            title="Aucune application detectee"
+            description="Synchronisez vos depots Git existants, ou laissez les agents creer un nouveau projet."
+          >
             <div class="flex items-center justify-center gap-3">
               <>
                 <SyncProjectsButton client:load />
                 <GithubImportModal client:load />
               </>
             </div>
-          </div>
+          </EmptyStateCard>
         )
       }
     </div>

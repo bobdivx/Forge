@@ -294,7 +294,7 @@ export default function ChatThread({
         </div>
       ) : null}
 
-      <div class="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth px-3 py-6 sm:px-6">
+      <div class="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto scroll-smooth px-3 py-4 sm:px-6">
         {chat.length === 0 && !historyLoading && (
           <div class="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-20 text-center animate-fade-in opacity-60">
              <div class="h-16 w-16 rounded-3xl bg-white shadow-sm flex items-center justify-center border border-gray-100">
@@ -389,7 +389,7 @@ export default function ChatThread({
             </div>
           )}
         </div>
-        <div ref={chatEndRef} class="h-12 shrink-0" />
+        <div ref={chatEndRef} class="h-6 shrink-0" />
       </div>
     </div>
   );

@@ -91,6 +91,20 @@ export const prerender = true;
             Se connecter
           </button>
         </form>
+
+        <div id="forge-sso-wrap" class="hidden mt-6 space-y-3" aria-live="polite">
+          <div class="flex items-center gap-3 text-xs text-gray-400">
+            <span class="flex-1 h-px bg-gray-200"></span>
+            <span>ou</span>
+            <span class="flex-1 h-px bg-gray-200"></span>
+          </div>
+          <a
+            href="/api/auth/oidc/login"
+            class="flex w-full items-center justify-center rounded-xl border border-gray-200 bg-white py-3.5 text-sm font-semibold text-gray-800 transition-all hover:border-[#175B37] hover:bg-gray-50"
+          >
+            Continuer avec SSO (OpenID)
+          </a>
+        </div>
       </div>
 
       <p class="mt-6 text-center text-xs text-gray-400">
@@ -108,6 +122,44 @@ export const prerender = true;
         var password = document.getElementById('forge-password');
         var tabLogin = document.getElementById('tab-login');
         var tabRegister = document.getElementById('tab-register');
+        var ssoWrap = document.getElementById('forge-sso-wrap');
+
+        function showSsoIfEnabled() {
+          fetch('/api/auth/oidc/status')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (d && d.oidc && ssoWrap) ssoWrap.classList.remove('hidden');
+            })
+            .catch(function () {});
+        }
+        showSsoIfEnabled();
+
+        function showSsoErrorFromQuery() {
+          try {
+            var params = new URLSearchParams(window.location.search);
+            var sso = params.get('sso');
+            if (!sso || !msg) return;
+            var texts = {
+              state:
+                'Session SSO interrompue (cookies manquants ou délai dépassé). Réessayez la connexion SSO.',
+              email:
+                'Le fournisseur d’identité n’a pas renvoyé d’adresse e-mail. Vérifiez les scopes (openid, email) et le mapping côté IdP.',
+              error: 'La connexion SSO a échoué. Vérifiez la configuration OIDC et les journaux serveur.',
+              OIDC_EMAIL_DENIED:
+                'Ce compte ou ce domaine e-mail n’est pas autorisé pour la connexion SSO.',
+              USER_NOT_PROVISIONED:
+                'Aucun utilisateur Forge pour cet e-mail : créez d’abord un compte ou ajustez FORGE_OIDC_REQUIRE_EXISTING_USER.',
+              OIDC_INVALID_EMAIL: 'L’adresse e-mail renvoyée par le SSO est invalide.',
+            };
+            var text = texts[sso] || texts.error;
+            msg.textContent = text;
+            msg.classList.remove('hidden');
+            if (window.history && window.history.replaceState) {
+              window.history.replaceState(null, '', '/login');
+            }
+          } catch (e) {}
+        }
+        showSsoErrorFromQuery();
 
         function setMode(next) {
           mode = next;

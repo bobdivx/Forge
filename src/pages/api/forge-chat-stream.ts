@@ -40,6 +40,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
         controller.enqueue(encoder.encode(sse(event, data)));
       };
 
+      /** Ping périodique : évite qu'un reverse-proxy (nginx, traefik) coupe l'SSE pendant un long tour LLM. */
+      let pingTimer: ReturnType<typeof setInterval> | null = null;
+      const startPing = () => {
+        if (pingTimer) return;
+        pingTimer = setInterval(() => {
+          try {
+            send('ping', { t: Date.now() });
+          } catch {
+            /* stream fermée */
+          }
+        }, 20_000);
+      };
+      const stopPing = () => {
+        if (pingTimer) {
+          clearInterval(pingTimer);
+          pingTimer = null;
+        }
+      };
+
       try {
         const { db, ForgeChatSession, ForgeChatMessage, ForgeChatStep } = await loadAstroDb();
         const now = new Date();
@@ -71,6 +90,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         });
 
         send('start', { ok: true, sessionId, turnId });
+        startPing();
 
         const orchestrated = await runForgeOrchestrator({
           agentId,
@@ -121,6 +141,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       } catch (e) {
         send('error', { ok: false, error: normalizeError(e) });
       } finally {
+        stopPing();
         controller.close();
       }
     },

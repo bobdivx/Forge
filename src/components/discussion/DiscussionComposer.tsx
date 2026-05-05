@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import {
   buildAgentTeamProfile,
   mergeZimaOSTeamProfile,
@@ -14,6 +14,7 @@ import ComposerInput from './composer/ComposerInput';
 import ProfileEditor from './composer/ProfileEditor';
 import type { AgentRow, Project, RequestItem, ChatMessage, RoutingDebugState } from './composer/types';
 import { isSessionUsable } from './composer/types';
+import { handleDiscussionSlashCommand } from './composer/slashCommands';
 
 const POLL_ATTEMPTS = 48; // 48 * 2.5s = ~2 minutes
 const POLL_INTERVAL_MS = 2500;
@@ -38,21 +39,24 @@ export default function DiscussionComposer() {
   const [sessionQuery, setSessionQuery] = useState('');
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [teamPickerOpen, setTeamPickerOpen] = useState(false);
+  const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
   const [ocProfiles, setOcProfiles] = useState<Record<string, ZimaOSAgentProfileRow>>({});
   const [profileDraft, setProfileDraft] = useState({ displayName: '', roleTitle: '', bio: '', avatarUrl: '', avatarEmoji: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [swarmCommandMode, setSwarmCommandMode] = useState<'direct' | 'leader'>('direct');
   const [policyBadge, setPolicyBadge] = useState<PolicyBadgeState>({ mode: 'off', state: 'idle' });
   const [currentSteps, setCurrentSteps] = useState<any[]>([]);
+  /** Clé de fil de discussion (persistée côté Forge dans ForgeChatMessage.sessionId). Peut différer de agentId (ex. CHEF_TECHNIQUE__uuid). */
+  const [discussionThreadKey, setDiscussionThreadKey] = useState('');
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const currentAgentRef = useRef<string>('');
 
   useEffect(() => {
     let interval: any;
-    if (sending && agentId) {
+    if (sending && discussionThreadKey) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`/api/discussion-steps?sessionId=${agentId}`);
+          const res = await fetch(`/api/discussion-steps?sessionId=${encodeURIComponent(discussionThreadKey)}`);
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data.steps)) setCurrentSteps(data.steps);
@@ -65,7 +69,7 @@ export default function DiscussionComposer() {
       setCurrentSteps([]);
     }
     return () => clearInterval(interval);
-  }, [sending, agentId]);
+  }, [sending, discussionThreadKey]);
 
   useEffect(() => {
     Promise.all([
@@ -117,9 +121,54 @@ export default function DiscussionComposer() {
     }
   };
 
-  const pickSession = (id: string) => {
+  const onEmptyMemberClick = () => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+      document.getElementById('discussion-team-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    setTeamPickerOpen(true);
+  };
+
+  const onOpenProfile = () => {
+    if (!agentId) return;
+    setProfileDrawerOpen(true);
+  };
+
+  const loadHistory = async (sessionKey: string) => {
+    if (!sessionKey) return;
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/discussion-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionKey, maxMessages: 100 }),
+      });
+      if (!res.ok) throw new Error('Erreur history');
+      const data = await res.json();
+      if (Array.isArray(data.messages)) setChat(data.messages);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const reloadContext = useCallback(async () => {
+    const [ctx, a, profData] = await Promise.all([
+      fetch('/api/discussion-context').then((r) => r.json()),
+      fetch('/api/agents').then((r) => r.json()),
+      fetch('/api/forge-agent-profiles').then((r) => r.json()).catch(() => ({})),
+    ]);
+    setProjects(Array.isArray(ctx.projects) ? ctx.projects : []);
+    setRequests(Array.isArray(ctx.requests) ? ctx.requests : []);
+    setAgents(Array.isArray(a.agents) ? a.agents : Array.isArray(a.data) ? a.data : []);
+    setOcProfiles((profData as { profiles?: Record<string, ZimaOSAgentProfileRow> }).profiles || {});
+  }, []);
+
+  const pickSession = async (id: string, opts?: { systemNote?: string }) => {
     setAgentId(id);
     currentAgentRef.current = id;
+    setDiscussionThreadKey(id);
     setChat([]);
     setRoutingDebug(null);
     setError(null);
@@ -131,36 +180,21 @@ export default function DiscussionComposer() {
         roleTitle: p.role || '',
         bio: p.bio || '',
         avatarUrl: p.avatarUrl || '',
-        avatarEmoji: p.avatarEmoji || ''
+        avatarEmoji: p.avatarEmoji || '',
       });
     }
-    loadHistory(id);
-  };
-
-  const onEmptyMemberClick = () => {
-    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
-      document.getElementById('discussion-team-sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      return;
-    }
-    setTeamPickerOpen(true);
-  };
-
-  const loadHistory = async (id: string) => {
-    if (!id) return;
-    setHistoryLoading(true);
-    try {
-      const res = await fetch('/api/discussion-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionKey: id, maxMessages: 100 }),
-      });
-      if (!res.ok) throw new Error('Erreur history');
-      const data = await res.json();
-      if (Array.isArray(data.messages)) setChat(data.messages);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setHistoryLoading(false);
+    await loadHistory(id);
+    const note = opts?.systemNote?.trim();
+    if (note) {
+      setChat((c) => [
+        {
+          id: `${Date.now()}-pick-note`,
+          role: 'system',
+          text: note,
+          at: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        },
+        ...c,
+      ]);
     }
   };
 
@@ -277,9 +311,72 @@ export default function DiscussionComposer() {
     return { ...finalData, steps: finalData.steps || streamedSteps };
   };
 
+  function isLikelyNetworkFailure(err: unknown): boolean {
+    const m = err instanceof Error ? err.message : String(err);
+    return /failed to fetch|networkerror|network error|load failed|aborted|échec du réseau|typeerror:\s*failed to fetch/i.test(
+      m,
+    );
+  }
+
+  /** Repli si l’SSE est coupé par un proxy ou le navigateur (souvent affiché comme « network error »). */
+  const sendViaJsonFallback = async (payload: Record<string, unknown>): Promise<any> => {
+    const res = await fetch('/api/forge-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(typeof data?.error === 'string' ? data.error : `Erreur forge-chat (${res.status})`);
+    }
+    return {
+      ok: data.ok,
+      via: data.via,
+      sessionId: data.sessionId,
+      turnId: data.turnId,
+      result: data.result,
+      steps: Array.isArray(data.steps) ? data.steps : [],
+    };
+  };
+
+  const sendWithStreamMaybeFallback = async (payload: Record<string, unknown>): Promise<any> => {
+    try {
+      return await sendWithStream(payload);
+    } catch (e) {
+      if (isLikelyNetworkFailure(e)) {
+        console.warn('[discussion] Stream indisponible, repli sur /api/forge-chat', e);
+        return await sendViaJsonFallback(payload);
+      }
+      throw e;
+    }
+  };
+
   const send = async () => {
     if (!agentId || !message.trim() || sending || sessionUnavailable) return;
     const text = message.trim();
+    const threadKey = discussionThreadKey || agentId;
+
+    const slash = await handleDiscussionSlashCommand(text, {
+      agentId,
+      discussionThreadKey: threadKey,
+      projectId,
+      requestId,
+      agents,
+      projects,
+      requests,
+      setMessage,
+      setDiscussionThreadKey,
+      setProjectId,
+      setRequestId,
+      setCurrentSteps,
+      setError,
+      appendSystemMessages: (msgs) => setChat((c) => [...c, ...msgs]),
+      pickSession,
+      reloadContext,
+      onModelChange,
+    });
+    if (slash.kind === 'handled') return;
+
     setMessage('');
     setSending(true);
     setError(null);
@@ -292,14 +389,15 @@ export default function DiscussionComposer() {
 
     try {
       const payload = {
-        sessionKey: agentId,
+        sessionKey: threadKey,
+        agentId,
         message: text,
         modelHint: selectedAgent?.model && selectedAgent.model !== '—' ? selectedAgent.model : undefined,
         projectId: projectId ? parseInt(projectId, 10) : undefined,
         requestId: requestId ? parseInt(requestId, 10) : undefined
       };
       setCurrentSteps([]);
-      const data = await sendWithStream(payload);
+      const data = await sendWithStreamMaybeFallback(payload);
       
       const steps = Array.isArray(data?.steps) ? data.steps as NonNullable<ChatMessage['steps']> : [];
       const ackMsg = buildAssistantMessage(data, steps);
@@ -346,7 +444,7 @@ export default function DiscussionComposer() {
   if (loading) return <div>Chargement...</div>;
 
   return (
-    <div class="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#ECEFF1] shadow-sm lg:flex-row lg:max-h-[min(85vh,820px)]">
+    <div class="flex min-h-[70dvh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-[#ECEFF1] shadow-sm lg:flex-row lg:max-h-[min(85vh,820px)]">
       <aside
         id="discussion-team-sidebar"
         class="z-40 flex max-h-[100dvh] w-full flex-col border-gray-200 bg-white shadow-xl lg:w-[min(100%,300px)] lg:shrink-0 lg:border-r lg:shadow-none hidden lg:flex"
@@ -363,11 +461,12 @@ export default function DiscussionComposer() {
            profileSaving={profileSaving} saveZimaOSProfile={saveZimaOSProfile}
         />
       </aside>
-      <div class="flex min-h-[min(100dvh,680px)] min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <DiscussionHeader 
            selectedTeamProfile={selectedTeamProfile} selectedAgentId={agentId} selectedProject={selectedProject} selectedRequest={selectedRequest}
            setHeaderMenuOpen={setHeaderMenuOpen} headerMenuOpen={headerMenuOpen} copyToClipboard={copyToClipboard}
            onEmptyMemberClick={onEmptyMemberClick}
+           onOpenProfile={onOpenProfile}
            policyBadge={policyBadge}
         />
         <ChatThread 
@@ -421,6 +520,40 @@ export default function DiscussionComposer() {
                 setSessionQuery={setSessionQuery}
                 offlineCount={offlineCount}
                 onModelChange={onModelChange}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {profileDrawerOpen ? (
+        <div class="fixed inset-0 z-[101] flex items-stretch lg:hidden" role="dialog" aria-modal="true" aria-labelledby="discussion-profile-drawer-title">
+          <button
+            type="button"
+            class="absolute inset-0 z-0 bg-black/40"
+            aria-label="Fermer"
+            onClick={() => setProfileDrawerOpen(false)}
+          />
+          <div class="relative z-10 ml-auto flex h-full w-[min(100%,360px)] min-h-0 flex-col overflow-hidden bg-white shadow-2xl">
+            <div class="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
+              <h2 id="discussion-profile-drawer-title" class="text-lg font-semibold text-gray-900">
+                Profil agent
+              </h2>
+              <button
+                type="button"
+                class="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                onClick={() => setProfileDrawerOpen(false)}
+                aria-label="Fermer le profil"
+              >
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <ProfileEditor 
+                 selectedAgentId={agentId} profileDraft={profileDraft} setProfileDraft={setProfileDraft}
+                 profileSaving={profileSaving} saveZimaOSProfile={saveZimaOSProfile}
               />
             </div>
           </div>

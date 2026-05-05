@@ -1,0 +1,40 @@
+---
+interface Action {
+  href: string;
+  label: string;
+  tone?: 'default' | 'primary';
+}
+
+const {
+  title,
+  description,
+  actions = [],
+} = Astro.props as {
+  title: string;
+  description?: string;
+  actions?: Action[];
+};
+---
+
+<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-3xl font-bold text-gray-900 sm:text-4xl">{title}</h1>
+    {description ? <p class="mt-2 max-w-2xl text-sm text-gray-500">{description}</p> : null}
+  </div>
+  {actions.length ? (
+    <div class="flex flex-wrap items-center gap-2">
+      {actions.map((action) => (
+        <a
+          href={action.href}
+          class={`inline-flex min-h-[44px] items-center rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+            action.tone === 'primary'
+              ? 'border-[#175B37]/30 bg-[#E9F3EB] text-[#175B37] hover:bg-[#dceee0]'
+              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          {action.label}
+        </a>
+      ))}
+    </div>
+  ) : null}
+</div>

@@ -28,12 +28,4 @@
     background: #9CA3AF;
   }
 
-  /* Désactiver les anciens effets néon/dark */
-  .forge-backdrop { display: none; }
-  .forge-grid { display: none; }
-  .forge-text-glow { text-shadow: none; }
-  .shadow-neon-cyan { box-shadow: none; }
-  .shadow-neon-card { box-shadow: none; }
-  .shadow-neon-card-lg { box-shadow: none; }
-  .forge-glass-panel { background: white; }
 }

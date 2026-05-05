@@ -47,6 +47,9 @@ const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
   '/api/auth/logout',
+  '/api/auth/oidc/login',
+  '/api/auth/oidc/callback',
+  '/api/auth/oidc/status',
   '/api/forge-hook',
   '/api/db-test',
   // Endpoints écriture accessibles depuis le navigateur (formulaires du dashboard)
@@ -91,6 +94,7 @@ const LOCAL_ONLY_PATHS = [
   '/api/forge-wake-agents',
   '/api/forge-directive',
   '/api/forge-chat',
+  '/api/forge-chat-stream',
   '/api/forge-orchestration',
   '/api/forge-needs',
   '/api/projects-db',

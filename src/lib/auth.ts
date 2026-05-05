@@ -173,6 +173,31 @@ export async function getUser(email: string) {
   }
 }
 
+/**
+ * Crée un compte local si l'e-mail n'existe pas encore (mot de passe aléatoire : connexion SSO uniquement).
+ * Si FORGE_OIDC_REQUIRE_EXISTING_USER=1 et aucun ForgeUser : erreur USER_NOT_PROVISIONED.
+ */
+export async function provisionUserForOidcIfNeeded(email: string): Promise<void> {
+  await migrateLegacyAuthOnce();
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!isValidEmail(normalized)) {
+    const err = new Error('Adresse e-mail invalide renvoyée par le fournisseur SSO.');
+    (err as Error & { code?: string }).code = 'OIDC_INVALID_EMAIL';
+    throw err;
+  }
+  const existing = await getUser(normalized);
+  if (existing) return;
+  if (String(process.env.FORGE_OIDC_REQUIRE_EXISTING_USER || '').trim() === '1') {
+    const err = new Error(
+      'Aucun compte Forge pour cet e-mail : créez d’abord un utilisateur ou désactivez FORGE_OIDC_REQUIRE_EXISTING_USER.',
+    );
+    (err as Error & { code?: string }).code = 'USER_NOT_PROVISIONED';
+    throw err;
+  }
+  const randomPw = randomHex(48);
+  await registerOrReplaceUser(normalized, randomPw);
+}
+
 export async function registerOrReplaceUser(email: string, password: string): Promise<void> {
   await migrateLegacyAuthOnce();
   const normalized = String(email || '').trim().toLowerCase();

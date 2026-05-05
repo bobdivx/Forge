@@ -1,25 +1,18 @@
 ---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import SettingsForm from '../components/settings/SettingsForm';
+import PageHeader from '../components/ui/PageHeader.astro';
 ---
 <DashboardLayout title="Paramètres" currentPath="/settings">
   <div class="max-w-4xl mx-auto space-y-6">
-
-    <div class="flex items-end justify-between flex-wrap gap-4">
-      <div>
-        <h1 class="text-4xl font-bold mb-2 text-gray-900">Paramètres</h1>
-        <p class="text-gray-500 text-sm">Intégration, jetons API, modèles agents, compte et maintenance.</p>
-      </div>
-      <a
-        href="/agents/instructions"
-        class="flex items-center gap-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-        </svg>
-        Instructions agents
-      </a>
-    </div>
+    <PageHeader
+      title="Parametres"
+      description="Integration, jetons API, modeles des agents, compte et maintenance."
+      actions={[
+        { href: '/agents/instructions', label: 'Instructions agents', tone: 'default' },
+        { href: '/help', label: 'Aide', tone: 'primary' },
+      ]}
+    />
 
     <SettingsForm client:load />
 

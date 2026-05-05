@@ -13,6 +13,7 @@ interface Props {
   copyToClipboard: (text: string) => Promise<void>;
   /** Clic sur la zone « Sélectionnez un membre » (liste agents / scroll vers la colonne). */
   onEmptyMemberClick?: () => void;
+  onOpenProfile?: () => void;
   policyBadge?: {
     mode: 'off' | 'warn' | 'enforce';
     state: 'idle' | 'compliant' | 'non_compliant';
@@ -21,7 +22,7 @@ interface Props {
 
 export default function DiscussionHeader({
   selectedTeamProfile, selectedAgentId, selectedProject, selectedRequest,
-  setHeaderMenuOpen, headerMenuOpen, copyToClipboard, onEmptyMemberClick, policyBadge
+  setHeaderMenuOpen, headerMenuOpen, copyToClipboard, onEmptyMemberClick, onOpenProfile, policyBadge
 }: Props) {
   const badgeClass =
     policyBadge?.state === 'compliant'
@@ -101,10 +102,18 @@ export default function DiscussionHeader({
           ) : null}
         </div>
       </div>
-      <div class="relative shrink-0 flex items-center">
+      <div class="relative shrink-0 flex items-center gap-2">
         <button
           type="button"
-          class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+          class="inline-flex h-11 items-center rounded-full border border-gray-200 px-3 text-xs font-semibold text-gray-600 transition hover:bg-gray-50 lg:hidden"
+          onClick={() => onOpenProfile?.()}
+          disabled={!selectedAgentId}
+        >
+          Profil
+        </button>
+        <button
+          type="button"
+          class="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
           onClick={() => setHeaderMenuOpen((v: boolean) => !v)}
         >
           <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">

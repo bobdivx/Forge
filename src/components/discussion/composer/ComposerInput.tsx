@@ -19,14 +19,14 @@ export default function ComposerInput({
   send, applySwarmCommand, swarmCommandMode, setSwarmCommandMode
 }: Props) {
   return (
-    <div class="shrink-0 border-t border-gray-200 bg-white p-3 sm:p-4">
+    <div class="sticky bottom-0 z-20 shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur sm:p-4" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
       <div class="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2">
         <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Commandes</span>
         {(['start_work', 'pause_work', 'resume_work', 'stop_work'] as SwarmWorkCommand[]).map((cmd) => (
           <button
             key={cmd}
             type="button"
-            class="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] hover:bg-[#E9F3EB]"
+            class="min-h-[36px] rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[11px] hover:bg-[#E9F3EB]"
             onClick={() => applySwarmCommand(cmd)}
             disabled={sending || historyLoading}
           >
@@ -35,7 +35,7 @@ export default function ComposerInput({
         ))}
         <button
           type="button"
-          class={`ml-auto rounded-full border px-2.5 py-1 text-[11px] font-medium ${swarmCommandMode === 'leader' ? 'bg-[#E9F3EB]' : 'bg-white'}`}
+          class={`ml-auto min-h-[36px] rounded-full border px-3 py-1 text-[11px] font-medium ${swarmCommandMode === 'leader' ? 'bg-[#E9F3EB]' : 'bg-white'}`}
           onClick={() => setSwarmCommandMode(m => m === 'leader' ? 'direct' : 'leader')}
           disabled={sending || historyLoading}
         >
@@ -45,7 +45,7 @@ export default function ComposerInput({
       <div class="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm">
         <textarea
           class="max-h-40 min-h-[48px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm outline-none disabled:opacity-50"
-          placeholder="Message..."
+          placeholder="Message… (/help pour les commandes)"
           value={message}
           onInput={(e) => setMessage((e.target as HTMLTextAreaElement).value)}
           disabled={sending || historyLoading || sessionUnavailable}

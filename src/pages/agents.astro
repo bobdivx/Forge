@@ -8,6 +8,7 @@ import SwarmCommunicationHeatmap from '../components/agents/SwarmCommunicationHe
 import MissionGanttTimeline from '../components/agents/MissionGanttTimeline';
 import AgentsDiscoveryKpi from '../components/agents/AgentsDiscoveryKpi';
 import SwarmFlowTimeline from '../components/swarm/SwarmFlowTimeline';
+import PageHeader from '../components/ui/PageHeader.astro';
 import { loadAstroDb } from '../lib/load-astro-db';
 
 let agentStats = { total: 0, withTasks: 0, totalTasks: 0, pendingIssues: 0 };
@@ -28,54 +29,26 @@ try {
   <div class="max-w-7xl mx-auto space-y-6">
 
     <!-- En-tête -->
-    <div class="flex items-end justify-between flex-wrap gap-4">
-      <div>
-        <h1 class="text-4xl font-bold mb-2 text-gray-900">L'Équipe</h1>
-        <p class="text-gray-500 text-sm max-w-2xl">
-          Gérez vos agents d'intelligence artificielle, supervisez leurs tâches en cours et surveillez leurs interactions
-          en temps réel au sein du Swarm.{' '}
-          
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-3">
+    <PageHeader
+      title="L Equipe"
+      description="Supervisez vos agents, leurs missions en cours et les interactions de swarm en temps reel."
+      actions={[
+        { href: '/discussion', label: 'Discussion Forge', tone: 'primary' },
+        { href: '/work', label: 'Carnet de bord', tone: 'default' },
+        { href: '/agents/instructions', label: 'Instructions', tone: 'default' },
+      ]}
+    />
+      <div class="mb-2 flex flex-wrap gap-3">
         <a
           href="#swarm-flux"
-          class="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          class="flex min-h-[44px] items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
         >
           <svg class="h-4 w-4 text-[#175B37]" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           Fil d’activité
         </a>
-        <a
-          href="/discussion"
-          class="flex items-center gap-2 rounded-full border border-[#175B37]/30 bg-[#E9F3EB] px-4 py-2 text-sm font-medium text-[#175B37] transition-colors hover:bg-[#dceee0]"
-        >
-          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          Discussion Forge
-        </a>
-        <a
-          href="/agents/instructions"
-          class="flex items-center gap-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-          </svg>
-          Instructions
-        </a>
-        <a
-          href="/work"
-          class="flex items-center gap-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-50 transition-colors"
-        >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          Carnet de bord
-        </a>
       </div>
-    </div>
 
     <!-- KPIs équipe -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-5">

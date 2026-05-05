@@ -13,6 +13,7 @@ import WorkCarnetRest from '../components/work/WorkCarnetRest';
 import WorkDiagnosticPanel from '../components/work/WorkDiagnosticPanel';
 import SwarmProjectsToggle from '../components/work/SwarmProjectsToggle';
 import WorkSimpleStory from '../components/work/WorkSimpleStory';
+import PageHeader from '../components/ui/PageHeader.astro';
 
 let requests = [];
 let issues = [];
@@ -81,15 +82,14 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
   <div class="max-w-7xl mx-auto space-y-6">
 
     <!-- En-tête -->
-    <div class="flex items-end justify-between flex-wrap gap-4">
-      <div>
-        <h1 class="text-4xl font-bold mb-2 text-gray-900">Carnet de Commandes</h1>
-        <p class="text-gray-500 text-sm max-w-2xl">
-          D’abord le fil simple : application, PR/CI, agent, étape. Le détail technique (graphiques, tableaux) est repliable
-          plus bas.
-        </p>
-      </div>
-    </div>
+    <PageHeader
+      title="Carnet de Commandes"
+      description="Commencez par le fil simple (app, PR/CI, agent, etape), puis ouvrez la vue avancee pour le detail technique."
+      actions={[
+        { href: '/discussion', label: 'Discussion', tone: 'default' },
+        { href: '/agents#swarm-flux', label: 'Fil d activite', tone: 'primary' },
+      ]}
+    />
 
     <!-- KPIs -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-5">
@@ -165,24 +165,24 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
               type="button"
               disabled={openIssues.length === 0}
               onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'active', ${openIssues.length}, 'bugs ouverts')`}
-              class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+              class="min-h-[44px] rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
             >Supprimer lot ouverts</button>
             <button
               type="button"
               disabled={finishedIssues.length === 0}
               onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'finished', ${finishedIssues.length}, 'bugs clôturés')`}
-              class="text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              class="min-h-[44px] rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
             >Clôturés</button>
             <button
               type="button"
               disabled={issues.length === 0}
               onclick={`window.__deleteWorkItems && window.__deleteWorkItems('issue', 'all', ${issues.length}, 'bugs')`}
-              class="text-xs font-medium px-3 py-1.5 rounded-full border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+              class="min-h-[44px] rounded-full border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
             >Tout supprimer</button>
             <button
               type="button"
               onclick="window.__openWorkModal && window.__openWorkModal('issue')"
-              class="w-8 h-8 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm"
+              class="flex h-11 w-11 items-center justify-center rounded-full text-lg font-bold text-white shadow-sm"
               style="background:#EF4444"
               title="Signaler un bug"
             >+</button>
