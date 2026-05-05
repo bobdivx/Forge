@@ -23,7 +23,11 @@ ENV ASTRO_DATABASE_FILE=file:/app/.astro/content.db
 # CLI Docker : sonde ZimaOS (docker inspect / exec) via /var/run/docker.sock monté par le compose NAS.
 # GitHub CLI : outils agent github_* (PR, issues, gist…) — auth via $GITHUB_TOKEN par appel.
 # bash : requis par certains outils exec_template qui utilisent set -e / pipes complexes.
-RUN apk add --no-cache git docker-cli github-cli bash
+# curl + jq : indispensables aux agents pour piloter leur propre API Forge interne
+#   (PUT /api/agent-instructions, POST /api/agent-tools, etc.) en mode ACCÈS TOTAL.
+# coreutils : `rm`, `find`, `grep`, etc. en versions GNU complètes (BusyBox d'Alpine
+#   manque certains flags utilisés par les outils builtin find_files / delete_path).
+RUN apk add --no-cache git docker-cli github-cli bash curl jq coreutils findutils grep
 
 COPY package.json package-lock.json .npmrc ./
 COPY scripts/ ./scripts/

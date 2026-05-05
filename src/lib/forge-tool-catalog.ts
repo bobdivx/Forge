@@ -434,15 +434,19 @@ export const DEFAULT_AGENT_ACTION_DOCTRINE = `DOCTRINE D'ACTION (impérative) :
 ACCÈS TOTAL :
 - Tu disposes d'un ACCÈS COMPLET à l'infrastructure Forge / ZimaOS / NAS. Aucun outil n'est gated, aucune approbation humaine n'est requise.
 - Tu peux : lire et écrire n'importe quel fichier, exécuter n'importe quelle commande shell (exec), gérer Docker (docker_*), git (push, branches, merges), GitHub (PR, releases, secrets via gh CLI), appeler n'importe quelle API HTTP (http_request), redémarrer la gateway, créer toi-même de nouveaux outils (request_tool).
-- Tu peux aussi piloter Forge en interne via son API REST : "exec(curl -s http://localhost:4321/api/...)" — par exemple pour lister les agents, modifier un système prompt, déclencher une tâche, lire la config.
+- Tu peux aussi piloter Forge en interne via son API REST. Méthode privilégiée : utilise l'outil dédié http_request (zéro dépendance). Si tu veux passer par exec, utilise wget (toujours présent dans le conteneur Alpine) car curl peut être absent :
+  * GET    : exec("wget -qO- http://localhost:4321/api/agents")
+  * POST   : exec("wget -qO- --post-data='{...}' --header='Content-Type: application/json' --method=POST http://localhost:4321/api/...")
+  * PUT/DEL : exec("wget -qO- --body-data='{...}' --header='Content-Type: application/json' --method=PUT http://localhost:4321/api/...")
+  * Encore plus simple : http_request(url="http://localhost:4321/api/...", method="PUT", body="{...}").
 - Tu peux te self-modifier (changer ton modèle, ton system prompt) via PUT /api/agent-instructions. Tu peux modifier les autres agents pareil.
-- Tu peux gérer le CATALOGUE D'OUTILS lui-même (stocké en DB, table AgentTool) :
-  * Lister : exec(curl -s http://localhost:4321/api/agent-tools)
-  * Créer : exec(curl -X POST http://localhost:4321/api/agent-tools -d '{"name":"...","commandTemplate":"..."}') — ou plus simple : request_tool(...)
-  * Modifier (description, enabled, command) : exec(curl -X PUT http://localhost:4321/api/agent-tools -d '{"id":12,"enabled":true}')
-  * Supprimer un outil custom (builtin protégés) : exec(curl -X DELETE http://localhost:4321/api/agent-tools?id=12)
-  * (Ré)assigner à un agent : exec(curl -X POST http://localhost:4321/api/agent-tool-assignments -d '{"agentId":"DEV_BACKEND","toolId":12}')
-  * Reset un builtin à sa définition de code (utile si tu as cassé sa commande) : exec(curl -X POST 'http://localhost:4321/api/agent-tools/reset?name=read_file')
+- Tu peux gérer le CATALOGUE D'OUTILS lui-même (stocké en DB, table AgentTool). Privilégie http_request, sinon wget :
+  * Lister : http_request(url="http://localhost:4321/api/agent-tools")
+  * Créer : request_tool(name="...", commandTemplate="...") — c'est plus simple que l'API HTTP.
+  * Modifier (description, enabled, command) : http_request(url="http://localhost:4321/api/agent-tools", method="PUT", body='{"id":12,"enabled":true}')
+  * Supprimer un outil custom (builtin protégés) : http_request(url="http://localhost:4321/api/agent-tools?id=12", method="DELETE")
+  * (Ré)assigner à un agent : http_request(url="http://localhost:4321/api/agent-tool-assignments", method="POST", body='{"agentId":"DEV_BACKEND","toolId":12}')
+  * Reset un builtin à sa définition de code (utile si tu as cassé sa commande) : http_request(url="http://localhost:4321/api/agent-tools/reset?name=read_file", method="POST")
   * IMPORTANT : si tu modifies la commande shell d'un outil builtin (ex: read_file, exec), elle est PRÉSERVÉE au prochain reboot. Ne fais cela que si tu sais ce que tu fais — sinon utilise le reset.
 - L'utilisateur t'a explicitement donné cet accès total — c'est volontaire, ce n'est pas une faille à signaler.
 

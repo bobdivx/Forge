@@ -63,6 +63,70 @@ function summarizeToolResultForModel(result: ForgeToolResult): string {
   return `[ERROR] ${String(result.error || 'Outil en échec')}`;
 }
 
+/**
+ * Après un échec d'outil, injecte une consigne impérative pour que le modèle
+ * retente tout seul (auto-correction) — sans attendre que l'utilisateur reformule.
+ *
+ * Inspiré du comportement « IDE agent » : l'environnement manque parfois de binaires
+ * que les recettes shell supposent présents (ex. curl sur Alpine).
+ */
+function buildOrchestratorRemediationHint(
+  tool: EffectiveTool | undefined,
+  args: Record<string, unknown>,
+  result: ForgeToolResult,
+): string {
+  if (result.ok) return '';
+  const rawErr = String(result.error || result.output || '');
+  const err = rawErr.toLowerCase();
+  const toolName = String(tool?.name || result.tool || '').trim();
+
+  // exec / shell : curl absent → http_request ou wget
+  if (toolName === 'exec') {
+    const isCurlMissing =
+      /curl:\s+not\s+found|curl:\s+command\s+not\s+found|\/bin\/sh:\s+curl:\s+not\s+found/i.test(
+        rawErr,
+      );
+    if (isCurlMissing) {
+      const cmd = String(args.command || '');
+      const urlMatch = cmd.match(/https?:\/\/[^\s'"]+/i);
+      const extractedUrl = urlMatch?.[0] || '';
+      const urlHint = extractedUrl
+        ? `url extraite de ta commande : "${extractedUrl}"`
+        : 'url = celle que tu ciblais (ex: http://localhost:4321/api/agents)';
+      return (
+        '\n\n[FORGE_AUTO_REMEDIATION] curl est ABSENT sur ce runtime. Tu DOIS retenter IMMÉDIATEMENT' +
+        ' dans ce même tour de réflexion (sans demander confirmation) :' +
+        ' (1) préfère l\'outil http_request (method GET ou PUT selon le cas) avec ' +
+        urlHint +
+        ' ; ou (2) exec avec wget équivalent (wget -qO- …).' +
+        ' Si c\'était un POST/PUT, utilise http_request avec body JSON plutôt que wget.'
+      );
+    }
+  }
+
+  // http_request : connexion refusée vers localhost → rappel PORT
+  if (toolName === 'http_request') {
+    if (/econnrefused|connection refused/i.test(err) && /localhost|127\.0\.0\.1/.test(err)) {
+      return (
+        '\n\n[FORGE_AUTO_REMEDIATION] Connexion refusée vers localhost.' +
+        ' Si Forge tourne en Docker exposé sur le NAS, l\'API est souvent sur le port publié' +
+        ' (ex: http://127.0.0.1:4331) depuis l\'hôte, ou http://localhost:4321 depuis l\'intérieur du conteneur forge.' +
+        ' Réessaie http_request avec l\'URL correcte pour CE runtime.'
+      );
+    }
+  }
+
+  return '';
+}
+
+function formatToolResultForModel(
+  tool: EffectiveTool | undefined,
+  args: Record<string, unknown>,
+  result: ForgeToolResult,
+): string {
+  return summarizeToolResultForModel(result) + buildOrchestratorRemediationHint(tool, args, result);
+}
+
 /** Construit le tableau `tools` exposé via l'API native Ollama. */
 function buildOllamaToolSchemas(tools: EffectiveTool[]) {
   return tools.map((t) => ({
@@ -480,7 +544,7 @@ export async function runForgeOrchestrator(
 
         currentMessages.push({
           role: 'tool',
-          content: summarizeToolResultForModel(toolResult),
+          content: formatToolResultForModel(tool, args, toolResult),
           tool_call_id: toolCallId,
         });
       }
@@ -510,7 +574,7 @@ export async function runForgeOrchestrator(
         lastToolResult = toolResult;
         await persistStep(buildDynamicToolResultStep(tool, args, toolResult, turnId, stepId));
         currentMessages.push({ role: 'assistant', content: rawReply });
-        currentMessages.push({ role: 'tool', content: summarizeToolResultForModel(toolResult) });
+        currentMessages.push({ role: 'tool', content: formatToolResultForModel(tool, args, toolResult) });
         continue;
       }
       // Fallback ultime : runForgeTool legacy
@@ -523,7 +587,15 @@ export async function runForgeOrchestrator(
         status: toolResult.ok ? 'completed' : 'failed',
       });
       currentMessages.push({ role: 'assistant', content: rawReply });
-      currentMessages.push({ role: 'tool', content: summarizeToolResultForModel(toolResult) });
+      const legacyTool = toolsByName.get(String(inlineTool.tool || ''));
+      currentMessages.push({
+        role: 'tool',
+        content: formatToolResultForModel(
+          legacyTool,
+          coerceArguments(inlineTool as unknown),
+          toolResult,
+        ),
+      });
       continue;
     }
 
