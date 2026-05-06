@@ -27,10 +27,10 @@ function normalizeOllamaBase(raw: string): string {
 }
 
 function isSelectableCompatibility(compatibility?: OllamaModelCompatibility): boolean {
-  if (!compatibility) return true;
+  // Exige un test explicite réussi avant d'exposer un modèle aux sélecteurs.
+  if (!compatibility) return false;
   if (compatibility.disabledManually) return false;
-  if (compatibility.ok === false) return false;
-  return true;
+  return compatibility.ok === true;
 }
 
 async function readCompatibility(): Promise<Record<string, OllamaModelCompatibility>> {

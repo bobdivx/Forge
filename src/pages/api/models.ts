@@ -2,24 +2,22 @@ import type { APIRoute } from 'astro';
 import { loadAstroDb } from '../../lib/load-astro-db';
 import { FORGE_DEFAULT_AGENT_MODELS } from '../../lib/agent-model-defaults';
 import { getSelectableOllamaModels } from '../../lib/ollama-model-availability';
-import { fetchGeminiAvailableModels, getGeminiConfig } from '../../lib/gemini-provider';
 import { getFunctionalGeminiModels } from '../../lib/gemini-model-availability';
+import { getGeminiConfig } from '../../lib/gemini-provider';
 
 type ModelEntry = { id: string; name: string; ownedBy: string };
 
-async function collectGeminiEntries(probeFunctional: boolean): Promise<ModelEntry[]> {
+async function collectGeminiEntries(): Promise<ModelEntry[]> {
   const cfg = await getGeminiConfig();
   if (!cfg.enabled || !cfg.apiKey) return [];
-  if (probeFunctional) {
-    const functional = await getFunctionalGeminiModels();
-    return functional.models.map((m) => ({
-      id: m.id,
-      name: m.label || m.id,
-      ownedBy: 'gemini-probed-ok',
-    }));
-  }
-  const { models } = await fetchGeminiAvailableModels({ apiKey: cfg.apiKey, baseUrl: cfg.baseUrl });
-  return models.map((m) => ({ id: m.id, name: m.label || m.id, ownedBy: 'gemini' }));
+  const functional = await getFunctionalGeminiModels({
+    maxProbe: Number.MAX_SAFE_INTEGER,
+  });
+  return functional.models.map((m) => ({
+    id: m.id,
+    name: m.label || m.id,
+    ownedBy: 'gemini-probed-ok',
+  }));
 }
 
 export const GET: APIRoute = async ({ request }) => {
@@ -96,7 +94,7 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     // 1bis. Modèles Gemini exposés si activés.
-    const geminiEntries = await collectGeminiEntries(filterActive);
+    const geminiEntries = await collectGeminiEntries();
 
     // Discussion / sélecteurs : catalogue DB activé ∩ présent sur Ollama, hors désactivés / Forge KO
     if (filterActive) {

@@ -20,7 +20,7 @@ export function ClaudeTerminal({ defaultCwd = '/' }: { defaultCwd?: string }) {
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const res = await fetch('/api/models');
+        const res = await fetch('/api/models?filter=active');
         if (res.ok) {
           const data = await res.json();
           // On filtre potentiellement pour ne garder que ceux pertinents (ex: Ollama)

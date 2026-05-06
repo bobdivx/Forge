@@ -205,7 +205,7 @@ export default function AgentsGrid() {
         .catch(() => setAppVersion(null));
     };
     const loadModels = () => {
-      fetch('/api/models')
+      fetch('/api/models?filter=active')
         .then((r) => r.json())
         .then((rows) => {
           const values = Array.isArray(rows)

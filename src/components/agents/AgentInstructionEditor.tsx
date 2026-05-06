@@ -97,7 +97,7 @@ export default function AgentInstructionEditor() {
       const [rAgents, rSync, rModels, rTemplates] = await Promise.all([
         fetch('/api/agent-instructions').then((r) => r.json().catch(() => [])),
         fetch('/api/sync-agents').then((r) => r.json().catch(() => [])),
-        fetch('/api/models').then((r) => r.json().catch(() => [])),
+        fetch('/api/models?filter=active').then((r) => r.json().catch(() => [])),
         fetch('/api/agent-template-models').then((r) => r.json().catch(() => ({ templates: [] })),
         ),
       ]);

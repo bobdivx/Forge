@@ -42,7 +42,7 @@ export default function AgentModelMatrix() {
 
   async function loadModels() {
     try {
-      const res = await fetch('/api/models');
+      const res = await fetch('/api/models?filter=active');
       const rows = await res.json();
       const values = Array.isArray(rows)
         ? rows.map((m: any) => String(m.id || m.name || '').replace(/^zimaos\//i, '').trim()).filter(Boolean)

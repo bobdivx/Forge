@@ -37,7 +37,12 @@ const hasActionsAppend = Astro.slots.has('actionsAppend');
           {action.label}
         </a>
       ))}
-      {hasActionsAppend ? <slot name="actionsAppend" /> : null}
+      {/*
+        Ne pas se fier à `Astro.slots.has('actionsAppend')` pour rendre ce slot :
+        avec des îlots Preact (`client:load`), la détection est souvent « false » alors
+        que le fragment projeté existe → le bouton disparaît (ex. carnet / file).
+      */}
+      <slot name="actionsAppend" />
     </div>
   ) : null}
 </div>

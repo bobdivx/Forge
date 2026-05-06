@@ -266,6 +266,19 @@ async function resolveAvailableModel(
   const globalDefault = config.agentDefaultModel && config.agentDefaultModel !== 'Auto' ? config.agentDefaultModel : 'qwen2.5:7b';
   const isAuto = !eff || eff.toLowerCase() === 'auto';
   const geminiOn = await isGeminiAvailable();
+  let functionalGeminiIds: Set<string> | null = null;
+  let firstFunctionalGeminiId: string | null = null;
+  const ensureFunctionalGeminiCatalog = async () => {
+    if (functionalGeminiIds) return;
+    const discovered = await getFunctionalGeminiModels({
+      maxProbe: Number.MAX_SAFE_INTEGER,
+    });
+    functionalGeminiIds = new Set(
+      discovered.models.map((m) => normalizeGeminiModelId(m.id).toLowerCase()),
+    );
+    firstFunctionalGeminiId =
+      discovered.models.length > 0 ? normalizeGeminiModelId(discovered.models[0]!.id) : null;
+  };
 
   // Modèle préféré explicitement Gemini → routage direct (sans fallback Ollama).
   if (!opts?.skipGemini && !isAuto && isGeminiModelId(eff)) {
@@ -274,7 +287,16 @@ async function resolveAvailableModel(
       // (le tour LLM produira l'erreur visible côté utilisateur si rien n'est dispo.)
       return { provider: 'ollama', origin: defaultOrigin, model: eff };
     }
-    return { provider: 'gemini', model: eff };
+    await ensureFunctionalGeminiCatalog();
+    const normalized = normalizeGeminiModelId(eff);
+    if (functionalGeminiIds!.has(normalized.toLowerCase())) {
+      return { provider: 'gemini', model: normalized };
+    }
+    if (firstFunctionalGeminiId) {
+      return { provider: 'gemini', model: firstFunctionalGeminiId };
+    }
+    // Aucun modèle Gemini réellement joignable : fallback Ollama pour éviter blocage.
+    return { provider: 'ollama', origin: defaultOrigin, model: normalized };
   }
 
   const selectable = await getSelectableOllamaModels();
@@ -287,14 +309,29 @@ async function resolveAvailableModel(
 
   // Auto : si Gemini est dispo et que le défaut global est Gemini, on l'utilise.
   if (!opts?.skipGemini && isAuto && geminiOn && isGeminiModelId(globalDefault)) {
-    return { provider: 'gemini', model: globalDefault };
+    await ensureFunctionalGeminiCatalog();
+    const normalized = normalizeGeminiModelId(globalDefault);
+    if (functionalGeminiIds!.has(normalized.toLowerCase())) {
+      return { provider: 'gemini', model: normalized };
+    }
+    if (firstFunctionalGeminiId) {
+      return { provider: 'gemini', model: firstFunctionalGeminiId };
+    }
   }
 
   const compatible = selectable.find((m) => m.compatibility?.ok === true);
   const fallbacks = [globalDefault, 'qwen2.5:7b', 'gemma4:latest', 'qwen2.5-coder:7b', 'qwen2.5-coder:32b', 'llama3.2:latest'];
   for (const candidate of fallbacks) {
     if (!opts?.skipGemini && isGeminiModelId(candidate) && geminiOn) {
-      return { provider: 'gemini', model: candidate };
+      await ensureFunctionalGeminiCatalog();
+      const normalized = normalizeGeminiModelId(candidate);
+      if (functionalGeminiIds!.has(normalized.toLowerCase())) {
+        return { provider: 'gemini', model: normalized };
+      }
+      if (firstFunctionalGeminiId) {
+        return { provider: 'gemini', model: firstFunctionalGeminiId };
+      }
+      continue;
     }
     const match = byName.get(candidate.toLowerCase());
     if (match) return { provider: 'ollama', origin: match.origin, model: match.name };
