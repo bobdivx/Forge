@@ -414,7 +414,8 @@ export async function executeDynamicTool(
     const ctxVars = await buildContextVars(ctx);
     const allVars: Record<string, unknown> = { ...ctxVars, ...args };
     const url = renderTemplate(String(cfg.url || ''), allVars);
-    const method = String(cfg.method || 'GET').toUpperCase();
+    // `method` est souvent un template en DB (ex: `{{method|GET}}`) — il faut le rendre comme `url` / `body`.
+    const method = (renderTemplate(String(cfg.method || 'GET'), allVars).trim() || 'GET').toUpperCase();
     const bodyTpl = cfg.body != null ? String(cfg.body) : '';
     const body = bodyTpl ? renderTemplate(bodyTpl, allVars) : undefined;
     if (!url) return { ok: false, tool: tool.name, error: 'URL HTTP manquante.' };

@@ -14,6 +14,7 @@ import WorkDiagnosticPanel from '../components/work/WorkDiagnosticPanel';
 import SwarmProjectsToggle from '../components/work/SwarmProjectsToggle';
 import WorkSimpleStory from '../components/work/WorkSimpleStory';
 import PageHeader from '../components/ui/PageHeader.astro';
+import WorkHeaderProcessQueueButton from '../components/work/WorkHeaderProcessQueueButton';
 
 let requests = [];
 let issues = [];
@@ -89,7 +90,9 @@ const depsJson      = JSON.stringify(deps.map(d => ({ ...d, _type: 'dep', create
         { href: '/discussion', label: 'Discussion', tone: 'default' },
         { href: '/agents#swarm-flux', label: 'Fil d activite', tone: 'primary' },
       ]}
-    />
+    >
+      <WorkHeaderProcessQueueButton slot="actionsAppend" client:load />
+    </PageHeader>
 
     <!-- KPIs -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-5">

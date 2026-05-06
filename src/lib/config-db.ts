@@ -209,6 +209,8 @@ export async function getAllConfig(): Promise<ForgeConfig> {
 }
 
 export async function setConfig(partial: Partial<ForgeConfig>): Promise<void> {
+  const touchedGemini =
+    'geminiApiKey' in partial || 'geminiBaseUrl' in partial || 'geminiEnabled' in partial;
   for (const [key, value] of Object.entries(partial)) {
     if (!(key in CONFIG_DEFAULTS)) continue;
     if (INTERNAL_CONFIG_KEYS.has(key)) continue;
@@ -224,5 +226,11 @@ export async function setConfig(partial: Partial<ForgeConfig>): Promise<void> {
     } catch (e) {
       console.error(`setConfig(${key}) failed:`, e);
     }
+  }
+  if (touchedGemini) {
+    const { invalidateGeminiModelsCache } = await import('./gemini-provider');
+    const { invalidateFunctionalGeminiModelsCache } = await import('./gemini-model-availability');
+    invalidateGeminiModelsCache();
+    invalidateFunctionalGeminiModelsCache();
   }
 }

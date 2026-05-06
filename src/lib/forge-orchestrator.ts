@@ -11,12 +11,13 @@ import { loadAstroDb } from './load-astro-db';
 import { getSelectableOllamaModels } from './ollama-model-availability';
 import { getEffectiveToolsForAgent, type EffectiveTool } from './forge-tool-catalog';
 import {
-  fetchGeminiAvailableModels,
   geminiChat,
   isGeminiAvailable,
   isGeminiModelId,
+  normalizeGeminiModelId,
   type GeminiToolSchema,
 } from './gemini-provider';
+import { getFunctionalGeminiModels, isRetriableGeminiHttpStatus } from './gemini-model-availability';
 
 type OllamaToolCall = {
   /**
@@ -252,40 +253,47 @@ type ResolvedModel =
   | { provider: 'ollama'; origin: string; model: string }
   | { provider: 'gemini'; model: string };
 
-async function resolveAvailableModel(preferred: string): Promise<ResolvedModel> {
+async function resolveAvailableModel(
+  preferred: string,
+  opts?: { skipGemini?: boolean },
+): Promise<ResolvedModel> {
+  let eff = String(preferred || '').trim();
+  if (opts?.skipGemini && isGeminiModelId(eff)) {
+    eff = '';
+  }
   const defaultOrigin = (await getOllamaOriginResolved()).replace(/\/$/, '');
   const config = await getAllConfig();
   const globalDefault = config.agentDefaultModel && config.agentDefaultModel !== 'Auto' ? config.agentDefaultModel : 'qwen2.5:7b';
-  const isAuto = !preferred || preferred.toLowerCase() === 'auto';
+  const isAuto = !eff || eff.toLowerCase() === 'auto';
   const geminiOn = await isGeminiAvailable();
 
   // Modèle préféré explicitement Gemini → routage direct (sans fallback Ollama).
-  if (!isAuto && isGeminiModelId(preferred)) {
+  if (!opts?.skipGemini && !isAuto && isGeminiModelId(eff)) {
     if (!geminiOn) {
       // Provider Gemini non configuré : on retombe sur Ollama pour ne pas bloquer.
       // (le tour LLM produira l'erreur visible côté utilisateur si rien n'est dispo.)
-      return { provider: 'ollama', origin: defaultOrigin, model: preferred };
+      return { provider: 'ollama', origin: defaultOrigin, model: eff };
     }
-    return { provider: 'gemini', model: preferred };
+    return { provider: 'gemini', model: eff };
   }
 
   const selectable = await getSelectableOllamaModels();
   const byName = new Map(selectable.map((m) => [m.name.toLowerCase(), m]));
 
   if (!isAuto) {
-    const exact = byName.get(preferred.toLowerCase());
+    const exact = byName.get(eff.toLowerCase());
     if (exact) return { provider: 'ollama', origin: exact.origin, model: exact.name };
   }
 
   // Auto : si Gemini est dispo et que le défaut global est Gemini, on l'utilise.
-  if (isAuto && geminiOn && isGeminiModelId(globalDefault)) {
+  if (!opts?.skipGemini && isAuto && geminiOn && isGeminiModelId(globalDefault)) {
     return { provider: 'gemini', model: globalDefault };
   }
 
   const compatible = selectable.find((m) => m.compatibility?.ok === true);
   const fallbacks = [globalDefault, 'qwen2.5:7b', 'gemma4:latest', 'qwen2.5-coder:7b', 'qwen2.5-coder:32b', 'llama3.2:latest'];
   for (const candidate of fallbacks) {
-    if (isGeminiModelId(candidate) && geminiOn) {
+    if (!opts?.skipGemini && isGeminiModelId(candidate) && geminiOn) {
       return { provider: 'gemini', model: candidate };
     }
     const match = byName.get(candidate.toLowerCase());
@@ -295,13 +303,13 @@ async function resolveAvailableModel(preferred: string): Promise<ResolvedModel> 
   if (compatible) return { provider: 'ollama', origin: compatible.origin, model: compatible.name };
   if (selectable.length > 0) return { provider: 'ollama', origin: selectable[0].origin, model: selectable[0].name };
 
-  // Aucun Ollama dispo : si Gemini activé, dernier recours via découverte API.
-  if (geminiOn) {
-    const discovered = await fetchGeminiAvailableModels();
+  // Aucun Ollama dispo : si Gemini activé, dernier recours via modèles réellement joignables.
+  if (!opts?.skipGemini && geminiOn) {
+    const discovered = await getFunctionalGeminiModels();
     const first = discovered.models[0]?.id;
     if (first) return { provider: 'gemini', model: first };
   }
-  return { provider: 'ollama', origin: defaultOrigin, model: isAuto ? 'qwen2.5:7b' : preferred };
+  return { provider: 'ollama', origin: defaultOrigin, model: isAuto ? 'qwen2.5:7b' : eff };
 }
 
 function parseInlineToolDirective(message: string): ForgeToolCall | null {
@@ -394,9 +402,9 @@ export async function runForgeOrchestrator(
 
   const preferredModel = String(input.modelHint || '').trim() || process.env.OLLAMA_MODEL?.trim() || 'llama3.2:latest';
   const resolved = await resolveAvailableModel(preferredModel);
-  const provider: 'ollama' | 'gemini' = resolved.provider;
-  const model = resolved.model;
-  const origin = resolved.provider === 'ollama' ? resolved.origin : '';
+  let provider: 'ollama' | 'gemini' = resolved.provider;
+  let model = resolved.model;
+  let origin = resolved.provider === 'ollama' ? resolved.origin : '';
 
   // Charge dynamiquement la liste d'outils disponibles pour cet agent.
   const effectiveTools = await getEffectiveToolsForAgent(input.agentId);
@@ -432,55 +440,113 @@ export async function runForgeOrchestrator(
     let rawReply = '';
     let nativeToolCalls: OllamaToolCall[] = [];
 
-    if (provider === 'gemini') {
-      const r = await geminiChat({
-        model,
-        messages: currentMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          ...(m.tool_calls
-            ? {
-                tool_calls: m.tool_calls.map((tc) => ({
-                  id: tc.id,
-                  type: 'function' as const,
-                  function: {
-                    name: tc.function?.name,
-                    // OpenAI exige `arguments` en string JSON.
-                    arguments:
-                      typeof tc.function?.arguments === 'string'
-                        ? tc.function?.arguments
-                        : JSON.stringify(tc.function?.arguments ?? {}),
-                  },
-                })),
-              }
-            : {}),
-          ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
-        })),
+    let workProvider: 'ollama' | 'gemini' = provider;
+    let workModel = model;
+    let workOrigin = origin;
+
+    const geminiApiMessages = () =>
+      currentMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        ...(m.tool_calls
+          ? {
+              tool_calls: m.tool_calls.map((tc) => ({
+                id: tc.id,
+                type: 'function' as const,
+                function: {
+                  name: tc.function?.name,
+                  arguments:
+                    typeof tc.function?.arguments === 'string'
+                      ? tc.function?.arguments
+                      : JSON.stringify(tc.function?.arguments ?? {}),
+                },
+              })),
+            }
+          : {}),
+        ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
+      }));
+
+    if (workProvider === 'gemini') {
+      let chat = await geminiChat({
+        model: workModel,
+        messages: geminiApiMessages(),
         tools: geminiTools.length > 0 ? geminiTools : undefined,
         timeoutMs,
       });
-      if (!r.ok) {
-        const err = `Erreur Gemini ${r.status}: ${r.error || 'inconnue'}`;
-        await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
-        return { reply: err, provider: 'gemini', model, steps, plan: null };
+
+      if (!chat.ok && isRetriableGeminiHttpStatus(chat.status)) {
+        const tried = new Set<string>();
+        tried.add(normalizeGeminiModelId(workModel).toLowerCase());
+        const functional = await getFunctionalGeminiModels();
+        for (const alt of functional.models) {
+          const id = normalizeGeminiModelId(alt.id);
+          const key = id.toLowerCase();
+          if (tried.has(key)) continue;
+          tried.add(key);
+          await persistStep({
+            type: 'llm',
+            label: 'gemini_model_failover',
+            payload: `${workModel} → ${id}`,
+            status: 'completed',
+          });
+          chat = await geminiChat({
+            model: id,
+            messages: geminiApiMessages(),
+            tools: geminiTools.length > 0 ? geminiTools : undefined,
+            timeoutMs,
+          });
+          if (chat.ok) {
+            workModel = id;
+            break;
+          }
+          if (!isRetriableGeminiHttpStatus(chat.status)) break;
+        }
       }
-      rawReply = r.content.trim();
-      nativeToolCalls = (r.toolCalls || []).map((tc, idx) => ({
-        // Conserve l'ID original (REQUIS pour le tour suivant : tool_call_id).
-        // Si le provider n'en fournit pas, on en synthétise un stable.
-        id: tc.id || `call_${turnId || 'turn'}_${turn}_${idx}`,
-        type: 'function' as const,
-        function: {
-          name: tc.function?.name,
-          arguments: tc.function?.arguments,
-        },
-      }));
-    } else {
-      const res = await fetch(`${origin}/api/chat`, {
+
+      if (chat.ok) {
+        rawReply = chat.content.trim();
+        nativeToolCalls = (chat.toolCalls || []).map((tc, idx) => ({
+          id: tc.id || `call_${turnId || 'turn'}_${turn}_${idx}`,
+          type: 'function' as const,
+          function: {
+            name: tc.function?.name,
+            arguments: tc.function?.arguments,
+          },
+        }));
+        model = workModel;
+        provider = 'gemini';
+      } else if (isRetriableGeminiHttpStatus(chat.status)) {
+        await persistStep({
+          type: 'llm',
+          label: 'gemini_ollama_failover',
+          payload: String(workModel),
+          status: 'running',
+        });
+        const fb = await resolveAvailableModel(preferredModel, { skipGemini: true });
+        if (fb.provider !== 'ollama') {
+          const err = `Erreur Gemini ${chat.status}: ${chat.error || 'inconnue'}`;
+          await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
+          return { reply: err, provider: 'gemini', model: workModel, steps, plan: null };
+        }
+        workProvider = 'ollama';
+        workModel = fb.model;
+        workOrigin = fb.origin;
+        provider = 'ollama';
+        model = workModel;
+        origin = workOrigin;
+      } else {
+        const err = `Erreur Gemini ${chat.status}: ${chat.error || 'inconnue'}`;
+        await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
+        return { reply: err, provider: 'gemini', model: workModel, steps, plan: null };
+      }
+    }
+
+    if (workProvider === 'ollama' && !rawReply) {
+      const res = await fetch(`${workOrigin}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model,
+          model: workModel,
           stream: false,
           messages: currentMessages,
           tools: ollamaTools.length > 0 ? ollamaTools : undefined,
@@ -491,15 +557,13 @@ export async function runForgeOrchestrator(
       if (!res.ok) {
         const err = `Erreur Ollama HTTP ${res.status}`;
         await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
-        return { reply: err, provider: 'ollama', model, steps, plan: null };
+        return { reply: err, provider: 'ollama', model: workModel, steps, plan: null };
       }
 
       const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const msg = (data.message as Record<string, unknown> | undefined) ?? undefined;
       rawReply = typeof msg?.content === 'string' ? String(msg.content).trim() : '';
       const ollamaCalls = Array.isArray(msg?.tool_calls) ? (msg!.tool_calls as OllamaToolCall[]) : [];
-      // Ollama ne fournit jamais d'`id` sur ses tool_calls : on en synthétise un stable
-      // pour pouvoir le re-référencer côté `tool_call_id` au tour suivant.
       nativeToolCalls = ollamaCalls.map((tc, idx) => ({
         id: tc.id || `call_${turnId || 'turn'}_${turn}_${idx}`,
         type: 'function' as const,
@@ -508,6 +572,9 @@ export async function runForgeOrchestrator(
           arguments: tc.function?.arguments,
         },
       }));
+      model = workModel;
+      provider = 'ollama';
+      origin = workOrigin;
     }
 
     // 1) Mode natif : tool_calls Ollama

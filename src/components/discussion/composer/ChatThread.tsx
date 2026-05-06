@@ -133,12 +133,12 @@ function DiffBlock({ diff }: { diff: string }) {
     <pre class="custom-scrollbar max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
       {diff.split('\n').map((line, idx) => {
         const cls = line.startsWith('+++') || line.startsWith('---')
-          ? 'text-gray-400'
+          ? 'text-gray-500'
           : line.startsWith('+')
-            ? 'bg-emerald-950/60 text-emerald-200'
+            ? 'bg-emerald-100 text-emerald-900'
             : line.startsWith('-')
-              ? 'bg-red-950/60 text-red-200'
-              : 'text-gray-200';
+              ? 'bg-red-100 text-red-900'
+              : 'text-gray-700';
         return <span key={idx} class={`block px-1 ${cls}`}>{line || ' '}</span>;
       })}
     </pre>
@@ -203,14 +203,14 @@ function StepCard({
         ) : null}
       </button>
       {hasDetail && expanded ? (
-        <div class="border-t border-gray-100 bg-gray-950 px-3 py-2">
-          <div class="mb-1 flex items-center justify-between gap-2">
+        <div class="border-t border-gray-100 bg-[#F8FAFB] px-4 py-4">
+          <div class="mb-3 flex items-center justify-between gap-2">
             <span class="font-mono text-[10px] uppercase tracking-widest text-gray-500">{hasDiff ? 'diff' : 'sortie'}</span>
             <div class="flex items-center gap-2">
               {subtitle ? (
                 <button
                   type="button"
-                  class="rounded border border-gray-800 px-2 py-0.5 font-mono text-[10px] text-gray-400 hover:border-gray-600 hover:text-gray-200"
+                  class="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-mono text-[10px] text-gray-600 shadow-sm hover:border-gray-300 hover:bg-gray-50"
                   onClick={() => copyToClipboard(subtitle)}
                 >
                   copier cible
@@ -218,19 +218,21 @@ function StepCard({
               ) : null}
               <button
                 type="button"
-                class="rounded border border-gray-800 px-2 py-0.5 font-mono text-[10px] text-gray-400 hover:border-gray-600 hover:text-gray-200"
+                class="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-mono text-[10px] text-gray-600 shadow-sm hover:border-gray-300 hover:bg-gray-50"
                 onClick={() => copyToClipboard(detail)}
               >
                 copier
               </button>
-              <span class="font-mono text-[10px] text-gray-600">step #{index + 1}</span>
+              <span class="font-mono text-[10px] text-gray-500">step #{index + 1}</span>
             </div>
           </div>
-          {hasDiff ? (
-            <DiffBlock diff={detail} />
-          ) : (
-            <pre class="custom-scrollbar max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-gray-100">{detail}</pre>
-          )}
+          <div class="rounded-xl border border-gray-200/90 bg-white p-4 shadow-sm">
+            {hasDiff ? (
+              <DiffBlock diff={detail} />
+            ) : (
+              <pre class="custom-scrollbar max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-gray-800">{detail}</pre>
+            )}
+          </div>
         </div>
       ) : null}
     </div>

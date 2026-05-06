@@ -14,6 +14,8 @@ const {
   description?: string;
   actions?: Action[];
 };
+
+const hasActionsAppend = Astro.slots.has('actionsAppend');
 ---
 
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -21,7 +23,7 @@ const {
     <h1 class="text-3xl font-bold text-gray-900 sm:text-4xl">{title}</h1>
     {description ? <p class="mt-2 max-w-2xl text-sm text-gray-500">{description}</p> : null}
   </div>
-  {actions.length ? (
+  {actions.length || hasActionsAppend ? (
     <div class="flex flex-wrap items-center gap-2">
       {actions.map((action) => (
         <a
@@ -35,6 +37,7 @@ const {
           {action.label}
         </a>
       ))}
+      {hasActionsAppend ? <slot name="actionsAppend" /> : null}
     </div>
   ) : null}
 </div>
