@@ -4,6 +4,11 @@ import { loadAstroDb } from './load-astro-db';
 import { resolveProjectPathFromDbProject } from './forge-repos';
 import { getConfig } from './config-db';
 import type { EffectiveTool } from './forge-tool-catalog';
+import {
+  applyForgeAttributionGitCommitMessage,
+  applyForgeAttributionPrBody,
+  applyForgeAttributionPrTitle,
+} from './forge-agent-attribution';
 
 export type ForgeToolCall =
   | { tool: 'read_file'; path: string }
@@ -196,6 +201,62 @@ async function runBuiltinRestartGateway(args: Record<string, unknown>): Promise<
   }
 }
 
+/** Guillemet shell POSIX-safe pour une chaîne utilisée après `git commit -m`. */
+function shellEscapeForSingleQuotedSegments(s: string): string {
+  return `'${String(s).replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * git commit avec message forcément préfixé `[Ageton · AGENT]` côté serveur.
+ */
+async function runBuiltinGitCommit(
+  args: Record<string, unknown>,
+  ctx: ToolExecutionContext,
+): Promise<ForgeToolResult> {
+  const amend = Boolean(args.amend);
+  const userMsg = String(args.message ?? '').trim();
+  if (!userMsg) {
+    return { ok: false, tool: 'git_commit', error: 'message requis (sujet de commit).' };
+  }
+
+  let cwd = String(ctx.overrideProjectPath || '').trim();
+  const ctxVars = await buildContextVars(ctx);
+  if (!cwd) cwd = String(ctxVars.__projectPath || '').trim();
+  if (!cwd) {
+    return {
+      ok: false,
+      tool: 'git_commit',
+      error: 'Aucun chemin projet (projectId hors scope ou projet introuvable).',
+    };
+  }
+
+  const message = applyForgeAttributionGitCommitMessage(ctx.agentId, userMsg);
+  const infra = await getZimaOSInfraClient();
+  const startedAt = Date.now();
+  try {
+    const cd = shellEscapeForSingleQuotedSegments(cwd);
+    const quotedMsg = shellEscapeForSingleQuotedSegments(message);
+    const cmd = amend
+      ? `cd ${cd} && git commit --amend -m ${quotedMsg}`
+      : `cd ${cd} && git commit -m ${quotedMsg}`;
+    const out = infra.exec(cmd);
+    return {
+      ok: true,
+      tool: 'git_commit',
+      output: out?.trim().length ? out : 'Commit enregistré.',
+      durationMs: Date.now() - startedAt,
+      exitCode: 0,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      tool: 'git_commit',
+      error: e instanceof Error ? e.message : String(e),
+      durationMs: Date.now() - startedAt,
+    };
+  }
+}
+
 /**
  * Auto-installation : crée un AgentTool + AgentToolAssignment pour l'agent demandeur.
  * Aucun Approval requis (choix utilisateur — sécurité = no_approval).
@@ -285,6 +346,7 @@ const BUILTIN_HANDLERS: Record<
   exec: (args) => runBuiltinExec(args),
   update_request_status: (args) => runBuiltinUpdateRequestStatus(args),
   restart_gateway: (args) => runBuiltinRestartGateway(args),
+  git_commit: (args, ctx) => runBuiltinGitCommit(args, ctx),
   request_tool: (args, ctx) => runBuiltinRequestTool(args, ctx),
 };
 
@@ -313,7 +375,21 @@ export async function executeDynamicTool(
       return { ok: false, tool: tool.name, error: 'Aucun template de commande défini.' };
     }
     const ctxVars = await buildContextVars(ctx);
-    const allVars: Record<string, unknown> = { ...ctxVars, ...args };
+
+    let resolvedArgs = args as Record<string, unknown>;
+    if (tool.name === 'gh_pr_create') {
+      resolvedArgs = { ...resolvedArgs };
+      resolvedArgs.title = applyForgeAttributionPrTitle(
+        ctx.agentId,
+        String(resolvedArgs.title ?? ''),
+      );
+      resolvedArgs.body = applyForgeAttributionPrBody(
+        ctx.agentId,
+        String(resolvedArgs.body ?? ''),
+      );
+    }
+
+    const allVars: Record<string, unknown> = { ...ctxVars, ...resolvedArgs };
     const command = renderTemplate(template, allVars).trim();
     if (!command) {
       return { ok: false, tool: tool.name, error: 'Template rendu vide (variables manquantes ?).' };

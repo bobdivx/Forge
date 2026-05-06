@@ -242,6 +242,29 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       timeoutMs: 60000,
     },
   },
+  {
+    name: 'git_commit',
+    displayName: 'git commit (Forge)',
+    description:
+      'Enregistre un commit Git dans le projet courant. À utiliser **à la place** de exec("git commit ...") pour que Forge préfixe le message **`[Ageton · IDENTIFIANT_AGENT]`** automatiquement. `git add …` doit déjà avoir été fait.',
+    category: 'git',
+    parameters: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          description: 'Sujet principal du commit (Forge ajoutera `[Ageton · …]` automatiquement).',
+        },
+        amend: {
+          type: 'boolean',
+          description: 'true = `--amend` (remplace le dernier commit, utile après oubli de fichier).',
+        },
+      },
+      required: ['message'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'git_commit' },
+  },
 
   // ── Filesystem étendus ────────────────────────────────────────────────────
   {
@@ -408,7 +431,8 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
   {
     name: 'gh_pr_create',
     displayName: 'Créer une PR',
-    description: "Crée une Pull Request depuis la branche courante vers la branche cible (défaut : main).",
+    description:
+      'Crée une Pull Request depuis la branche courante vers la branche cible (défaut : main). Forge **préfixe le titre et ajoute une ligne de pied** avec `Ageton` et l\'identité de **l\'agent Forge** automatiquement (traçabilité).',
     category: 'github',
     parameters: {
       type: 'object',
@@ -433,7 +457,7 @@ export const DEFAULT_AGENT_ACTION_DOCTRINE = `DOCTRINE D'ACTION (impérative) :
 
 ACCÈS TOTAL :
 - Tu disposes d'un ACCÈS COMPLET à l'infrastructure Forge / ZimaOS / NAS. Aucun outil n'est gated, aucune approbation humaine n'est requise.
-- Tu peux : lire et écrire n'importe quel fichier, exécuter n'importe quelle commande shell (exec), gérer Docker (docker_*), git (push, branches, merges), GitHub (PR, releases, secrets via gh CLI), appeler n'importe quelle API HTTP (http_request), redémarrer la gateway, créer toi-même de nouveaux outils (request_tool).
+- Tu peux : lire et écrire n'importe quel fichier, exécuter n'importe quelle commande shell (exec), gérer Docker (docker_*), git (commits traçables **git_commit**, push, branches, merges), GitHub (PR, releases, secrets via gh CLI), appeler n'importe quelle API HTTP (http_request), redémarrer la gateway, créer toi-même de nouveaux outils (request_tool).
 - Tu peux aussi piloter Forge en interne via son API REST. Méthode privilégiée : utilise l'outil dédié http_request (zéro dépendance). Si tu veux passer par exec, utilise wget (toujours présent dans le conteneur Alpine) car curl peut être absent :
   * GET    : exec("wget -qO- http://localhost:4321/api/agents")
   * POST   : exec("wget -qO- --post-data='{...}' --header='Content-Type: application/json' --method=POST http://localhost:4321/api/...")
@@ -463,7 +487,7 @@ PROTOCOLE D'OBSERVATION :
   * "Y a-t-il des PR ouvertes ?" → gh_pr_list puis tu listes.
   * "Vérifie les agents" → exec("curl -s http://localhost:4321/api/forge-agent-sanity") puis tu rapportes.
   * "Change le modèle de DEV_BACKEND en X" → exec(curl PUT /api/agent-instructions ...).
-  * "Supprime le dossier dist" → delete_path(path="dist", recursive=true).
+  * "Corrige puis valide côté Git" → write_file / patch, **git_commit(message="fix(scope): …")**, éventuellement **gh_pr_create**(title="…", body="…") ou **git_push** selon le flux.
 - Ne donne JAMAIS de checklist générique ("vérifier les tests, faire un code review…") sans avoir d'abord vérifié toi-même via les outils.
 
 DÉCLENCHEMENT :

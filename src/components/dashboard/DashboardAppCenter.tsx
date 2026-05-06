@@ -377,44 +377,24 @@ export default function DashboardAppCenter({ initialProjects }: { initialProject
 
               <div class="flex flex-col gap-2">
                 {isOnline && port !== 'Inconnu' && (
-                  <div class="bg-[#E9F3EB] rounded-xl p-3 flex flex-col gap-2 relative z-10 pointer-events-auto">
-                    <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-[#175B37]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                        </svg>
-                        <a href={`http://zimacube.local:${port}`} target="_blank" rel="noopener noreferrer" class="text-[13px] font-bold text-[#175B37] hover:underline" onClick={(e) => e.stopPropagation()}>
-                          zimacube.local:${port} (Dev)
-                        </a>
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          const btn = document.getElementById('cf-btn-' + project.id);
-                          if(btn) btn.innerHTML = '<div class="w-3 h-3 border-2 border-[#175B37]/30 border-t-[#175B37] rounded-full animate-spin"></div>';
-                          try {
-                            const res = await fetch('/api/cloudflare-tunnel', {
-                              method: 'POST',
-                              headers: {'Content-Type':'application/json'},
-                              body: JSON.stringify({ appName: project.path.split('/').pop() || project.name, action: 'publish' })
-                            });
-                            const data = await res.json();
-                            if(data.error) alert(data.error);
-                            else {
-                              alert('Demande de Tunnel envoyée !\nURL cible: ' + data.url);
-                            }
-                          } catch(e) { alert('Erreur serveur'); }
-                          if(btn) btn.innerHTML = 'Publier';
-                        }}
-                        id={`cf-btn-${project.id}`}
-                        class="text-[10px] font-semibold bg-white text-[#175B37] border border-[#175B37]/20 px-2 py-1 rounded hover:bg-[#175B37] hover:text-white transition-colors"
-                        title="Exposer sur Internet via Cloudflare"
-                      >
-                        Publier
-                      </button>
-                    </div>
-                  </div>
+                  <a
+                    href={`http://zimacube.local:${port}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Ouvrir l’application de développement dans le navigateur"
+                    class="bg-[#E9F3EB] rounded-xl p-3 flex items-center gap-2 relative z-10 pointer-events-auto text-[13px] font-bold text-[#175B37] hover:underline decoration-[#175B37]/35 hover:bg-[#dff0e3] transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg class="w-4 h-4 text-[#175B37] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                    <span class="min-w-0 truncate">
+                      zimacube.local:{port} (Dev)
+                    </span>
+                    <svg class="w-4 h-4 text-[#175B37]/70 shrink-0 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
                 )}
 
               </div>

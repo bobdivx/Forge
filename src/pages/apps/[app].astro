@@ -10,6 +10,7 @@ import AuditLauncher from '../../components/apps/AuditLauncher';
 import GitHistoryCard from '../../components/apps/GitHistoryCard';
 import GithubFolderCard from '../../components/apps/GithubFolderCard';
 import AgentActivityCanvas from '../../components/apps/AgentActivityCanvas';
+import AppCloudflarePublish from '../../components/apps/AppCloudflarePublish';
 import path from 'path';
 import { db, Project, Request, eq, desc } from 'astro:db';
 import {
@@ -147,6 +148,8 @@ const app = {
         </div>
       </div>
     </div>
+
+    <AppCloudflarePublish client:load appFolderKey={folderKey} />
 
     <!-- HERO : ce que les agents ont fait sur ce projet -->
     <AgentActivityCanvas client:load appName={folderKey} />

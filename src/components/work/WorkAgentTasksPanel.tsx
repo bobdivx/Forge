@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 
 type TaskRow = {
   id: number;
@@ -9,6 +9,18 @@ type TaskRow = {
   createdAt: string;
   updatedAt: string;
 };
+
+function updatedAtMs(iso: string | undefined): number {
+  if (!iso) return 0;
+  const ms = new Date(iso).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function normalizeStatus(s: string): string {
+  return String(s || '').toLowerCase();
+}
+
+type TaskViewTab = 'active' | 'finished' | 'all';
 
 function statusCls(s: string): string {
   const x = String(s || '').toLowerCase();
@@ -25,6 +37,7 @@ export default function WorkAgentTasksPanel() {
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [purgeScope, setPurgeScope] = useState<'pending' | 'finished' | 'all' | null>(null);
+  const [taskTab, setTaskTab] = useState<TaskViewTab>('active');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,10 +115,44 @@ export default function WorkAgentTasksPanel() {
     }
   }
 
-  const pendingCount = tasks.filter((t) => ['pending', 'bug'].includes(String(t.status).toLowerCase())).length;
+  const pendingCount = tasks.filter((t) => ['pending', 'bug'].includes(normalizeStatus(t.status))).length;
   const finishedCount = tasks.filter((t) =>
-    ['completed', 'failed', 'cancelled'].includes(String(t.status).toLowerCase()),
+    ['completed', 'failed', 'cancelled'].includes(normalizeStatus(t.status)),
   ).length;
+
+  const activeSorted = useMemo(() => {
+    const rank = (status: string) => {
+      const s = normalizeStatus(status);
+      if (s === 'running') return 0;
+      if (s === 'pending' || s === 'bug') return 1;
+      return 2;
+    };
+    return [...tasks]
+      .filter((t) => ['pending', 'bug', 'running'].includes(normalizeStatus(t.status)))
+      .sort((a, b) => {
+        const d = rank(a.status) - rank(b.status);
+        if (d !== 0) return d;
+        return updatedAtMs(b.updatedAt) - updatedAtMs(a.updatedAt);
+      });
+  }, [tasks]);
+
+  const finishedSorted = useMemo(
+    () =>
+      [...tasks]
+        .filter((t) => ['completed', 'failed', 'cancelled'].includes(normalizeStatus(t.status)))
+        .sort((a, b) => updatedAtMs(b.updatedAt) - updatedAtMs(a.updatedAt)),
+    [tasks],
+  );
+
+  const allSorted = useMemo(
+    () => [...tasks].sort((a, b) => updatedAtMs(b.updatedAt) - updatedAtMs(a.updatedAt)),
+    [tasks],
+  );
+
+  const displayTasks =
+    taskTab === 'active' ? activeSorted : taskTab === 'finished' ? finishedSorted : allSorted;
+
+  const activeTabCount = activeSorted.length;
 
   return (
     <section class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -117,8 +164,57 @@ export default function WorkAgentTasksPanel() {
           </div>
           <p class="text-xs text-gray-500 mt-1 max-w-xl">
             Journal des <code class="text-[11px] bg-gray-100 px-1 rounded">AgentTask</code>. Lancez tout le dispatch
-            (comme le scheduler), une tâche précise en file, ou supprimez des lots pour repartir proprement.
+            (comme le scheduler), une tâche précise en file, ou supprimez des lots pour repartir proprement. Le statut
+            <strong> completed</strong> signifie que l’agent a terminé une exécution avec une réponse enregistrée — ce
+            n’est pas un certificat de correctif fusionné dans le dépôt (voir l’arborescence Git ci-dessus dans le fil
+            simple).
           </p>
+          {!loading && tasks.length > 0 ? (
+            <div class="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="Filtrer les tâches par statut">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={taskTab === 'active'}
+                onClick={() => setTaskTab('active')}
+                class={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                  taskTab === 'active'
+                    ? 'bg-[#175B37] text-white shadow-sm'
+                    : 'border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                À traiter · {activeTabCount}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={taskTab === 'finished'}
+                onClick={() => setTaskTab('finished')}
+                class={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                  taskTab === 'finished'
+                    ? 'bg-[#175B37] text-white shadow-sm'
+                    : 'border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Terminées · {finishedCount}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={taskTab === 'all'}
+                onClick={() => setTaskTab('all')}
+                class={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                  taskTab === 'all'
+                    ? 'bg-[#175B37] text-white shadow-sm'
+                    : 'border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Toutes · {tasks.length}
+              </button>
+              <span class="text-[10px] text-gray-400 self-center">
+                À traiter : en cours puis file (pending / bug), tri par mise à jour.
+              </span>
+            </div>
+          ) : null}
         </div>
         <div class="flex flex-wrap gap-2">
           <button
@@ -178,6 +274,14 @@ export default function WorkAgentTasksPanel() {
         <div class="p-10 text-center text-sm text-gray-400">Chargement des tâches…</div>
       ) : tasks.length === 0 ? (
         <div class="p-10 text-center text-sm text-gray-400">Aucune entrée AgentTask en base.</div>
+      ) : displayTasks.length === 0 ? (
+        <div class="p-10 text-center text-sm text-gray-500">
+          {taskTab === 'active'
+            ? 'Aucune tâche active (running / pending / bug). Ouvrez l’onglet « Terminées » pour voir l’historique.'
+            : taskTab === 'finished'
+              ? 'Aucune tâche terminée dans les entrées chargées.'
+              : 'Aucune tâche à afficher.'}
+        </div>
       ) : (
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -192,7 +296,7 @@ export default function WorkAgentTasksPanel() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((t) => {
+              {displayTasks.map((t) => {
                 const st = String(t.status || '').toLowerCase();
                 const canSend = st === 'pending' || st === 'bug';
                 const sending = busy === `task-${t.id}`;
