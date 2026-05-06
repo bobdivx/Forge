@@ -1,0 +1,3 @@
+## 2026-05-06 - Parallelizing fallback sequences trades network for latency
+**Learning:** Converting sequential `for...of` retry/fallback loops into parallel `Promise.all` queries executes all options concurrently. While this achieves the lowest possible latency for the function, it generates redundant HTTP requests to secondary pathways if the primary succeeds.
+**Action:** For internal or gateway endpoints where minimal latency is favored over network overhead (like ZimaOS local probes), `Promise.all` is beneficial. Ensure to iterate correctly through the results array in the original order to preserve state variables dependent on sequence.
