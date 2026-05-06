@@ -13,7 +13,7 @@
  * - Journalise dans la table Heartbeat.
  */
 
-import { eq } from 'drizzle-orm';
+import { asc, eq, or, sql } from 'drizzle-orm';
 import { getConfig } from './config-db';
 import { loadAstroDb } from './load-astro-db';
 import { toAgentPath, translateContentForAgent } from './forge-repos';
@@ -311,7 +311,13 @@ async function dispatchOpenAppIssues(agentIds: string[], onlyProjectId?: number)
     const open = issues.filter((i) => String(i.status).toLowerCase() === 'open');
     if (!open.length) return;
 
-    const taskRows = await db.select({ task: AgentTask.task, input: AgentTask.input }).from(AgentTask).limit(300);
+    /** Toutes les tâches qui référencent déjà un `AppIssue #id` (pas un échantillon fixe). */
+    const taskRows = await db
+      .select({ task: AgentTask.task, input: AgentTask.input })
+      .from(AgentTask)
+      .where(
+        sql`(coalesce(${AgentTask.task},'') like '%AppIssue #%' or coalesce(${AgentTask.input},'') like '%AppIssue #%')`,
+      );
     const seenIssueIds = new Set<string>();
     for (const t of taskRows) {
       const blob = `${t.task ?? ''}\n${t.input ?? ''}`;
@@ -521,7 +527,19 @@ async function dispatchPendingTasks(agentIds: string[], onlyProjectId?: number) 
     const activeProjects = await db.select({ id: Project.id }).from(Project).where(eq(Project.swarmEnabled, 1));
     const activeProjectIds = activeProjects.map(p => p.id);
 
-    const rows = await db.select().from(AgentTask).limit(50);
+    /** Priorité : anomalies `[AppIssue #…]`, puis demandes carnet `[ForgeRequest #…]`, puis le reste (PR/CI, audits…), puis ancienneté. */
+    const rows = await db
+      .select()
+      .from(AgentTask)
+      .where(or(eq(AgentTask.status, 'pending'), eq(AgentTask.status, 'bug')))
+      .orderBy(
+        sql`(case
+          when coalesce(${AgentTask.task},'') like '%[AppIssue #%' or coalesce(${AgentTask.input},'') like '%AppIssue #%' then 0
+          when coalesce(${AgentTask.task},'') like '%[ForgeRequest #%' or coalesce(${AgentTask.input},'') like '%ForgeRequest #%' then 1
+          else 2 end)`,
+        asc(AgentTask.createdAt),
+      )
+      .limit(120);
     const pending = rows.filter((r) => {
       if (!['pending', 'bug'].includes(r.status)) return false;
       if (!isAgentTargeted(r.agentId, agentIds)) return false;

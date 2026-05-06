@@ -1,6 +1,8 @@
 import { loadAstroDb } from './load-astro-db';
 import { resolveProjectPathFromDbProject } from './forge-repos';
 import { summarizeGithubFolder } from './project-github-meta';
+import { cancelQueuedAgentTasksLinkedToAppIssue } from './forge-app-issue-task-cleanup';
+import { insertForgeActivityLog } from './forge-activity-log';
 import fs from 'fs';
 import { eq } from 'drizzle-orm';
 
@@ -413,22 +415,62 @@ export async function checkGithubPullRequestsForProjects(scope?: GithubMonitorin
             },
           },
         );
+        if (prRes.status === 404) {
+          await cancelQueuedAgentTasksLinkedToAppIssue(issue.id);
+          await db
+            .update(AgentAppIssue)
+            .set({
+              status: 'resolved',
+              detail: `${issue.detail || ''}\n\n---\nAuto-clôturé : PR #${parsed.number} introuvable sur GitHub (404 — supprimée, déplacée ou URL obsolète). Les tâches Forge « [AppIssue #${issue.id}] » encore en file ont été annulées.`.slice(
+                0,
+                120_000,
+              ),
+              updatedAt: new Date(),
+            })
+            .where(eq(AgentAppIssue.id, issue.id));
+          await insertForgeActivityLog({
+            actorType: 'system',
+            actorId: 'github-pulls-sync',
+            action: 'swarm.issue.pr_404.linked_tasks_cancelled',
+            entityType: 'agent_app_issue',
+            entityId: String(issue.id),
+            details: { prNumber: parsed.number, projectId: project.id, repo: `${owner}/${repo}` },
+          });
+          console.log(`[github-pulls] Issue pr_review #${issue.id} clôturée — PR #${parsed.number} 404`);
+          continue;
+        }
         if (!prRes.ok) continue;
         const prData = (await prRes.json()) as { state?: string; merged_at?: string | null; closed_at?: string | null };
         if (prData.state === 'open') continue;
         const merged = Boolean(prData.merged_at);
         const closedAt = prData.closed_at ? new Date(prData.closed_at).toISOString() : '';
+        await cancelQueuedAgentTasksLinkedToAppIssue(issue.id);
         await db
           .update(AgentAppIssue)
           .set({
             status: 'resolved',
-            detail: `${issue.detail || ''}\n\n---\nAuto-clôturé : PR #${parsed.number} ${merged ? 'fusionnée' : 'fermée'} le ${closedAt}`.slice(
+            detail: `${issue.detail || ''}\n\n---\nAuto-clôturé : PR #${parsed.number} ${merged ? 'fusionnée' : 'fermée'} le ${closedAt}. Les tâches Forge « [AppIssue #${issue.id}] » encore en file ont été annulées.`.slice(
               0,
               120_000,
             ),
             updatedAt: new Date(),
           })
           .where(eq(AgentAppIssue.id, issue.id));
+        await insertForgeActivityLog({
+          actorType: 'system',
+          actorId: 'github-pulls-sync',
+          action: merged
+            ? 'swarm.issue.pr_merged.linked_tasks_cancelled'
+            : 'swarm.issue.pr_closed.linked_tasks_cancelled',
+          entityType: 'agent_app_issue',
+          entityId: String(issue.id),
+          details: {
+            prNumber: parsed.number,
+            projectId: project.id,
+            repo: `${owner}/${repo}`,
+            closedAt,
+          },
+        });
         console.log(`[github-pulls] Issue pr_review #${issue.id} clôturée (PR #${parsed.number} ${merged ? 'merged' : 'closed'})`);
       }
     }
