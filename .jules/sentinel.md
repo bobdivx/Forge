@@ -1,0 +1,5 @@
+
+## 2024-05-18 - PM2 API Command Injection Prevention
+**Vulnerability:** Found a shell injection vulnerability in `src/pages/api/pm2.ts` where user inputs (appName, scriptPath, env properties) were directly string concatenated into an `exec` command without sanitization.
+**Learning:** Concatenating paths and user-provided environment values into a shell execution via `exec` allows an attacker to trivially bypass constraints by appending arbitrary shell commands. This affects local endpoints wrapping complex CLI utilities (like `pm2`).
+**Prevention:** Instead of using shell interpolation via `exec`, use `execFile` or `spawn` to run the underlying executable (like `npx` or `npm`) by passing all arguments as an array (`['pm2', 'start', ...]`). Also, pass directory constraints via the `cwd` option, safely pass environment variables through the `env` option (extending `process.env`), and validate user parameters (such as `appName`) to ensure they don't start with a hyphen (`-`) to avoid flag injection.

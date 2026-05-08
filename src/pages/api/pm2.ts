@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -13,17 +13,16 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'action and appName are required' }), { status: 400 });
     }
 
-    let command = '';
+    // 🛡️ Sentinel: Input validation to prevent flag injection in PM2 CLI
+    if (appName.startsWith('-')) {
+      return new Response(JSON.stringify({ error: 'appName cannot start with a hyphen' }), { status: 400 });
+    }
 
     if (action === 'start' || action === 'start_prod') {
       if (!scriptPath) return new Response(JSON.stringify({ error: 'scriptPath required to start' }), { status: 400 });
-      // Build env variables string
-      let envString = '';
-      if (env) {
-        for (const [key, value] of Object.entries(env)) {
-          envString += `${key}="${value}" `;
-        }
-      }
+
+      // Prepare secure environment dictionary instead of string concatenation
+      const childEnv = { ...process.env, ...(env || {}) };
       
       let npmScript = action === 'start_prod' ? 'start' : 'dev';
       
@@ -60,24 +59,26 @@ export const POST: APIRoute = async ({ request }) => {
           } catch(e) {}
           
           if (hasBuild) {
-              command = `cd ${scriptPath} && npm run build && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
-          } else {
-              command = `cd ${scriptPath} && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              // 🛡️ Sentinel: Using execFile with array of args to prevent shell injection
+              await execFilePromise('npm', ['run', 'build'], { cwd: scriptPath, env: childEnv });
           }
-      } else {
-          command = `cd ${scriptPath} && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
       }
-    } else if (action === 'stop') {
-      command = `npx -y pm2 stop "${appName}"`;
-    } else if (action === 'delete') {
-      command = `npx -y pm2 delete "${appName}"`;
-    } else if (action === 'restart') {
-      command = `npx -y pm2 restart "${appName}"`;
-    } else {
-      return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
+
+      const { stdout, stderr } = await execFilePromise('npx', ['-y', 'pm2', 'start', 'npm', '--name', appName, '--', 'run', npmScript], { cwd: scriptPath, env: childEnv });
+      return new Response(JSON.stringify({ status: 'ok', stdout, stderr }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    const { stdout, stderr } = await execPromise(command);
+    let pm2Action = '';
+    if (action === 'stop') pm2Action = 'stop';
+    else if (action === 'delete') pm2Action = 'delete';
+    else if (action === 'restart') pm2Action = 'restart';
+    else return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
+
+    // 🛡️ Sentinel: Using execFile with array of args to prevent shell injection
+    const { stdout, stderr } = await execFilePromise('npx', ['-y', 'pm2', pm2Action, appName]);
 
     return new Response(JSON.stringify({ status: 'ok', stdout, stderr }), {
       status: 200,
@@ -93,7 +94,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const GET: APIRoute = async () => {
   try {
-    const { stdout } = await execPromise('npx -y pm2 jlist');
+    const { stdout } = await execFilePromise('npx', ['-y', 'pm2', 'jlist']);
     const list = JSON.parse(stdout);
     return new Response(JSON.stringify(list), {
       status: 200,
