@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -14,23 +17,26 @@ export const GET: APIRoute = async ({ url }) => {
     const containerId = url.searchParams.get('id');
     const tail = url.searchParams.get('tail') || '100';
 
-    if (!containerId) {
-      return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
+    // Validation de sécurité : éviter l'injection de drapeaux ou commandes
+    if (!containerId || containerId.startsWith('-') || tail.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "ID du conteneur manquant ou invalide" }), {
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        // Utiliser execFile au lieu de execSync pour éviter les injections de commande et le blocage de l'event loop
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+
+        // docker logs écrit souvent sur stderr (ou stdout + stderr combinés)
+        const combined = (stdout + '\n' + stderr).trim();
+        logs = combined ? combined.split('\n') : [];
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
-        if (err.stderr) {
-            logs = err.stderr.toString().trim().split('\n');
+        if (err.stderr || err.stdout) {
+            const combined = ((err.stdout || '') + '\n' + (err.stderr || '')).trim();
+            logs = combined ? combined.split('\n') : [];
         } else {
             throw err;
         }

@@ -1,6 +1,9 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import path from 'path';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,7 +15,8 @@ export const GET: APIRoute = async ({ url }) => {
 
     let output = "";
     try {
-      output = execSync(`tail -n ${lines} ${filePath}`).toString();
+      const { stdout } = await execFileAsync('tail', ['-n', lines.toString(), filePath]);
+      output = stdout;
     } catch (e) {
       output = "Erreur lors de la lecture du fichier log.";
     }
