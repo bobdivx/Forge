@@ -113,7 +113,10 @@ export default function DiscussionHeader({
         </button>
         <button
           type="button"
-          class="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+          class="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
+          aria-label="Menu d'options"
+          aria-expanded={headerMenuOpen}
+          aria-haspopup="menu"
           onClick={() => setHeaderMenuOpen((v: boolean) => !v)}
         >
           <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
