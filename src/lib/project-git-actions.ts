@@ -140,6 +140,48 @@ export async function gitCheckoutBranch(
   }
 }
 
+const STASH_MSG_MAX = 220;
+
+/** Met de côté l’index + l’arbre de travail (y compris fichiers non suivis). */
+export async function gitStashPushIncludingUntracked(
+  cwd: string,
+  message: string,
+): Promise<{ ok: boolean; stderr: string; nothingToStash?: boolean }> {
+  const msg = String(message || 'Forge stash').trim().slice(0, STASH_MSG_MAX);
+  try {
+    await execFileAsync('git', ['stash', 'push', '-u', '-m', msg], {
+      cwd,
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
+    });
+    return { ok: true, stderr: '' };
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; stdout?: string; message?: string };
+    const combined = `${err.stderr || ''} ${err.stdout || ''} ${err.message || ''}`;
+    if (/no local changes to save/i.test(combined)) {
+      return { ok: true, stderr: '', nothingToStash: true };
+    }
+    return { ok: false, stderr: err.stderr || err.message || String(e) };
+  }
+}
+
+/** Ré-applique le dernier stash (après un pull). */
+export async function gitStashPop(cwd: string): Promise<{ ok: boolean; stderr: string }> {
+  try {
+    await execFileAsync('git', ['stash', 'pop'], {
+      cwd,
+      encoding: 'utf8',
+      maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
+    });
+    return { ok: true, stderr: '' };
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string };
+    return { ok: false, stderr: err.stderr || err.message || String(e) };
+  }
+}
+
 export async function gitCommitAll(
   cwd: string,
   message: string,

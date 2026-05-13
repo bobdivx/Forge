@@ -5,6 +5,7 @@ import DashboardLayout from "../layouts/DashboardLayout.astro";
 import DashboardAppCenter from "../components/dashboard/DashboardAppCenter";
 import AppLauncher from "../components/apps/AppLauncher";
 import SyncProjectsButton from "../components/apps/SyncProjectsButton";
+import DashboardGitPullAllButton from "../components/dashboard/DashboardGitPullAllButton";
 import GithubImportModal from "../components/apps/GithubImportModal";
 import PageHeader from "../components/ui/PageHeader.astro";
 import EmptyStateCard from "../components/ui/EmptyStateCard.astro";
@@ -33,6 +34,7 @@ try {
   />
   <div class="mb-8 flex flex-wrap items-center gap-3">
       <SyncProjectsButton client:load />
+      <DashboardGitPullAllButton client:load />
       <GithubImportModal client:load />
   </div>
 
@@ -66,6 +68,7 @@ try {
             <div class="flex items-center justify-center gap-3">
               <>
                 <SyncProjectsButton client:load />
+                <DashboardGitPullAllButton client:load />
                 <GithubImportModal client:load />
               </>
             </div>
