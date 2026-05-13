@@ -10,6 +10,7 @@ import GeminiTab from './GeminiTab';
 import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
 import AgentRulesTab from './AgentRulesTab';
+import PermissionsTab from './PermissionsTab';
 
 type Config = {
   forgePublicUrl: string;
@@ -53,6 +54,7 @@ const TABS = [
   { id: 'api', label: 'Jetons API' },
   { id: 'models', label: 'Modèles agents' },
   { id: 'policy', label: 'Politique agents' },
+  { id: 'permissions', label: 'Permissions' },
   { id: 'schedule', label: 'Horaires de travail' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
@@ -390,6 +392,7 @@ export default function SettingsForm() {
         )}
         {activeTab === 'models' && <AgentModelsTab />}
         {activeTab === 'policy' && <AgentRulesTab />}
+        {activeTab === 'permissions' && <PermissionsTab />}
         {activeTab === 'schedule' && <WorkScheduleTab />}
         {activeTab === 'maintenance' && (
           <MaintenanceTab

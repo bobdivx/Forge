@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import AgentToolsPanel from './AgentToolsPanel';
+import AgentPermissionEditor from './AgentPermissionEditor';
 
 type Props = {
   agentId: string;
@@ -19,7 +20,7 @@ export default function AgentConfigModal({ agentId, open, onClose }: Props) {
   const [instruction, setInstruction] = useState<Instruction | null>(null);
   const [prompt, setPrompt] = useState('');
   const [savingPrompt, setSavingPrompt] = useState(false);
-  const [tab, setTab] = useState<'tools' | 'prompt' | 'meta'>('tools');
+  const [tab, setTab] = useState<'tools' | 'prompt' | 'permissions' | 'meta'>('tools');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function AgentConfigModal({ agentId, open, onClose }: Props) {
             [
               { id: 'tools', label: 'Outils' },
               { id: 'prompt', label: 'System prompt' },
+              { id: 'permissions', label: 'Permissions' },
               { id: 'meta', label: 'Méta' },
             ] as const
           ).map((t) => (
@@ -141,6 +143,8 @@ export default function AgentConfigModal({ agentId, open, onClose }: Props) {
               </div>
             </div>
           )}
+
+          {tab === 'permissions' && <AgentPermissionEditor agentId={agentId} />}
 
           {tab === 'meta' && (
             <div class="space-y-2 text-xs text-gray-700">

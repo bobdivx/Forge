@@ -487,6 +487,105 @@ const AgentTool = defineTable({
 });
 
 /**
+ * Suggestions de la veille tech (outdated, advisories, RSS).
+ * Une ligne par projet × kind × packageName.
+ *
+ * impact : `low | medium | high | critical`
+ * status : `open | dismissed | converted_to_request`
+ */
+const TechWatchSuggestion = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    projectId: column.number({ optional: true, references: () => Project.columns.id }),
+    /** outdated | advisory | rss | other */
+    kind: column.text({ default: 'outdated' }),
+    packageName: column.text({ optional: true }),
+    currentVersion: column.text({ optional: true }),
+    latestVersion: column.text({ optional: true }),
+    severity: column.text({ optional: true }),
+    impact: column.text({ default: 'low' }),
+    title: column.text(),
+    detail: column.text({ optional: true }),
+    status: column.text({ default: 'open' }),
+    requestId: column.number({ optional: true, references: () => Request.columns.id }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Décisions du watcher GitHub par PR — audit + dédoublonnage.
+ * Une ligne par (projectId, prNumber, createdAt).
+ *
+ * decision : `useful | duplicate | already_done | needs_more_info | ignored`
+ */
+const GithubWatchDecision = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    projectId: column.number({ references: () => Project.columns.id }),
+    prNumber: column.number(),
+    prTitle: column.text({ optional: true }),
+    prAuthor: column.text({ optional: true }),
+    decision: column.text({ default: 'needs_more_info' }),
+    justification: column.text({ optional: true }),
+    /** Identifiant Request créée si decision = useful. */
+    requestId: column.number({ optional: true, references: () => Request.columns.id }),
+    /** Provider de la décision : heuristic | llm */
+    provider: column.text({ default: 'heuristic' }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Registre durable des sous-agents — inspiré de subagent-registry.ts (openclaw).
+ * Une ligne par exécution de sous-agent : permet de suivre le cycle
+ * de vie (pending → running → completed/failed/cancelled) et de relier
+ * un sous-agent au parent qui l'a spawn.
+ */
+const SubagentRun = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    /** Identifiant agent parent (ex: CHEF_TECHNIQUE). */
+    parentAgentId: column.text(),
+    /** Identifiant agent enfant (ex: DEV_BACKEND__APP_FORGE). */
+    childAgentId: column.text(),
+    /** Projet associé. */
+    projectId: column.number({ optional: true, references: () => Project.columns.id }),
+    /** pending | running | completed | failed | cancelled */
+    status: column.text({ default: 'pending' }),
+    /** Tâche associée (AgentTask.id), si applicable. */
+    taskId: column.number({ optional: true }),
+    /** Raison/contexte de spawn. */
+    reason: column.text({ optional: true }),
+    /** Sortie agrégée du sous-agent (à compléter par le scheduler). */
+    output: column.text({ optional: true }),
+    /** Message d'erreur si failed. */
+    error: column.text({ optional: true }),
+    startedAt: column.date({ optional: true }),
+    finishedAt: column.date({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
+ * Permissions par agent — override du moteur de permissions global.
+ * Si `mode` est NULL, l'agent hérite du mode global (Config.permissionMode).
+ * Les listes allowedTools / deniedTools sont des JSON arrays de noms d'outils.
+ */
+const AgentPermission = defineTable({
+  columns: {
+    agentId: column.text({ primaryKey: true }),
+    /** autonomous | tiered | plan_first — null = héritage global. */
+    mode: column.text({ optional: true }),
+    /** JSON array de noms d'outils toujours autorisés pour cet agent. */
+    allowedTools: column.text({ default: '[]' }),
+    /** JSON array de noms d'outils toujours refusés pour cet agent. */
+    deniedTools: column.text({ default: '[]' }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
+/**
  * Liaison N-N entre AgentInstruction et AgentTool.
  * Quels outils sont disponibles pour quel agent.
  *
@@ -559,5 +658,9 @@ export default defineDb({
     AgentRuleOption,
     AgentTool,
     AgentToolAssignment,
+    AgentPermission,
+    SubagentRun,
+    GithubWatchDecision,
+    TechWatchSuggestion,
   },
 });

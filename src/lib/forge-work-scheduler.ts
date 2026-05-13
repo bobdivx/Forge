@@ -1019,8 +1019,33 @@ export async function readDispatchOutsideScheduledWindowEnabled(): Promise<boole
 
 // ── Tick principal ────────────────────────────────────────────────────────────
 
+let _missionPullTickCounter = 0;
+
 async function tick() {
   if (sched().workState === 'stopped') return;
+
+  // Respect du mode d'autonomie (off ou quiet_hours).
+  let dispatchAllowed = true;
+  try {
+    const { shouldDispatchNow } = await import('./forge-autonomy-loop');
+    dispatchAllowed = await shouldDispatchNow();
+  } catch {
+    /* module pas encore chargé : on autorise pour ne pas bloquer */
+  }
+  if (!dispatchAllowed) {
+    return;
+  }
+
+  // Pull autonome du Mission Board toutes les 5 minutes (toutes les 5 ticks).
+  _missionPullTickCounter = (_missionPullTickCounter + 1) % 5;
+  if (_missionPullTickCounter === 0) {
+    try {
+      const { pullMissionBoardOnce } = await import('./forge-mission-board');
+      await pullMissionBoardOnce(5);
+    } catch (e) {
+      console.warn('[work-scheduler] pullMissionBoardOnce error:', e);
+    }
+  }
 
   // Mode manuel « En cours » : redispatch régulier (la directive complète a été envoyée au démarrage).
   if (sched().workState === 'running') {

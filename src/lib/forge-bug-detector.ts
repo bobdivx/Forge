@@ -43,6 +43,10 @@ const _readPositions: Map<string, number> = new Map();
 
 let _intervalHandle: ReturnType<typeof setInterval> | null = null;
 let _initialScanHandle: ReturnType<typeof setTimeout> | null = null;
+let _lastScanAt: Date | null = null;
+let _lastScanDurationMs: number | null = null;
+let _lastScanError: string | null = null;
+let _lastScanBugsDetected = 0;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -167,30 +171,42 @@ async function reportBug(
 // ── Scan principal ────────────────────────────────────────────────────────────
 
 async function scanAllProjects() {
-  let projectPaths: string[] = [];
+  const start = Date.now();
+  let detected = 0;
   try {
-    projectPaths = await listRepoProjectPaths();
-  } catch {
-    return;
-  }
+    let projectPaths: string[] = [];
+    try {
+      projectPaths = await listRepoProjectPaths();
+    } catch {
+      return;
+    }
 
-  for (const projectPath of projectPaths) {
-    const pidsDir = devPidsDir(projectPath);
-    if (!fs.existsSync(pidsDir)) continue;
+    for (const projectPath of projectPaths) {
+      const pidsDir = devPidsDir(projectPath);
+      if (!fs.existsSync(pidsDir)) continue;
 
-    const cfg = readAppDashboardConfig(projectPath);
-    for (const server of cfg.servers ?? []) {
-      const logPath = path.join(pidsDir, `${server.id}.log`);
-      if (!fs.existsSync(logPath)) continue;
+      const cfg = readAppDashboardConfig(projectPath);
+      for (const server of cfg.servers ?? []) {
+        const logPath = path.join(pidsDir, `${server.id}.log`);
+        if (!fs.existsSync(logPath)) continue;
 
-      const newContent = readNewContent(logPath);
-      if (!newContent) continue;
+        const newContent = readNewContent(logPath);
+        if (!newContent) continue;
 
-      const errors = detectErrors(newContent);
-      for (const err of errors) {
-        await reportBug(projectPath, server.id, err.snippet, err.type);
+        const errors = detectErrors(newContent);
+        for (const err of errors) {
+          await reportBug(projectPath, server.id, err.snippet, err.type);
+          detected++;
+        }
       }
     }
+    _lastScanError = null;
+  } catch (e) {
+    _lastScanError = e instanceof Error ? e.message : String(e);
+  } finally {
+    _lastScanAt = new Date();
+    _lastScanDurationMs = Date.now() - start;
+    _lastScanBugsDetected = detected;
   }
 }
 
@@ -228,4 +244,62 @@ export function stopBugDetector() {
 /** Force un scan immédiat (utilisable depuis le REPL ou les tests). */
 export async function forceScan(): Promise<void> {
   await scanAllProjects();
+}
+
+/** Statut public du daemon pour le dashboard. */
+export function getBugDetectorStatus(): {
+  running: boolean;
+  intervalMs: number;
+  lastScanAt: string | null;
+  lastScanDurationMs: number | null;
+  lastScanError: string | null;
+  lastScanBugsDetected: number;
+} {
+  return {
+    running: _intervalHandle !== null,
+    intervalMs: 30_000,
+    lastScanAt: _lastScanAt ? _lastScanAt.toISOString() : null,
+    lastScanDurationMs: _lastScanDurationMs,
+    lastScanError: _lastScanError,
+    lastScanBugsDetected: _lastScanBugsDetected,
+  };
+}
+
+/** Force un scan immédiat avec un résumé pour l'UI/API. */
+export async function runBugDetectorNow(): Promise<{
+  ok: boolean;
+  durationMs: number;
+  bugsDetected: number;
+  error?: string;
+}> {
+  const start = Date.now();
+  try {
+    await scanAllProjects();
+    return {
+      ok: _lastScanError == null,
+      durationMs: Date.now() - start,
+      bugsDetected: _lastScanBugsDetected,
+      error: _lastScanError ?? undefined,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      durationMs: Date.now() - start,
+      bugsDetected: 0,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/** Liste les AgentAppIssue récentes pour le dashboard Bug Inspector. */
+export async function listRecentAppIssues(limit = 100): Promise<Array<Record<string, unknown>>> {
+  try {
+    const { db, AgentAppIssue } = await loadAstroDb();
+    const rows = await db.select().from(AgentAppIssue);
+    return rows
+      .sort((a: { id: number }, b: { id: number }) => b.id - a.id)
+      .slice(0, Math.max(1, Math.min(500, limit))) as Array<Record<string, unknown>>;
+  } catch {
+    return [];
+  }
 }

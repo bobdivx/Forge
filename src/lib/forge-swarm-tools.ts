@@ -239,7 +239,10 @@ const proposeImprovement: ForgeTool<
   },
 };
 
-const spawnSubagent: ForgeTool<{ parentAgentId: string; projectId: number; reason?: string }, { agentId?: string }> = {
+const spawnSubagent: ForgeTool<
+  { parentAgentId: string; projectId: number; reason?: string },
+  { agentId?: string; runId?: number }
+> = {
   name: 'spawn_subagent',
   description: 'Provisionne un sous-agent projet (`…__APP_…`) si le parent est autorisé.',
   category: 'swarm',
@@ -248,7 +251,7 @@ const spawnSubagent: ForgeTool<{ parentAgentId: string; projectId: number; reaso
     projectId: { type: 'number', description: 'ID projet Forge', required: true },
     reason: { type: 'string', description: 'Raison courte', required: false },
   },
-  execute: async (input, ctx: ToolContext): Promise<ToolResult<{ agentId?: string }>> => {
+  execute: async (input, ctx: ToolContext): Promise<ToolResult<{ agentId?: string; runId?: number }>> => {
     const caller = String(ctx.agentId || '').trim().toUpperCase();
     const parent = String(input.parentAgentId || '').trim().toUpperCase();
     const allowedCaller = ['CHEF_TECHNIQUE', 'ARCHITECTE_LOGICIEL'];
@@ -270,15 +273,29 @@ const spawnSubagent: ForgeTool<{ parentAgentId: string; projectId: number; reaso
       return { ok: false, output: {}, error: 'projectId invalide', durationMs: 0, toolName: 'spawn_subagent' };
     }
     const res = await ensureForgeProjectScopedAgent({ parentAgentId: parent, projectId: pid });
+    // Registry — création d'une ligne SubagentRun pour traçabilité.
+    let runId: number | undefined;
+    try {
+      const { startSubagentRun } = await import('./forge-subagent-registry');
+      const run = await startSubagentRun({
+        parentAgentId: parent,
+        childAgentId: String(res.agentId || ''),
+        projectId: pid,
+        reason: input.reason,
+      });
+      runId = run?.id;
+    } catch {
+      /* registry indisponible — non bloquant */
+    }
     await insertForgeActivityLog({
       actorType: 'agent',
       actorId: caller,
       action: 'swarm.agent.spawned_subagent',
       entityType: 'agent_instruction',
       entityId: String(res.agentId || ''),
-      details: { parent, projectId: pid, reason: String(input.reason || '').slice(0, 300), created: res.created },
+      details: { parent, projectId: pid, reason: String(input.reason || '').slice(0, 300), created: res.created, runId },
     });
-    return { ok: true, output: { agentId: res.agentId }, durationMs: 0, toolName: 'spawn_subagent' };
+    return { ok: true, output: { agentId: res.agentId, runId }, durationMs: 0, toolName: 'spawn_subagent' };
   },
 };
 

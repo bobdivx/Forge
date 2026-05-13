@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { getConfig } from './config-db';
+import { getHostContext } from './forge-host-context';
 
 export type ZimaOSInfraConfig = {
   mode: 'local' | 'remote_ssh';
@@ -15,7 +16,12 @@ export type ZimaOSInfraConfig = {
 };
 
 export async function getZimaOSInfraConfig(): Promise<ZimaOSInfraConfig> {
-  const mode = (await getConfig('zimaosAccessMode')) === 'remote_ssh' ? 'remote_ssh' : 'local';
+  const rawMode = (await getConfig('zimaosAccessMode')) || '';
+  // Auto-détection : si la config est vide ou par défaut, on choisit selon l'hôte.
+  let mode: 'local' | 'remote_ssh';
+  if (rawMode === 'remote_ssh') mode = 'remote_ssh';
+  else if (rawMode === 'local' || rawMode === 'local_docker') mode = 'local';
+  else mode = getHostContext().defaultInfraMode;
   const host = await getConfig('zimaosHost');
   const user = await getConfig('zimaosSshUser');
   const port = Number(await getConfig('zimaosSshPort')) || 22;

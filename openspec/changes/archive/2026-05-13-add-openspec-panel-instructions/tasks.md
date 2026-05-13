@@ -9,4 +9,4 @@
 ## 2. Qualité
 
 - [x] 2.1 Vérifier manuellement la page en dev (`/agents/instructions`).
-- [ ] 2.2 (Post-merge) Archiver la change OpenSpec et fusionner le delta dans `openspec/specs/` selon le flux du projet.
+- [x] 2.2 (Post-merge) Archiver la change OpenSpec et fusionner le delta dans `openspec/specs/` selon le flux du projet.

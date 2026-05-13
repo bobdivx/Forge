@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import BugInspectorBoard from '../../components/agents/bugs/BugInspectorBoard';
+import PageHeader from '../../components/ui/PageHeader.astro';
+---
+
+<DashboardLayout title="Bug Inspector" currentPath="/agents/bugs">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <PageHeader
+      title="Bug Inspector"
+      description="Détecte automatiquement les erreurs dans les logs des serveurs de dev et crée des tickets de bug."
+      actions={[
+        { href: '/agents', label: "L'Équipe", tone: 'default' },
+        { href: '/agents/veille', label: 'Veille tech', tone: 'default' },
+        { href: '/work', label: 'Carnet', tone: 'primary' },
+      ]}
+    />
+    <BugInspectorBoard client:load />
+  </div>
+</DashboardLayout>

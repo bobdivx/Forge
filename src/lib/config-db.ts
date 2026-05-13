@@ -91,6 +91,33 @@ export type ForgeConfig = {
   geminiBaseUrl: string;
   /** `true` pour exposer les modèles Gemini aux agents et à l'orchestrateur. */
   geminiEnabled: string;
+  /**
+   * Mode du moteur de permissions Forge :
+   *  - `autonomous` (défaut) : tous les outils autorisés sauf hard-deny patterns
+   *  - `tiered` : lecture seule auto, destructifs en `ask`, neutre auto
+   *  - `plan_first` : tous les outils en `ask` (validation explicite)
+   */
+  permissionMode: string;
+  /** JSON array d'outils toujours autorisés globalement. */
+  permissionAllowedTools: string;
+  /** JSON array d'outils toujours refusés globalement. */
+  permissionDeniedTools: string;
+  /** `true` pour activer le daemon GitHub watcher au démarrage. */
+  githubWatcherEnabled: string;
+  /** Intervalle (minutes) entre deux passes du watcher GitHub. */
+  githubWatcherIntervalMinutes: string;
+  /** Identifiant agent utilisé pour l'analyse LLM des PR (défaut EXPERT_GITHUB). */
+  githubWatcherAgentId: string;
+  /** `true` pour activer le daemon de veille tech au démarrage. */
+  techWatchEnabled: string;
+  /** Intervalle (minutes) entre deux passes de veille tech (défaut 360 = 6h). */
+  techWatchIntervalMinutes: string;
+  /** JSON array d'URLs RSS à surveiller (Hacker News, Astro releases, etc.). */
+  techWatchFeeds: string;
+  /** Mode d'autonomie globale : `on` (24/7), `off`, `quiet_hours`. */
+  autonomyMode: string;
+  /** Plage HH:MM-HH:MM pendant laquelle le scheduler ne dispatch pas de nouvelles tâches. */
+  autonomyQuietHours: string;
 };
 
 /** Valeurs neutres si aucune ligne Config en base (pas de chemins ou URLs « maison » codés en dur). */
@@ -136,6 +163,17 @@ export const CONFIG_DEFAULTS: ForgeConfig = {
   geminiApiKey: '',
   geminiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
   geminiEnabled: 'false',
+  permissionMode: 'autonomous',
+  permissionAllowedTools: '[]',
+  permissionDeniedTools: '[]',
+  githubWatcherEnabled: 'true',
+  githubWatcherIntervalMinutes: '10',
+  githubWatcherAgentId: 'EXPERT_GITHUB',
+  techWatchEnabled: 'true',
+  techWatchIntervalMinutes: '360',
+  techWatchFeeds: '[]',
+  autonomyMode: 'on',
+  autonomyQuietHours: '',
 };
 
 const INTERNAL_CONFIG_KEYS = new Set(['sessionSecret']);

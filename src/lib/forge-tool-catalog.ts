@@ -11,6 +11,8 @@
  */
 import { eq, and } from 'drizzle-orm';
 import { loadAstroDb } from './load-astro-db';
+import type { ToolClassification, ResolvedToolClassification } from './forge-tool-contract';
+import { resolveClassification } from './forge-tool-contract';
 
 export type ToolImplementationKind = 'builtin' | 'exec_template' | 'http';
 
@@ -24,11 +26,17 @@ export type BuiltinToolDefinition = {
   name: string;
   displayName: string;
   description: string;
-  category: 'filesystem' | 'git' | 'github' | 'shell' | 'forge' | 'network';
+  category: 'filesystem' | 'git' | 'github' | 'shell' | 'forge' | 'network' | 'docker' | 'install';
   parameters: ToolParametersSchema;
   implementationKind: ToolImplementationKind;
   implementationConfig: Record<string, unknown>;
   requiresApproval?: boolean;
+  /**
+   * Classification optionnelle (Phase 2) — utilisée par le permission engine
+   * et le scheduler. Si absente, on tombe sur des heuristiques basées sur le
+   * nom de l'outil.
+   */
+  classification?: ToolClassification;
 };
 
 /**
@@ -60,6 +68,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
     },
     implementationKind: 'builtin',
     implementationConfig: { handler: 'read_file' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'write_file',
@@ -76,6 +85,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
     },
     implementationKind: 'builtin',
     implementationConfig: { handler: 'write_file' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
   },
 
   // ── Shell ─────────────────────────────────────────────────────────────────
@@ -94,6 +104,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
     },
     implementationKind: 'builtin',
     implementationConfig: { handler: 'exec' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
   },
 
   // ── Forge ────────────────────────────────────────────────────────────────
@@ -174,6 +185,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'cd "{{__projectPath}}" && git status --short --branch',
       timeoutMs: 15000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'git_diff',
@@ -193,6 +205,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'cd "{{__projectPath}}" && git diff --stat {{?staged|--cached}} -- {{path|}}',
       timeoutMs: 20000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'git_log',
@@ -211,6 +224,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
         'cd "{{__projectPath}}" && git log -n {{limit|10}} --pretty=format:"%h %ad %an %s" --date=short',
       timeoutMs: 15000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'git_branch',
@@ -223,6 +237,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'cd "{{__projectPath}}" && git branch -vv',
       timeoutMs: 10000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'git_push',
@@ -241,6 +256,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'cd "{{__projectPath}}" && git push origin {{branch|{{__branch}}}}',
       timeoutMs: 60000,
     },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
   },
   {
     name: 'git_commit',
@@ -264,6 +280,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
     },
     implementationKind: 'builtin',
     implementationConfig: { handler: 'git_commit' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
   },
 
   // ── Filesystem étendus ────────────────────────────────────────────────────
@@ -283,6 +300,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'ls -la "{{path|{{__projectPath}}}}"',
       timeoutMs: 10000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'find_files',
@@ -304,6 +322,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
         'cd "{{path|{{__projectPath}}}}" && if [ "{{mode|name}}" = "content" ]; then grep -rIn --exclude-dir=node_modules --exclude-dir=.git "{{pattern}}" . | head -200; else find . -name "{{pattern}}" -not -path "*/node_modules/*" -not -path "*/.git/*" | head -200; fi',
       timeoutMs: 30000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'delete_path',
@@ -323,6 +342,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'rm {{?recursive|-rf}} -- "{{path}}"',
       timeoutMs: 30000,
     },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
   },
 
   // ── Réseau / API ──────────────────────────────────────────────────────────
@@ -369,6 +389,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'docker ps {{?all|-a}} --format "table {{.Names}}\\t{{.Status}}\\t{{.Image}}"',
       timeoutMs: 15000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'docker_logs',
@@ -388,6 +409,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
       command: 'docker logs --tail {{lines|100}} "{{container}}" 2>&1',
       timeoutMs: 20000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
 
   // ── GitHub (gh CLI) ───────────────────────────────────────────────────────
@@ -408,6 +430,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
         'cd "{{__projectPath}}" && GH_TOKEN={{__githubToken}} gh pr list --state {{state|open}} --json number,title,author,headRefName',
       timeoutMs: 20000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'gh_pr_view',
@@ -427,6 +450,7 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
         'cd "{{__projectPath}}" && GH_TOKEN={{__githubToken}} gh pr view {{number}} --json number,title,body,state,author,files',
       timeoutMs: 20000,
     },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
   {
     name: 'gh_pr_create',
@@ -449,6 +473,677 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
         'cd "{{__projectPath}}" && GH_TOKEN={{__githubToken}} gh pr create --title "{{title}}" --body "{{body|}}" --base {{base|main}}',
       timeoutMs: 30000,
     },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+
+  // ── Phase 3 — Install & FS étendus ────────────────────────────────────────
+  {
+    name: 'install_tool',
+    displayName: 'Installer un paquet',
+    description:
+      "Installe un paquet/outil via le bon gestionnaire selon l'hôte (winget/scoop sous Windows, apt/apk dans le conteneur Linux, brew sous macOS, ou npm -g / pip / cargo si pertinent).",
+    category: 'install',
+    parameters: {
+      type: 'object',
+      properties: {
+        pkg: { type: 'string', description: 'Nom du paquet à installer (ex: ripgrep, gh, jq, @astrojs/check)' },
+        manager: {
+          type: 'string',
+          description: "Forcer un gestionnaire spécifique. 'auto' par défaut.",
+          enum: ['auto', 'winget', 'scoop', 'apt', 'apk', 'brew', 'npm', 'pip', 'cargo'],
+        },
+      },
+      required: ['pkg'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'install_tool' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'fs_mkdir',
+    displayName: 'Créer un dossier',
+    description: 'Crée un répertoire (récursivement par défaut).',
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Chemin du dossier à créer' },
+        recursive: { type: 'boolean', description: 'Créer les parents si nécessaire (défaut true)' },
+      },
+      required: ['path'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'fs_mkdir' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'fs_delete',
+    displayName: 'Supprimer un fichier/dossier',
+    description: 'Supprime un fichier ou dossier. recursive=true pour les dossiers non vides.',
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Chemin à supprimer' },
+        recursive: { type: 'boolean', description: 'Mode -rf' },
+      },
+      required: ['path'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'fs_delete' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'fs_chmod',
+    displayName: 'Changer les permissions',
+    description: 'Modifie les permissions Unix (mode octal).',
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Chemin cible' },
+        mode: { type: 'string', description: 'Mode octal (ex: 644, 755, 0755)' },
+      },
+      required: ['path', 'mode'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'fs_chmod' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'fs_search',
+    displayName: 'Rechercher (ripgrep)',
+    description: "Recherche par nom ou contenu (utilise ripgrep si disponible, sinon grep). Limite à 200 résultats.",
+    category: 'filesystem',
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string', description: 'Pattern à chercher' },
+        path: { type: 'string', description: 'Racine de recherche (défaut: répertoire courant)' },
+        mode: { type: 'string', enum: ['name', 'content'], description: 'name = par nom, content = grep' },
+      },
+      required: ['pattern'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'fs_search' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+
+  // ── Phase 3 — Docker (API native via socket / CLI fallback) ───────────────
+  {
+    name: 'docker_container_create',
+    displayName: 'Docker : créer/lancer un conteneur',
+    description: "docker run équivalent : crée et démarre un conteneur. detach=true par défaut.",
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        image: { type: 'string', description: 'Image Docker (ex: nginx:alpine)' },
+        name: { type: 'string', description: 'Nom du conteneur (optionnel)' },
+        env: { type: 'string', description: 'JSON de variables d\'environnement (ex: {"FOO":"BAR"})' },
+        ports: { type: 'string', description: 'JSON array de mappings de ports (ex: ["8080:80"])' },
+        volumes: { type: 'string', description: 'JSON array de volumes (ex: ["/host:/container"])' },
+        cmd: { type: 'string', description: 'Commande à exécuter dans le conteneur (optionnel)' },
+        detach: { type: 'boolean', description: 'true = détaché (-d), défaut true' },
+      },
+      required: ['image'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_create' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_container_start',
+    displayName: 'Docker : démarrer',
+    description: 'Démarre un conteneur existant.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'Nom ou ID' } },
+      required: ['name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_start' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_container_stop',
+    displayName: 'Docker : arrêter',
+    description: 'Arrête un conteneur (SIGTERM puis SIGKILL après timeoutSec).',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nom ou ID' },
+        timeoutSec: { type: 'integer', description: 'Timeout en secondes (défaut 10)' },
+      },
+      required: ['name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_stop' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_container_restart',
+    displayName: 'Docker : redémarrer',
+    description: 'Redémarre un conteneur.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'Nom ou ID' } },
+      required: ['name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_restart' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_container_remove',
+    displayName: 'Docker : supprimer un conteneur',
+    description: 'Supprime un conteneur. force=true permet de supprimer un conteneur running.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nom ou ID' },
+        force: { type: 'boolean', description: '-f' },
+      },
+      required: ['name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_remove' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_container_exec',
+    displayName: 'Docker : exec',
+    description: "Exécute une commande dans un conteneur (docker exec).",
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nom ou ID du conteneur' },
+        command: { type: 'string', description: 'Commande shell à exécuter dans le conteneur' },
+      },
+      required: ['name', 'command'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_exec' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_container_logs_tail',
+    displayName: 'Docker : tail logs',
+    description: 'Renvoie les N dernières lignes de logs d\'un conteneur.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Nom ou ID' },
+        lines: { type: 'integer', description: 'Nombre de lignes (défaut 100)' },
+      },
+      required: ['name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_container_logs_tail' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'docker_image_pull',
+    displayName: 'Docker : pull image',
+    description: "Télécharge une image Docker depuis un registre.",
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: { image: { type: 'string', description: 'Référence image (ex: nginx:alpine)' } },
+      required: ['image'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_image_pull' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_image_build',
+    displayName: 'Docker : build image',
+    description: 'Construit une image Docker depuis un Dockerfile.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        contextPath: { type: 'string', description: 'Chemin du contexte de build' },
+        tag: { type: 'string', description: 'Tag de l\'image' },
+        dockerfile: { type: 'string', description: 'Chemin du Dockerfile (-f), optionnel' },
+      },
+      required: ['contextPath', 'tag'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_image_build' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_image_list',
+    displayName: 'Docker : images',
+    description: 'Liste les images Docker disponibles.',
+    category: 'docker',
+    parameters: { type: 'object', properties: {} },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_image_list' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'docker_compose_up',
+    displayName: 'Docker Compose : up',
+    description: 'Démarre une stack docker compose.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: {
+        composeFile: { type: 'string', description: 'Chemin du docker-compose.yml' },
+        detach: { type: 'boolean', description: 'Mode détaché (-d), défaut true' },
+      },
+      required: ['composeFile'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_compose_up' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_compose_down',
+    displayName: 'Docker Compose : down',
+    description: 'Arrête et supprime une stack docker compose.',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: { composeFile: { type: 'string', description: 'Chemin du docker-compose.yml' } },
+      required: ['composeFile'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_compose_down' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_volume_list',
+    displayName: 'Docker : volumes',
+    description: 'Liste les volumes Docker.',
+    category: 'docker',
+    parameters: { type: 'object', properties: {} },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_volume_list' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'docker_volume_remove',
+    displayName: 'Docker : supprimer un volume',
+    description: 'Supprime un volume Docker (destructif).',
+    category: 'docker',
+    parameters: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'Nom du volume' } },
+      required: ['name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_volume_remove' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'docker_network_list',
+    displayName: 'Docker : networks',
+    description: 'Liste les réseaux Docker.',
+    category: 'docker',
+    parameters: { type: 'object', properties: {} },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_network_list' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'docker_info',
+    displayName: 'Docker : info',
+    description: 'Retourne les informations système Docker (JSON).',
+    category: 'docker',
+    parameters: { type: 'object', properties: {} },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'docker_info' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+
+  // ── Phase 3 — GitHub API native ───────────────────────────────────────────
+  {
+    name: 'gh_api',
+    displayName: 'GitHub API',
+    description: 'Appel API GitHub générique (endpoint, method, body).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        endpoint: { type: 'string', description: 'Endpoint API (ex: /repos/owner/repo/pulls)' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] },
+        body: { type: 'string', description: 'Body JSON (objet ou string)' },
+      },
+      required: ['endpoint'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_api' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_pr_list_api',
+    displayName: 'GitHub : PRs (API)',
+    description: 'Liste les PR via l\'API GitHub (au lieu du CLI gh).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string', description: 'Owner GitHub' },
+        repo: { type: 'string', description: 'Nom du repo' },
+        state: { type: 'string', enum: ['open', 'closed', 'all'] },
+      },
+      required: ['owner', 'repo'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_pr_list_api' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_pr_get',
+    displayName: 'GitHub : détail PR',
+    description: 'Récupère le détail d\'une PR (diff, état, reviews) via API.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer' },
+      },
+      required: ['owner', 'repo', 'number'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_pr_get' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_pr_merge',
+    displayName: 'GitHub : merger PR',
+    description: 'Merge une PR (méthodes: merge, squash, rebase).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer' },
+        merge_method: { type: 'string', enum: ['merge', 'squash', 'rebase'] },
+        commit_title: { type: 'string' },
+        commit_message: { type: 'string' },
+      },
+      required: ['owner', 'repo', 'number'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_pr_merge' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_pr_close',
+    displayName: 'GitHub : fermer PR',
+    description: 'Ferme une PR sans merger.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: { owner: { type: 'string' }, repo: { type: 'string' }, number: { type: 'integer' } },
+      required: ['owner', 'repo', 'number'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_pr_close' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_pr_review',
+    displayName: 'GitHub : review PR',
+    description: 'Crée une review (COMMENT, APPROVE, REQUEST_CHANGES).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer' },
+        event: { type: 'string', enum: ['COMMENT', 'APPROVE', 'REQUEST_CHANGES'] },
+        body: { type: 'string' },
+      },
+      required: ['owner', 'repo', 'number', 'event'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_pr_review' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_pr_comment',
+    displayName: 'GitHub : commenter PR',
+    description: 'Ajoute un commentaire à une PR (alias issue comments).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer' },
+        body: { type: 'string' },
+      },
+      required: ['owner', 'repo', 'number', 'body'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_pr_comment' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_issue_list',
+    displayName: 'GitHub : issues',
+    description: 'Liste les issues d\'un repo.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        state: { type: 'string', enum: ['open', 'closed', 'all'] },
+      },
+      required: ['owner', 'repo'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_issue_list' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_issue_create',
+    displayName: 'GitHub : créer une issue',
+    description: 'Crée une issue (titre, body, labels, assignees).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        labels: { type: 'string', description: 'JSON array de labels' },
+        assignees: { type: 'string', description: 'JSON array d\'utilisateurs' },
+      },
+      required: ['owner', 'repo', 'title'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_issue_create' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_issue_close',
+    displayName: 'GitHub : fermer issue',
+    description: 'Ferme une issue.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: { owner: { type: 'string' }, repo: { type: 'string' }, number: { type: 'integer' } },
+      required: ['owner', 'repo', 'number'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_issue_close' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_issue_comment',
+    displayName: 'GitHub : commenter issue',
+    description: 'Ajoute un commentaire à une issue.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer' },
+        body: { type: 'string' },
+      },
+      required: ['owner', 'repo', 'number', 'body'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_issue_comment' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_issue_label',
+    displayName: 'GitHub : labels issue',
+    description: 'Ajoute des labels à une issue.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer' },
+        labels: { type: 'string', description: 'JSON array de labels' },
+      },
+      required: ['owner', 'repo', 'number', 'labels'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_issue_label' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_workflow_runs',
+    displayName: 'GitHub Actions : runs',
+    description: 'Liste les workflow runs récents.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        status: { type: 'string', description: 'queued, in_progress, completed, failure, ...' },
+        branch: { type: 'string' },
+      },
+      required: ['owner', 'repo'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_workflow_runs' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_workflow_cancel',
+    displayName: 'GitHub Actions : annuler run',
+    description: 'Annule un workflow run en cours.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: { owner: { type: 'string' }, repo: { type: 'string' }, runId: { type: 'integer' } },
+      required: ['owner', 'repo', 'runId'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_workflow_cancel' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_workflow_rerun',
+    displayName: 'GitHub Actions : relancer run',
+    description: 'Relance un workflow run.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: { owner: { type: 'string' }, repo: { type: 'string' }, runId: { type: 'integer' } },
+      required: ['owner', 'repo', 'runId'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_workflow_rerun' },
+    classification: { runtimeProfile: 'worker' },
+  },
+  {
+    name: 'gh_dependabot_alerts',
+    displayName: 'GitHub : Dependabot alerts',
+    description: 'Liste les alertes Dependabot d\'un repo.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        state: { type: 'string', enum: ['open', 'dismissed', 'fixed', 'auto_dismissed'] },
+      },
+      required: ['owner', 'repo'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_dependabot_alerts' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_security_advisories',
+    displayName: 'GitHub : code scanning alerts',
+    description: 'Liste les alertes Code Scanning (CodeQL, etc.).',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        state: { type: 'string', enum: ['open', 'closed', 'dismissed', 'fixed'] },
+      },
+      required: ['owner', 'repo'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_security_advisories' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_branches_list',
+    displayName: 'GitHub : branches',
+    description: 'Liste les branches d\'un repo.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: { owner: { type: 'string' }, repo: { type: 'string' } },
+      required: ['owner', 'repo'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_branches_list' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+  {
+    name: 'gh_release_create',
+    displayName: 'GitHub : créer release',
+    description: 'Crée une release sur un repo.',
+    category: 'github',
+    parameters: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        tag_name: { type: 'string' },
+        name: { type: 'string' },
+        body: { type: 'string' },
+        draft: { type: 'boolean' },
+        prerelease: { type: 'boolean' },
+      },
+      required: ['owner', 'repo', 'tag_name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'gh_release_create' },
+    classification: { isDestructive: true, runtimeProfile: 'worker' },
   },
 ];
 
@@ -536,6 +1231,12 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
     // 2. Outils builtin - upsert par name
     const seededIds: number[] = [];
     for (const def of BUILTIN_TOOLS) {
+      // Injecter la classification (Phase 2) dans implementationConfig pour
+      // qu'elle survive au round-trip DB.
+      const cfgWithClassification: Record<string, unknown> = {
+        ...def.implementationConfig,
+        classification: resolveClassification(def.classification),
+      };
       try {
         const existing = await db.select().from(AgentTool).where(eq(AgentTool.name, def.name));
         if (existing.length === 0) {
@@ -548,7 +1249,7 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
               category: def.category,
               parametersJson: JSON.stringify(def.parameters),
               implementationKind: def.implementationKind,
-              implementationConfig: JSON.stringify(def.implementationConfig),
+              implementationConfig: JSON.stringify(cfgWithClassification),
               enabled: 1,
               builtin: 1,
               requiresApproval: def.requiresApproval ? 1 : 0,
@@ -579,7 +1280,7 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
           if (!isEdited) {
             // Première fois ou jamais édité : on synchronise la définition de code.
             updateSet.parametersJson = JSON.stringify(def.parameters);
-            updateSet.implementationConfig = JSON.stringify(def.implementationConfig);
+            updateSet.implementationConfig = JSON.stringify(cfgWithClassification);
             updateSet.updatedAt = now;
           }
           await db.update(AgentTool).set(updateSet).where(eq(AgentTool.name, def.name));
@@ -641,6 +1342,8 @@ export type EffectiveTool = {
   implementationConfig: Record<string, unknown>;
   builtin: boolean;
   requiresApproval: boolean;
+  /** Classification résolue (avec défauts fail-closed). */
+  classification: ResolvedToolClassification;
 };
 
 /**
@@ -687,6 +1390,7 @@ export async function getEffectiveToolsForAgent(agentId: string): Promise<Effect
     } catch {
       cfg = {};
     }
+    const cls = resolveClassification((cfg.classification ?? null) as ToolClassification | null);
     out.push({
       id: t.id,
       name: t.name,
@@ -698,6 +1402,7 @@ export async function getEffectiveToolsForAgent(agentId: string): Promise<Effect
       implementationConfig: cfg,
       builtin: Number(t.builtin) === 1,
       requiresApproval: Number(t.requiresApproval) === 1,
+      classification: cls,
     });
   }
   return out;

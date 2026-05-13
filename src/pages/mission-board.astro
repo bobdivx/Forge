@@ -1,0 +1,22 @@
+---
+export const prerender = false;
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import MissionBoardComponent from '../components/mission-board/MissionBoard';
+import PageHeader from '../components/ui/PageHeader.astro';
+---
+
+<DashboardLayout title="Mission Board" currentPath="/mission-board">
+  <div class="max-w-[1600px] mx-auto space-y-6">
+    <PageHeader
+      title="Mission Board"
+      description="Vue partagée multi-agents : bugs, fonctionnalités, veille tech. Les agents tirent en priorité les items triés."
+      actions={[
+        { href: '/work', label: 'Carnet classique', tone: 'default' },
+        { href: '/agents/bugs', label: 'Bug Inspector', tone: 'default' },
+        { href: '/agents/veille', label: 'Veille tech', tone: 'default' },
+        { href: '/agents/github', label: 'Agent GitHub', tone: 'primary' },
+      ]}
+    />
+    <MissionBoardComponent client:load />
+  </div>
+</DashboardLayout>

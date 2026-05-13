@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import VeilleTechBoard from '../../components/agents/veille/VeilleTechBoard';
+import PageHeader from '../../components/ui/PageHeader.astro';
+---
+
+<DashboardLayout title="Veille tech" currentPath="/agents/veille">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <PageHeader
+      title="Veille technologique"
+      description="Scanne les dépendances obsolètes, les advisories sécurité et (à venir) les flux RSS pour proposer des améliorations."
+      actions={[
+        { href: '/agents', label: "L'Équipe", tone: 'default' },
+        { href: '/agents/bugs', label: 'Bug Inspector', tone: 'default' },
+        { href: '/work', label: 'Carnet', tone: 'primary' },
+      ]}
+    />
+    <VeilleTechBoard client:load />
+  </div>
+</DashboardLayout>

@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import GithubAgentBoard from '../../components/agents/github/GithubAgentBoard';
+import PageHeader from '../../components/ui/PageHeader.astro';
+---
+
+<DashboardLayout title="Agent GitHub" currentPath="/agents/github">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <PageHeader
+      title="Agent GitHub"
+      description="Watcher autonome des PR et issues. Classe chaque PR (utile / doublon / déjà fait) et crée des tâches dans le carnet quand c'est utile."
+      actions={[
+        { href: '/agents', label: 'L\'Équipe', tone: 'default' },
+        { href: '/work', label: 'Carnet de bord', tone: 'default' },
+        { href: '/settings#api', label: 'Jetons API', tone: 'primary' },
+      ]}
+    />
+    <GithubAgentBoard client:load />
+  </div>
+</DashboardLayout>

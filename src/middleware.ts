@@ -4,8 +4,7 @@ import { verifySessionToken } from './lib/auth';
 import { getConfig } from './lib/config-db';
 import { ensureAstroLocalDbSchemaOnce } from './lib/forge-astro-db-bootstrap';
 import { getForgeSetupRedirect } from './lib/forge-setup';
-import { startScheduler } from './lib/forge-work-scheduler';
-import { startBugDetector } from './lib/forge-bug-detector';
+import { startAutonomyLoop } from './lib/forge-autonomy-loop';
 
 /** D\u00e9marrage du scheduler et du bug detector une seule fois apr\u00e8s que la DB est pr\u00eate. */
 let _schedulerBooted = false;
@@ -15,8 +14,7 @@ function ensureSchedulerOnce() {
   _schedulerBooted = true;
   // Démarre après un court délai pour laisser le bootstrap DB se terminer
   setTimeout(() => {
-    startScheduler();
-    startBugDetector();
+    void startAutonomyLoop().catch((e) => console.warn('[forge] startAutonomyLoop:', e));
     void (async () => {
       try {
         const { loadAstroDb } = await import('./lib/load-astro-db');
@@ -99,6 +97,9 @@ const LOCAL_ONLY_PATHS = [
   '/api/forge-needs',
   '/api/projects-db',
   '/api/work-overview',
+  '/api/forge-activity-stream',
+  '/api/autonomy',
+  '/api/mission-board',
   '/api/work-tasks-actions',
   '/api/work-items-actions',
   '/api/discussion-history',
