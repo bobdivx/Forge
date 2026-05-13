@@ -1,0 +1,4 @@
+## 2024-05-13 - Command Injection in Docker Logs via URL Parameters
+**Vulnerability:** Command injection and potential flag injection due to using `execSync` with unsanitized URL parameters (`tail` and `id`) string-concatenated in `docker logs`.
+**Learning:** Even internal toolings or APIs querying basic container information can be vectors for critical command injections if parameters derived from `url.searchParams` are concatenated into strings executed by the shell.
+**Prevention:** Always use `execFileSync`, `execFile`, or `spawn` with an array of arguments, and ensure input parameters do not start with a hyphen (`-`) to mitigate flag injection vulnerabilities in CLI tools like docker. Also, catch blocks should sanitize error outputs rather than throwing raw internal stack traces directly.
