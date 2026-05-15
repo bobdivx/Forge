@@ -114,20 +114,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
         if (orchestrated.plan && orchestrated.plan.length > 0 && projectId) {
           const { Request } = await loadAstroDb();
-          for (const item of orchestrated.plan) {
-            await db.insert(Request).values({
-              projectId,
-              title: item.title,
-              content: item.content || `Tâche issue du plan de ${agentId}`,
-              status: 'pending',
-              priority: 'medium',
-              author: agentId,
-              requestType: 'Correction',
-              assigneeAgentId: item.assignee || undefined,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-          }
+          const planRequests = orchestrated.plan.map((item) => ({
+            projectId,
+            title: item.title,
+            content: item.content || `Tâche issue du plan de ${agentId}`,
+            status: 'pending',
+            priority: 'medium',
+            author: agentId,
+            requestType: 'Correction',
+            assigneeAgentId: item.assignee || undefined,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }));
+          await db.insert(Request).values(planRequests);
         }
 
         send('done', {

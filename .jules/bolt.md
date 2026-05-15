@@ -1,0 +1,3 @@
+## 2025-05-15 - Batch Database Inserts to Avoid N+1 Bottlenecks
+**Learning:** Found multiple instances where the application iterates over an array (e.g., missing seed records, generated request plans) and executes a separate `await db.insert(...).values(...)` for each item. This N+1 query pattern creates an unnecessary performance bottleneck, especially for bulk operations or initialization tasks.
+**Action:** Replaced iterative single-record `insert` statements with `map` operations to construct an array of objects, then passed the entire array into a single `await db.insert(...).values([...])` call. This leverages Drizzle ORM's native batch insert capabilities and significantly reduces database round-trips.
