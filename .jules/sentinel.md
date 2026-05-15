@@ -1,0 +1,4 @@
+## 2025-05-15 - Command Injection in Docker Exec Sync
+**Vulnerability:** Found a critical command injection vulnerability in `src/pages/api/docker-logs.ts` where unvalidated user query parameters (`id`, `tail`) were directly concatenated into a shell string and executed via `child_process.execSync`.
+**Learning:** Node.js `execSync` combined with string interpolation of user parameters inherently leads to shell command injection and simultaneously blocks the entire single-threaded event loop, magnifying the risk with a Denial-of-Service vector.
+**Prevention:** Always use `execFile` or `execFileAsync` with an explicit arguments array instead of executing raw shell strings. Additionally, strictly validate and sanitize any parameters (e.g., verifying parameters do not start with a hyphen to prevent flag injection, coercing types like strings to integers where applicable).

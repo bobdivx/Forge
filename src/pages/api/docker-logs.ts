@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,27 +15,44 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const containerId = url.searchParams.get('id');
-    const tail = url.searchParams.get('tail') || '100';
+    const tailStr = url.searchParams.get('tail') || '100';
 
-    if (!containerId) {
+    if (!containerId || typeof containerId !== 'string') {
       return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Prevent argument injection
+    if (containerId.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "ID du conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const tail = parseInt(tailStr, 10);
+    if (isNaN(tail) || tail < 0) {
+      return new Response(JSON.stringify({ error: "Paramètre tail invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail.toString(), containerId], { timeout: 10000 });
+        const output = stdout.trim() || stderr.trim();
+        logs = output ? output.split('\n') : [];
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
-            logs = err.stderr.toString().trim().split('\n');
+            const stderrStr = err.stderr.toString().trim();
+            logs = stderrStr ? stderrStr.split('\n') : [];
         } else {
-            throw err;
+            // Sanitize error to prevent leaking secrets/internal state
+            throw new Error("Erreur lors de la récupération des logs Docker");
         }
     }
 
@@ -41,7 +61,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // Return sanitized error
+    return new Response(JSON.stringify({ error: "Logs indisponibles: " + (error.message || "Erreur interne") }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
