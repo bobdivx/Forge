@@ -35,6 +35,11 @@ const userName = userEmail.split('@')[0];
           <span class="text-xl font-bold text-gray-900">Ageton</span>
         </div>
 
+        <!-- Pet Codex Sidebar Container -->
+        <div class="mb-12 mt-4 flex justify-center">
+          <div id="pet-sidebar-target" class="w-full h-24 relative overflow-visible" data-bubble-pos="down" data-bubble-align="center"></div>
+        </div>
+
         {navGroups.map((group) => (
           <div class="mb-8">
             <p class="mb-4 text-xs font-semibold tracking-wider text-gray-400">{group.label.toUpperCase()}</p>
@@ -122,6 +127,38 @@ const userName = userEmail.split('@')[0];
         <slot />
       </div>
     </main>
-    <script src="/agent-pet-widget.iife.js" data-codex-pet="patamon"></script>
+    <script src="/agent-pet-widget.iife.js?v=8" data-auto-mount="false"></script>
+    <script is:inline>
+      function initPet() {
+        if (!window.AgentPet) return;
+        
+        const isMobile = window.innerWidth < 768;
+        
+        if (isMobile) {
+          // Mobile: Floating mode
+          window.AgentPet.mount({
+            name: "Patamon",
+            accent: "#ff9d00",
+            chat: true
+          });
+        } else {
+          // PC: Sidebar mode
+          window.AgentPet.mount({
+            target: document.getElementById('pet-sidebar-target'),
+            name: "Patamon",
+            accent: "#ff9d00",
+            chat: true
+          });
+        }
+        
+        window.AgentPet.play("greeting");
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPet);
+      } else {
+        initPet();
+      }
+    </script>
   </body>
 </html>
