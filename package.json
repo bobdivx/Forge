@@ -42,6 +42,7 @@
     "@astrojs/tailwind": "^6.0.2",
     "@astrojs/vercel": "^10.0.4",
     "@tailwindcss/typography": "^0.5.19",
+    "agent-pet": "^0.8.6",
     "astro": "^6.1.6",
     "chart.js": "^4.5.1",
     "d3-force": "^3.0.0",
