@@ -69,11 +69,13 @@ export default function DashboardGitPullAllButton() {
           type="button"
           onClick={() => setOpen(!open)}
           class="btn btn-sm btn-outline border-emerald-700 text-emerald-200 hover:bg-emerald-900/30 hover:border-emerald-500"
+          aria-expanded={open}
+          aria-controls="git-pull-panel"
         >
           ↓ Mettre à jour depuis GitHub (tous les projets)
         </button>
         {open && (
-          <div class="flex flex-col gap-2 rounded-xl border border-gray-600 bg-gray-900/80 p-4 text-sm text-gray-200 max-w-lg">
+          <div id="git-pull-panel" class="flex flex-col gap-2 rounded-xl border border-gray-600 bg-gray-900/80 p-4 text-sm text-gray-200 max-w-lg">
             <p class="text-xs text-gray-400">
               Exécute <code class="text-emerald-300">git pull origin &lt;branche courante&gt;</code> pour chaque
               dépôt. Les projets sans Git ou avec HEAD détachée sont ignorés ou signalés.
