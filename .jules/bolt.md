@@ -1,0 +1,3 @@
+## 2024-05-18 - Pre-fetching DB rows to prevent N+1 queries during loop synchronization
+**Learning:** Performing database queries (`db.select().from(Table).where(eq(Table.field, value)).limit(1)`) inside a `for` loop to check for existing records creates an N+1 query bottleneck.
+**Action:** Always pre-fetch existing records upfront using `await db.select().from(Table)` (optionally scoped via `.where(inArray(...))`) and load them into a `Map` (`new Map(rows.map(r => [r.field, r]))`). This reduces database roundtrips from O(N) to a single query while allowing fast O(1) in-memory lookups during iteration.
