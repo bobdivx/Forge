@@ -1,0 +1,3 @@
+## 2024-05-18 - Improve icon-only button accessibility in Settings/OllamaTab
+**Learning:** Found a specific pattern in the settings tab (specifically Ollama instance configuration) where several icon-only buttons (run test, toggle manual disable, edit instance, delete instance) lacked accessible names and allowed focus to trap inside inner `<svg>` tags without proper styling or hints. The standard `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]` pattern was absent.
+**Action:** When adding icon-only buttons to configuration interfaces, always explicitly add `aria-label`, ensure `<svg aria-hidden="true">` is present to avoid duplicate screen reader readouts, and apply the standardized ring focus styles for better keyboard navigation.
