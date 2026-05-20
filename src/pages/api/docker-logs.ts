@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,18 +24,33 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Prevent argument injection
+    if (containerId.startsWith('-') || tail.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "Paramètres invalides" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        // Use execFile to prevent shell command injection
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        // Docker logs may go to stdout or stderr depending on the containerized app
+        const combinedOutput = stdout + stderr;
+        if (combinedOutput.trim()) {
+           logs = combinedOutput.trim().split('\n');
+        }
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
             logs = err.stderr.toString().trim().split('\n');
         } else {
-            throw err;
+            console.error('Erreur de docker logs:', err);
+            // Do not leak internal error details
+            return new Response(JSON.stringify({ error: "Erreur lors de la récupération des logs" }), {
+              status: 500,
+              headers: { 'Content-Type': 'application/json' }
+            });
         }
     }
 
@@ -41,7 +59,9 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    console.error('Erreur de requête logs:', error);
+    // Secure error message
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
