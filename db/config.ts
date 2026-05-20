@@ -627,8 +627,29 @@ const AgentRuleOption = defineTable({
   },
 });
 
+/**
+ * Modules métiers installables via le store.
+ */
+const ForgeModule = defineTable({
+  columns: {
+    id: column.number({ primaryKey: true }),
+    identifier: column.text({ unique: true }),
+    name: column.text(),
+    description: column.text({ optional: true }),
+    version: column.text({ default: '1.0.0' }),
+    installed: column.number({ default: 0 }),
+    published: column.number({ default: 0 }),
+    payload: column.text({ optional: true }),
+    isMcp: column.number({ default: 0 }),
+    mcpUrl: column.text({ optional: true }),
+    createdAt: column.date({ default: new Date() }),
+    updatedAt: column.date({ default: new Date() }),
+  },
+});
+
 export default defineDb({
   tables: {
+    ForgeModule,
     Project,
     AppData,
     Heartbeat,

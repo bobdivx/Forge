@@ -109,6 +109,27 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
 
   // ── Forge ────────────────────────────────────────────────────────────────
   {
+    name: 'create_module',
+    displayName: 'Créer un module Store',
+    description: "Permet de créer un module métier Forge et de le sauvegarder dans le store local (ex: module github, docker). Un module peut contenir plusieurs configurations d'outils ou agents.",
+    category: 'forge',
+    parameters: {
+      type: 'object',
+      properties: {
+        identifier: { type: 'string', description: 'Identifiant unique (ex: module-github)' },
+        name: { type: 'string', description: 'Nom lisible du module' },
+        description: { type: 'string', description: 'Description du module' },
+        payload: { type: 'string', description: 'JSON stringifié contenant la configuration du module' },
+        isMcp: { type: 'number', description: '1 si c\'est un serveur MCP, 0 sinon' },
+        mcpUrl: { type: 'string', description: 'URL du serveur MCP si applicable' },
+      },
+      required: ['identifier', 'name'],
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'create_module' },
+    classification: { isDestructive: true, runtimeProfile: 'both' },
+  },
+  {
     name: 'update_request_status',
     displayName: 'Mettre à jour une demande',
     description: "Met à jour le statut d'une tâche/demande dans la base Forge.",
@@ -1198,8 +1219,36 @@ let _seedingPromise: Promise<void> | null = null;
 export async function ensureBuiltinToolsSeeded(): Promise<void> {
   if (_seedingPromise) return _seedingPromise;
   _seedingPromise = (async () => {
-    const { db, AgentTool, AgentToolAssignment, AgentInstruction, Config } = await loadAstroDb();
+    const { db, AgentTool, AgentToolAssignment, AgentInstruction, Config, ForgeModule } = await loadAstroDb();
     const now = new Date();
+
+    // 0. Seed des modules de base (Store)
+    const defaultModules = [
+      { identifier: 'module-github', name: 'Intégration GitHub', description: 'Outils et actions pour l\'intégration avec GitHub (PRs, releases, code scanning).' },
+      { identifier: 'module-docker', name: 'Docker / ZimaOS', description: 'Outils de gestion des conteneurs locaux et ZimaOS.' },
+      { identifier: 'module-vercel', name: 'Vercel Deployments', description: 'Gestion des déploiements Vercel.' },
+      { identifier: 'module-pet', name: 'Agent Pet', description: 'Compagnon virtuel et système de récompenses pour les développeurs.' },
+    ];
+    try {
+      if (ForgeModule) {
+        for (const mod of defaultModules) {
+          const existing = await db.select().from(ForgeModule).where(eq(ForgeModule.identifier, mod.identifier));
+          if (existing.length === 0) {
+            await db.insert(ForgeModule).values({
+              ...mod,
+              version: '1.0.0',
+              installed: 1, // On considère ces core features comme déjà installées
+              published: 1,
+              payload: '{}',
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[tool-catalog] default modules seed failed:', e);
+    }
 
     // 1. Doctrine d'action (Config) - upsert.
     // Si la valeur en DB est vide OU correspond à une ancienne version par défaut
@@ -1358,13 +1407,19 @@ export type EffectiveTool = {
  */
 export async function getEffectiveToolsForAgent(agentId: string): Promise<EffectiveTool[]> {
   await ensureBuiltinToolsSeeded();
-  const { db, AgentTool, AgentToolAssignment } = await loadAstroDb();
+  const { db, AgentTool, AgentToolAssignment, ForgeModule } = await loadAstroDb();
   const assignments = await db
     .select()
     .from(AgentToolAssignment)
     .where(and(eq(AgentToolAssignment.agentId, agentId), eq(AgentToolAssignment.enabled, 1)));
 
   const tools = await db.select().from(AgentTool);
+  let modules: { identifier: string; installed: number }[] = [];
+  try {
+    if (ForgeModule) modules = await db.select().from(ForgeModule);
+  } catch {
+    // Ignore if ForgeModule table is somehow missing
+  }
   type AgentToolRow = (typeof tools)[number];
   const byId = new Map<number, AgentToolRow>(tools.map((t) => [t.id, t] as [number, AgentToolRow]));
 
@@ -1378,6 +1433,14 @@ export async function getEffectiveToolsForAgent(agentId: string): Promise<Effect
   for (const id of toolIds) {
     const t = byId.get(id);
     if (!t || Number(t.enabled) !== 1) continue;
+
+    // Filter out tools if their corresponding module is uninstalled
+    if (modules.length > 0) {
+      const moduleForTool = modules.find((m) => m.identifier === `module-${t.category}`);
+      if (moduleForTool && moduleForTool.installed !== 1) {
+        continue;
+      }
+    }
     let params: ToolParametersSchema;
     try {
       params = JSON.parse(t.parametersJson) as ToolParametersSchema;
