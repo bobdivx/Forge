@@ -26,7 +26,7 @@ export type BuiltinToolDefinition = {
   name: string;
   displayName: string;
   description: string;
-  category: 'filesystem' | 'git' | 'github' | 'shell' | 'forge' | 'network' | 'docker' | 'install';
+  category: 'filesystem' | 'git' | 'github' | 'shell' | 'forge' | 'network' | 'docker' | 'install' | 'audit';
   parameters: ToolParametersSchema;
   implementationKind: ToolImplementationKind;
   implementationConfig: Record<string, unknown>;
@@ -587,6 +587,21 @@ export const BUILTIN_TOOLS: BuiltinToolDefinition[] = [
     },
     implementationKind: 'builtin',
     implementationConfig: { handler: 'fs_search' },
+    classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
+  },
+
+  // ── Audit ─────────────────────────────────────────────────────────────────
+  {
+    name: 'audit_project',
+    displayName: 'Audit de Projet',
+    description: "Effectue un audit rapide du projet courant (fichiers manquants, métriques, dépendances basiques). Idéal pour prendre connaissance de l'état d'un projet.",
+    category: 'audit',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+    implementationKind: 'builtin',
+    implementationConfig: { handler: 'audit_project' },
     classification: { isReadOnly: true, isConcurrencySafe: true, runtimeProfile: 'both' },
   },
 
@@ -1229,6 +1244,7 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
       { identifier: 'module-docker', name: 'Docker / ZimaOS', description: 'Outils de gestion des conteneurs locaux et ZimaOS.' },
       { identifier: 'module-vercel', name: 'Vercel Deployments', description: 'Gestion des déploiements Vercel.' },
       { identifier: 'module-pet', name: 'Agent Pet', description: 'Compagnon virtuel et système de récompenses pour les développeurs.' },
+      { identifier: 'module-audit', name: 'Qualité & Audit', description: 'Outils d\'audit de code et de projet (audit_project).' },
     ];
     try {
       if (ForgeModule) {

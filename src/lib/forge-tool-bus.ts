@@ -60,7 +60,8 @@ export type ForgeToolCall =
   | { tool: 'exec'; command: string }
   | { tool: 'create_module'; identifier: string; name: string; description?: string; payload?: string; isMcp?: boolean | number; mcpUrl?: string }
   | { tool: 'update_request_status'; requestId: number; status: 'pending' | 'in_progress' | 'completed' | 'rejected' }
-  | { tool: 'restart_gateway'; containerName?: string };
+  | { tool: 'restart_gateway'; containerName?: string }
+  | { tool: 'audit_project' };
 
 export type ForgeToolResult = {
   ok: boolean;
@@ -531,6 +532,23 @@ async function runBuiltinFsSearch(args: Record<string, unknown>): Promise<ForgeT
   }
 }
 
+async function runBuiltinAuditProject(): Promise<ForgeToolResult> {
+  const infra = await getZimaOSInfraClient();
+  try {
+    const out = await infra.exec(`
+      echo "=== Project Audit ==="
+      echo "Files:"
+      find . -maxdepth 2 -not -path "*/node_modules/*" -not -path "*/.git/*" | sort | head -n 50
+      echo ""
+      echo "Package.json:"
+      if [ -f package.json ]; then head -n 15 package.json; else echo "Not found"; fi
+    `);
+    return { ok: true, tool: 'audit_project', output: out };
+  } catch (e) {
+    return { ok: false, tool: 'audit_project', error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 function dockerHandler<T>(toolName: string, run: () => Promise<{ ok: boolean; output?: string; error?: string }>): Promise<ForgeToolResult> {
   return run().then((r) => ({
     ok: r.ok,
@@ -590,6 +608,7 @@ const BUILTIN_HANDLERS: Record<
   fs_delete: (args) => runBuiltinFsDelete(args),
   fs_chmod: (args) => runBuiltinFsChmod(args),
   fs_search: (args) => runBuiltinFsSearch(args),
+  audit_project: () => runBuiltinAuditProject(),
 
   // Phase 3 — docker complet
   docker_container_create: (args) => dockerHandler('docker_container_create', () =>
@@ -847,5 +866,7 @@ export async function runForgeTool(
     return runBuiltinUpdateRequestStatus({ requestId: call.requestId, status: call.status });
   if (call.tool === 'restart_gateway')
     return runBuiltinRestartGateway({ containerName: call.containerName });
+  if (call.tool === 'audit_project')
+    return runBuiltinAuditProject();
   return { ok: false, tool: (call as { tool: string }).tool, error: 'Outil legacy inconnu' };
 }
