@@ -248,8 +248,10 @@ async function runBuiltinCreateModule(args: Record<string, unknown>): Promise<Fo
   }
 
   try {
-    const { db, ForgeModule } = await loadAstroDb();
+    const { db, ForgeModule, AgentTool } = await loadAstroDb();
     const now = new Date();
+
+    // Insert the module
     await db.insert(ForgeModule).values({
       identifier,
       name,
@@ -263,7 +265,44 @@ async function runBuiltinCreateModule(args: Record<string, unknown>): Promise<Fo
       createdAt: now,
       updatedAt: now,
     });
-    return { ok: true, tool: 'create_module', output: `Module ${identifier} créé avec succès.` };
+
+    let toolsRegistered = 0;
+    // Attempt to parse payload and register any bundled tools
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && Array.isArray(parsed.tools)) {
+        for (const t of parsed.tools) {
+          if (!t.name || !t.implementationConfig) continue;
+
+          const existing = await db.select().from(AgentTool).where(eq(AgentTool.name, t.name));
+          if (existing.length === 0) {
+            await db.insert(AgentTool).values({
+              name: t.name,
+              displayName: t.displayName || t.name,
+              description: t.description || `Outil bundled dans ${identifier}`,
+              category: identifier.replace('module-', ''),
+              parametersJson: t.parametersJson || JSON.stringify(t.parameters || { type: 'object', properties: {} }),
+              implementationKind: t.implementationKind || 'exec_template',
+              implementationConfig: typeof t.implementationConfig === 'string' ? t.implementationConfig : JSON.stringify(t.implementationConfig),
+              enabled: 1,
+              builtin: 0,
+              requiresApproval: t.requiresApproval ? 1 : 0,
+              createdAt: now,
+              updatedAt: now,
+            });
+            toolsRegistered++;
+          }
+        }
+      }
+    } catch {
+      // Ignore JSON parse error or missing tools array
+    }
+
+    return {
+      ok: true,
+      tool: 'create_module',
+      output: `Module ${identifier} créé avec succès.` + (toolsRegistered > 0 ? ` ${toolsRegistered} outil(s) enregistré(s).` : '')
+    };
   } catch (e) {
     return { ok: false, tool: 'create_module', error: e instanceof Error ? e.message : String(e) };
   }

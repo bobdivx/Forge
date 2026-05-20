@@ -1407,13 +1407,19 @@ export type EffectiveTool = {
  */
 export async function getEffectiveToolsForAgent(agentId: string): Promise<EffectiveTool[]> {
   await ensureBuiltinToolsSeeded();
-  const { db, AgentTool, AgentToolAssignment } = await loadAstroDb();
+  const { db, AgentTool, AgentToolAssignment, ForgeModule } = await loadAstroDb();
   const assignments = await db
     .select()
     .from(AgentToolAssignment)
     .where(and(eq(AgentToolAssignment.agentId, agentId), eq(AgentToolAssignment.enabled, 1)));
 
   const tools = await db.select().from(AgentTool);
+  let modules: { identifier: string; installed: number }[] = [];
+  try {
+    if (ForgeModule) modules = await db.select().from(ForgeModule);
+  } catch {
+    // Ignore if ForgeModule table is somehow missing
+  }
   type AgentToolRow = (typeof tools)[number];
   const byId = new Map<number, AgentToolRow>(tools.map((t) => [t.id, t] as [number, AgentToolRow]));
 
@@ -1427,6 +1433,14 @@ export async function getEffectiveToolsForAgent(agentId: string): Promise<Effect
   for (const id of toolIds) {
     const t = byId.get(id);
     if (!t || Number(t.enabled) !== 1) continue;
+
+    // Filter out tools if their corresponding module is uninstalled
+    if (modules.length > 0) {
+      const moduleForTool = modules.find((m) => m.identifier === `module-${t.category}`);
+      if (moduleForTool && moduleForTool.installed !== 1) {
+        continue;
+      }
+    }
     let params: ToolParametersSchema;
     try {
       params = JSON.parse(t.parametersJson) as ToolParametersSchema;
