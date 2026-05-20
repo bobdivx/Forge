@@ -1,0 +1,3 @@
+## 2025-05-20 - Concurrent I/O in System Status API
+**Learning:** The `system-status.ts` API route had a significant bottleneck where retrieving disk usages and Docker health stats were executed sequentially and synchronously using `execSync`. This effectively blocked the main thread. Additionally, because the `df` command used shell operators (`||`), it could not be trivially ported to `execFile` without losing functionality or explicitly invoking a shell.
+**Action:** Replaced `execSync` with `exec` (promisified as `execAsync`) and ran these independent shell commands concurrently within a `Promise.all()`, safely catching errors for each promise to prevent the entire array from failing. This prevents event loop blocking and speeds up the endpoint.
