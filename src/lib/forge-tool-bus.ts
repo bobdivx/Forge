@@ -58,6 +58,7 @@ export type ForgeToolCall =
   | { tool: 'read_file'; path: string }
   | { tool: 'write_file'; path: string; content: string }
   | { tool: 'exec'; command: string }
+  | { tool: 'create_module'; identifier: string; name: string; description?: string; payload?: string; isMcp?: boolean | number; mcpUrl?: string }
   | { tool: 'update_request_status'; requestId: number; status: 'pending' | 'in_progress' | 'completed' | 'rejected' }
   | { tool: 'restart_gateway'; containerName?: string };
 
@@ -231,6 +232,40 @@ async function runBuiltinUpdateRequestStatus(args: Record<string, unknown>): Pro
     return { ok: true, tool: 'update_request_status', output: `Demande #${requestId} → ${status}` };
   } catch (e) {
     return { ok: false, tool: 'update_request_status', error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function runBuiltinCreateModule(args: Record<string, unknown>): Promise<ForgeToolResult> {
+  const identifier = String(args.identifier || '').trim();
+  const name = String(args.name || '').trim();
+  const description = String(args.description || '').trim();
+  const payload = String(args.payload || '{}').trim();
+  const isMcp = args.isMcp === true || args.isMcp === 1 ? 1 : 0;
+  const mcpUrl = typeof args.mcpUrl === 'string' ? args.mcpUrl.trim() : null;
+
+  if (!identifier || !name) {
+    return { ok: false, tool: 'create_module', error: 'identifier et name sont requis' };
+  }
+
+  try {
+    const { db, ForgeModule } = await loadAstroDb();
+    const now = new Date();
+    await db.insert(ForgeModule).values({
+      identifier,
+      name,
+      description,
+      version: '1.0.0',
+      payload,
+      installed: 0,
+      published: 0,
+      isMcp,
+      mcpUrl,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { ok: true, tool: 'create_module', output: `Module ${identifier} créé avec succès.` };
+  } catch (e) {
+    return { ok: false, tool: 'create_module', error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -504,6 +539,7 @@ const BUILTIN_HANDLERS: Record<
   read_file: (args) => runBuiltinReadFile(args),
   write_file: (args) => runBuiltinWriteFile(args),
   exec: (args) => runBuiltinExec(args),
+  create_module: (args) => runBuiltinCreateModule(args),
   update_request_status: (args) => runBuiltinUpdateRequestStatus(args),
   restart_gateway: (args) => runBuiltinRestartGateway(args),
   git_commit: (args, ctx) => runBuiltinGitCommit(args, ctx),
@@ -766,6 +802,8 @@ export async function runForgeTool(
   if (call.tool === 'read_file') return runBuiltinReadFile({ path: call.path });
   if (call.tool === 'write_file') return runBuiltinWriteFile({ path: call.path, content: call.content });
   if (call.tool === 'exec') return runBuiltinExec({ command: call.command });
+  if (call.tool === 'create_module')
+    return runBuiltinCreateModule({ identifier: call.identifier, name: call.name, description: call.description, payload: call.payload, isMcp: call.isMcp, mcpUrl: call.mcpUrl });
   if (call.tool === 'update_request_status')
     return runBuiltinUpdateRequestStatus({ requestId: call.requestId, status: call.status });
   if (call.tool === 'restart_gateway')

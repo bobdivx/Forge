@@ -12,6 +12,7 @@ import WorkScheduleTab from './WorkScheduleTab';
 import AgentRulesTab from './AgentRulesTab';
 import PermissionsTab from './PermissionsTab';
 import PetTab from './PetTab';
+import ModuleStoreTab from './ModuleStoreTab';
 
 type Config = {
   forgePublicUrl: string;
@@ -47,6 +48,7 @@ type AuthState = {
 };
 
 const TABS = [
+  { id: 'store', label: 'Store Modules' },
   { id: 'account', label: 'Compte & Sécurité' },
   { id: 'zimaos', label: 'Infra NAS/Docker' },
   { id: 'ollama', label: 'Ollama' },
@@ -347,6 +349,11 @@ export default function SettingsForm() {
       <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
       <div class="bg-white border border-gray-100 rounded-[1.5rem] overflow-hidden shadow-sm min-h-[400px]">
+        {activeTab === 'store' && (
+          <div class="p-6 bg-[#0E1525]">
+            <ModuleStoreTab />
+          </div>
+        )}
         {activeTab === 'account' && (
           <AccountTab
             auth={auth}
