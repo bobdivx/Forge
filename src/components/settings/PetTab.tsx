@@ -11,14 +11,58 @@ interface PetConfig {
     glyph: string;
     accent: string;
     greeting: string;
+    imageUrl?: string;
+    useCodexAtlas?: boolean;
+    assignedAgent?: string;
   };
+}
+
+interface CodexPet {
+  id: string;
+  displayName: string;
+  description: string;
+  spritesheetUrl: string;
 }
 
 export default function PetTab() {
   const [config, setConfig] = useState<PetConfig | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [codexPets, setCodexPets] = useState<CodexPet[]>([]);
+  const [agents, setAgents] = useState<{id: string, name: string}[]>([]);
+  const [petSearch, setPetSearch] = useState('');
 
   useEffect(() => {
+    // Fetch Codex Pets
+    const fetchCodex = async () => {
+      try {
+        const r = await fetch('/api/codex-pets?count=200');
+        const data = await r.json();
+        
+        if (data.pets) {
+          // Normaliser pour correspondre à la structure CodexPet
+          const pets = data.pets.map((p: any) => ({
+            id: String(p.id || ''),
+            displayName: String(p.displayName || p.id || ''),
+            description: p.description,
+            spritesheetUrl: p.spritesheetUrl || `https://codex-pets.net/assets/pets/${p.id}/spritesheet.webp`
+          })).filter((p: any) => p.id && p.spritesheetUrl);
+          
+          setCodexPets(pets);
+        }
+      } catch (e) {
+        console.error("Failed to fetch codex pets via proxy", e);
+      }
+    };
+    fetchCodex();
+
+    // Fetch Agents
+    fetch('/api/agents')
+      .then(r => r.json())
+      .then(data => {
+        if (data.agents) setAgents(data.agents);
+      })
+      .catch(e => console.error("Failed to fetch agents", e));
+
     const raw = localStorage.getItem(PET_CONFIG_KEY);
     if (raw) {
       try {
@@ -31,10 +75,13 @@ export default function PetTab() {
         adopted: true,
         enabled: true,
         custom: {
-          name: "Patamon",
-          glyph: "🐶",
-          accent: "#ff9d00",
-          greeting: "Salut ! Je suis là si tu as besoin de moi.",
+          name: "Clawd",
+          glyph: "🦀",
+          accent: "#175B37",
+          greeting: "Salut ! Je suis Clawd, ton assistant.",
+          assignedAgent: "",
+          imageUrl: "https://codex-pets.net/assets/pets/clawd/spritesheet.webp",
+          useCodexAtlas: true
         },
       });
     }
@@ -54,7 +101,36 @@ export default function PetTab() {
     window.location.reload();
   };
 
+  const handlePetSelect = (e: Event) => {
+    const target = e.target as HTMLSelectElement;
+    const petId = target.value;
+    if (!petId) {
+      setConfig({
+        ...config!,
+        custom: { ...config!.custom, imageUrl: undefined, useCodexAtlas: false }
+      });
+      return;
+    }
+    const pet = codexPets.find(p => p.id === petId);
+    if (pet) {
+      setConfig({
+        ...config!,
+        custom: {
+          ...config!.custom,
+          name: pet.displayName,
+          imageUrl: pet.spritesheetUrl,
+          useCodexAtlas: true
+        }
+      });
+    }
+  };
+
   if (!config) return <div class="p-8 text-gray-400">Chargement...</div>;
+
+  const filteredPets = codexPets.filter(p => 
+    p.displayName.toLowerCase().includes(petSearch.toLowerCase()) || 
+    p.id.toLowerCase().includes(petSearch.toLowerCase())
+  );
 
   return (
     <div class="p-6 md:p-8 space-y-8">
@@ -67,6 +143,80 @@ export default function PetTab() {
           </div>
 
           <div class="space-y-4">
+            {/* Activation / Désactivation */}
+            <div class="bg-gray-50 border border-gray-200 rounded-2xl p-4 flex items-center justify-between transition-all hover:bg-gray-100/50">
+              <div class="space-y-0.5">
+                <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Statut de l'animal</span>
+                <h4 class="text-sm font-bold text-gray-800">
+                  {config.enabled ? 'Animal activé' : 'Animal désactivé'}
+                </h4>
+                <p class="text-xs text-gray-500">
+                  {config.enabled ? "L'animal est affiché sur toutes les pages." : "L'animal est masqué de l'interface."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, enabled: !config.enabled })}
+                class={`relative inline-flex h-6.5 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 focus:outline-none focus:ring-4 focus:ring-[#175B37]/10 ${
+                  config.enabled ? 'bg-[#175B37]' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  class={`pointer-events-none inline-block h-5.5 w-5.5 transform rounded-full bg-white shadow-md ring-0 transition duration-300 ease-in-out ${
+                    config.enabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div class="space-y-1.5">
+              <div class="flex justify-between items-center">
+                <label class="text-xs font-semibold uppercase tracking-wider text-gray-400">Animal (Codex)</label>
+                {codexPets.length > 0 && <span class="text-xs text-gray-400">{codexPets.length} disponibles</span>}
+              </div>
+              <input
+                type="text"
+                placeholder="Rechercher un animal..."
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-[#175B37]/20 focus:border-[#175B37] outline-none transition-all mb-2"
+                value={petSearch}
+                onInput={(e) => setPetSearch((e.target as HTMLInputElement).value)}
+              />
+              <select
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#175B37]/20 focus:border-[#175B37] outline-none transition-all"
+                onChange={handlePetSelect}
+                size={filteredPets.length > 0 ? Math.min(5, filteredPets.length + 1) : 1}
+              >
+                <option value="">Sélectionner un animal...</option>
+                {filteredPets.map(pet => (
+                  <option 
+                    value={pet.id} 
+                    selected={config.custom.imageUrl?.includes(pet.id)}
+                  >
+                    {pet.displayName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400">Agent assigné</label>
+              <select
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#175B37]/20 focus:border-[#175B37] outline-none transition-all"
+                onChange={(e) => setConfig({
+                  ...config,
+                  custom: { ...config.custom, assignedAgent: (e.target as HTMLSelectElement).value }
+                })}
+              >
+                <option value="">Aucun agent assigné</option>
+                {agents.map(agent => (
+                  <option value={agent.id} selected={config.custom.assignedAgent === agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+              <p class="text-xs text-gray-500 mt-1">L'animal réagira aux actions de cet agent spécifique.</p>
+            </div>
+
             <div class="space-y-1.5">
               <label class="text-xs font-semibold uppercase tracking-wider text-gray-400">Nom de l'animal</label>
               <input
@@ -148,16 +298,33 @@ export default function PetTab() {
             <div class="absolute inset-0 opacity-[0.05] pointer-events-none transition-all duration-500 group-hover:opacity-[0.08]" style={{ backgroundColor: config.custom.accent }} />
             
             <div class="relative z-10 flex flex-col items-center gap-6">
-              <div 
-                class="w-28 h-28 rounded-full flex items-center justify-center text-5xl shadow-xl transition-all duration-300 group-hover:scale-110"
-                style={{ backgroundColor: `${config.custom.accent}15`, border: `3px solid ${config.custom.accent}`, color: config.custom.accent }}
-              >
-                {config.custom.glyph}
-              </div>
+              {config.custom.imageUrl ? (
+                 <div 
+                  class="w-28 h-28 flex items-center justify-center transition-all duration-300 group-hover:scale-110"
+                  style={{
+                    backgroundImage: `url(${config.custom.imageUrl})`,
+                    backgroundSize: '800% 900%',
+                    backgroundPosition: '0% 0%',
+                    imageRendering: 'pixelated'
+                  }}
+                 />
+              ) : (
+                <div 
+                  class="w-28 h-28 rounded-full flex items-center justify-center text-5xl shadow-xl transition-all duration-300 group-hover:scale-110"
+                  style={{ backgroundColor: `${config.custom.accent}15`, border: `3px solid ${config.custom.accent}`, color: config.custom.accent }}
+                >
+                  {config.custom.glyph}
+                </div>
+              )}
 
               <div class="text-center space-y-4">
                 <h4 class="text-2xl font-black uppercase tracking-tighter" style={{ color: config.custom.accent }}>
                   {config.custom.name}
+                  {config.custom.assignedAgent && (
+                     <span class="block text-xs font-normal text-gray-500 tracking-normal mt-1 lowercase">
+                       @{config.custom.assignedAgent}
+                     </span>
+                  )}
                 </h4>
                 
                 <div class="relative max-w-[240px] bg-white shadow-lg rounded-2xl p-4 text-sm text-gray-700 italic border border-gray-100 animate-bounce-subtle">

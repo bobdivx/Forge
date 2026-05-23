@@ -11,7 +11,7 @@ import MaintenanceTab from './MaintenanceTab';
 import WorkScheduleTab from './WorkScheduleTab';
 import AgentRulesTab from './AgentRulesTab';
 import PermissionsTab from './PermissionsTab';
-import PetTab from './PetTab';
+
 
 type Config = {
   forgePublicUrl: string;
@@ -57,7 +57,6 @@ const TABS = [
   { id: 'policy', label: 'Politique agents' },
   { id: 'permissions', label: 'Permissions' },
   { id: 'schedule', label: 'Horaires de travail' },
-  { id: 'pet', label: 'Pet Codex' },
   { id: 'maintenance', label: 'Maintenance' },
 ];
 
@@ -396,7 +395,7 @@ export default function SettingsForm() {
         {activeTab === 'policy' && <AgentRulesTab />}
         {activeTab === 'permissions' && <PermissionsTab />}
         {activeTab === 'schedule' && <WorkScheduleTab />}
-        {activeTab === 'pet' && <PetTab />}
+
         {activeTab === 'maintenance' && (
           <MaintenanceTab
             onSync={syncProjects}

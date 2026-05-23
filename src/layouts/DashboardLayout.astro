@@ -35,10 +35,6 @@ const userName = userEmail.split('@')[0];
           <span class="text-xl font-bold text-gray-900">Ageton</span>
         </div>
 
-        <!-- Pet Codex Sidebar Container -->
-        <div class="mb-12 mt-4 flex justify-center">
-          <div id="pet-sidebar-target" class="w-full h-24 relative overflow-visible" data-bubble-pos="down" data-bubble-align="center"></div>
-        </div>
 
         {navGroups.map((group) => (
           <div class="mb-8">
@@ -127,32 +123,92 @@ const userName = userEmail.split('@')[0];
         <slot />
       </div>
     </main>
-    <script src="/agent-pet-widget.iife.js?v=8" data-auto-mount="false"></script>
+    <script src="/agent-pet-widget.iife.js?v=11" data-auto-mount="false"></script>
     <script is:inline>
       function initPet() {
         if (!window.AgentPet) return;
         
+        let config = null;
+        try {
+          const rawConfig = localStorage.getItem("agent-pet:config");
+          if (rawConfig) {
+            config = JSON.parse(rawConfig);
+          }
+        } catch (e) {}
+
+        // Si l'animal est désactivé dans la config, on ne le monte pas
+        if (config && config.enabled === false) {
+          return;
+        }
+
         const isMobile = window.innerWidth < 768;
         
-        if (isMobile) {
-          // Mobile: Floating mode
-          window.AgentPet.mount({
-            name: "Patamon",
-            accent: "#ff9d00",
-            chat: true
-          });
-        } else {
-          // PC: Sidebar mode
-          window.AgentPet.mount({
-            target: document.getElementById('pet-sidebar-target'),
-            name: "Patamon",
-            accent: "#ff9d00",
-            chat: true
-          });
-        }
+        // Floating mode for all devices
+        window.AgentPet.mount({
+          chat: true,
+          name: config?.custom?.name,
+          accent: config?.custom?.accent,
+        });
         
         window.AgentPet.play("greeting");
+
+        // Interactive responses
+        window.AgentPet.on('userMessage', (msg) => {
+          const m = msg.toLowerCase();
+          if (m.includes('salut') || m.includes('bonjour') || m.includes('hello')) {
+            window.AgentPet.play('greeting');
+            window.AgentPet.say("Salut ! Comment ça va aujourd'hui ?");
+          } else if (m.includes('aide') || m.includes('help')) {
+            window.AgentPet.play('thinking');
+            window.AgentPet.say("Je suis là pour t'accompagner. Tu peux configurer tes agents dans les paramètres !");
+          } else {
+            window.AgentPet.play('excited');
+            window.AgentPet.say("Je t'écoute !");
+          }
+        });
+
+        // Agent Connection Logic
+        let lastTaskId = null;
+        setInterval(() => {
+          try {
+            const rawConfig = localStorage.getItem("agent-pet:config");
+            if (!rawConfig) return;
+            const config = JSON.parse(rawConfig);
+            const assignedAgent = config?.custom?.assignedAgent;
+            
+            if (!assignedAgent) return;
+
+            fetch('/api/agents')
+              .then(r => r.json())
+              .then(data => {
+                if (!data.agents) return;
+                const agent = data.agents.find(a => a.id === assignedAgent);
+                if (!agent) return;
+
+                const currentWork = agent.currentWork;
+                
+                if (currentWork && currentWork.taskId !== lastTaskId) {
+                  // Nouvelle tâche détectée !
+                  lastTaskId = currentWork.taskId;
+                  window.AgentPet.setHostState('working');
+                  window.AgentPet.say(`Je m'occupe de : ${currentWork.title}`);
+                } else if (!currentWork && lastTaskId !== null) {
+                  // Tâche terminée !
+                  lastTaskId = null;
+                  window.AgentPet.setHostState('idle');
+                  window.AgentPet.play('excited');
+                  window.AgentPet.say("Tâche terminée ! Qu'est-ce qu'on fait maintenant ?");
+                }
+              })
+              .catch(() => {});
+          } catch (e) {}
+        }, 5000);
       }
+
+      // Recharger la page quand les paramètres de l'animal changent pour appliquer (ou masquer) le pet
+      window.addEventListener('agent-pet:config-changed', () => {
+        window.location.reload();
+      });
 
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initPet);

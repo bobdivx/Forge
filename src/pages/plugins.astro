@@ -1,0 +1,21 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import PluginsBoard from '../components/plugins/PluginsBoard';
+import PageHeader from '../components/ui/PageHeader.astro';
+---
+<DashboardLayout title="Plugins & Modules" currentPath="/plugins">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <PageHeader
+      title="Plugins & Modules"
+      description="Installez et gérez vos modules d'extension, connectez des outils MCP (Model Context Protocol) ou configurez le compagnon de bureau interactif et le watcher GitHub."
+      actions={[
+        { href: '/agents', label: "L'Équipe", tone: 'default' },
+        { href: '/settings#api', label: 'Jetons API', tone: 'default' },
+        { href: '/help', label: 'Aide', tone: 'primary' },
+      ]}
+    />
+
+    <PluginsBoard client:load />
+
+  </div>
+</DashboardLayout>
