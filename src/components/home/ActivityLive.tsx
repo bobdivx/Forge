@@ -27,11 +27,13 @@ const MAX_ENTRIES = 200;
 function actorBadge(actorType: string) {
   switch (actorType) {
     case 'agent':
-      return 'bg-emerald-100 text-emerald-800';
+      return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
     case 'user':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-50 text-blue-700 border border-blue-100';
+    case 'system':
+      return 'bg-purple-50 text-purple-700 border border-purple-100';
     default:
-      return 'bg-gray-100 text-gray-700';
+      return 'bg-gray-50 text-gray-600 border border-gray-100';
   }
 }
 
@@ -99,39 +101,39 @@ export default function ActivityLive() {
         <div>
           <span class="text-[10px] font-black uppercase tracking-widest text-[#175B37]">Activity Live</span>
           <h2 class="text-base font-bold text-gray-900 mt-1">Forge en autonomie</h2>
-          <p class="text-xs text-gray-500 mt-1">
-            Flux temps-réel des actions agents et daemons. Auto-actualisation toutes les 2 s.
+          <p class="text-xs text-gray-500 mt-1 leading-relaxed">
+            Flux temps-réel des actions agents et daemons.
           </p>
         </div>
         <div class="flex items-center gap-2">
-          <span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            connected ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+          <span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+            connected ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'
           }`}>
             <span class={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-            {connected ? 'SSE connecté' : 'SSE déconnecté'}
+            {connected ? 'SSE' : 'Hors-ligne'}
           </span>
           <select
             value={autonomy?.mode ?? 'on'}
             onChange={(e) => switchMode((e.target as HTMLSelectElement).value as AutonomyMode)}
-            class="text-[11px] border border-gray-200 rounded-full px-2 py-1"
+            class="text-[11px] font-semibold text-gray-600 border border-gray-200 rounded-full px-2.5 py-1 bg-white hover:border-[#175B37]/35 transition-colors focus:outline-none"
             title="Mode d'autonomie"
           >
-            <option value="on">24/7</option>
-            <option value="quiet_hours">Quiet hours</option>
-            <option value="off">Off</option>
+            <option value="on">Actif</option>
+            <option value="quiet_hours">Heures calmes</option>
+            <option value="off">Inactif</option>
           </select>
         </div>
       </div>
 
       {autonomy && (
-        <div class="mb-3 flex flex-wrap gap-2 text-[10px]">
+        <div class="mb-4 flex flex-wrap gap-2 text-[10px]">
           {autonomy.subDaemons.map((d) => (
             <span
               key={d.name}
-              class={`inline-flex items-center gap-1 px-2 py-0.5 rounded border ${
+              class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border font-medium ${
                 d.running
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-gray-50 text-gray-600 border-gray-200'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  : 'bg-gray-50 text-gray-500 border-gray-100'
               }`}
               title={d.lastError ?? undefined}
             >
@@ -140,8 +142,8 @@ export default function ActivityLive() {
             </span>
           ))}
           {autonomy.inQuietHours && (
-            <span class="px-2 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
-              Quiet hours actif ({autonomy.quietHours})
+            <span class="px-2 py-0.5 rounded-lg border bg-amber-50 text-amber-700 border-amber-100 font-medium">
+              Heures calmes ({autonomy.quietHours})
             </span>
           )}
         </div>
@@ -149,7 +151,7 @@ export default function ActivityLive() {
 
       <div
         ref={containerRef as never}
-        class="bg-gray-950 text-gray-200 font-mono text-[11px] rounded-lg p-3 h-[300px] overflow-auto"
+        class="bg-gray-50/50 border border-gray-100 rounded-2xl p-4 h-[350px] overflow-y-auto custom-scrollbar flex flex-col gap-3"
         onScroll={(e) => {
           const el = e.currentTarget as HTMLDivElement;
           const atBottom = el.scrollTop + el.clientHeight + 20 >= el.scrollHeight;
@@ -157,25 +159,48 @@ export default function ActivityLive() {
         }}
       >
         {entries.length === 0 ? (
-          <div class="text-gray-500 text-center py-8">En attente d'événements…</div>
+          <div class="text-gray-400 text-center py-12 text-xs font-medium">En attente d'événements…</div>
         ) : (
           entries.map((e) => (
-            <div key={e.id} class="flex gap-2 py-0.5">
-              <span class="text-gray-500 shrink-0">{new Date(e.createdAt).toLocaleTimeString()}</span>
-              <span class={`shrink-0 px-1.5 rounded text-[9px] uppercase font-bold ${actorBadge(e.actorType)}`}>
-                {e.actorId}
-              </span>
-              <span class="text-emerald-400 shrink-0">{e.action}</span>
-              <span class="text-gray-400 truncate">
-                {e.entityType}/{e.entityId}
-              </span>
+            <div key={e.id} class="flex items-start gap-3 relative pb-1 last:pb-0 border-l border-gray-200 pl-4 ml-2">
+              <div class={`absolute left-0 top-1.5 -translate-x-1/2 w-2 h-2 rounded-full border border-white ${
+                e.actorType === 'agent'
+                  ? 'bg-emerald-500'
+                  : e.actorType === 'user'
+                  ? 'bg-blue-500'
+                  : 'bg-purple-500'
+              }`} />
+              
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                  <span class="text-[10px] text-gray-400 font-semibold">{new Date(e.createdAt).toLocaleTimeString()}</span>
+                  <span class={`px-1 rounded text-[8px] uppercase font-bold tracking-wider ${actorBadge(e.actorType)}`}>
+                    {e.actorId}
+                  </span>
+                </div>
+                <div class="text-xs text-gray-800 font-bold leading-normal">
+                  <span class="text-[#175B37]">{e.action}</span>
+                </div>
+                {e.entityType && (
+                  <div class="text-[9px] text-gray-500 mt-0.5 truncate font-mono bg-white border border-gray-100 px-1 py-0.5 rounded inline-block">
+                    {e.entityType}/{e.entityId}
+                  </div>
+                )}
+                {e.details && (
+                  <div class="text-[10px] text-gray-500 mt-1 max-w-full truncate whitespace-normal line-clamp-2 leading-relaxed">
+                    {typeof e.details === 'string' && e.details.startsWith('{')
+                      ? 'Détails JSON...'
+                      : e.details}
+                  </div>
+                )}
+              </div>
             </div>
           ))
         )}
       </div>
       {!autoScroll && (
         <button
-          class="mt-2 text-[10px] text-[#175B37] font-bold hover:underline"
+          class="mt-3 w-full flex items-center justify-center gap-1.5 py-2 border border-[#175B37]/15 bg-[#E9F3EB]/40 text-[#175B37] text-xs font-bold rounded-xl hover:bg-[#E9F3EB]/80 transition-colors"
           onClick={() => {
             setAutoScroll(true);
             if (containerRef.current) {
@@ -183,7 +208,10 @@ export default function ActivityLive() {
             }
           }}
         >
-          ⬇ Reprendre l'auto-scroll
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 13l-7 7-7-7m14-6l-7 7-7-7" />
+          </svg>
+          Reprendre le défilement
         </button>
       )}
     </div>

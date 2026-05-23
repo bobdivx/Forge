@@ -34,13 +34,9 @@ try {
     ]}
   />
   <div class="mb-8 flex flex-wrap items-center gap-3">
-      <SyncProjectsButton client:load />
-      <DashboardGitPullAllButton client:load />
-      <GithubImportModal client:load />
-  </div>
-
-  <div class="mb-8">
-    <ActivityLive client:load />
+    <SyncProjectsButton client:load />
+    <DashboardGitPullAllButton client:load />
+    <GithubImportModal client:load />
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -104,7 +100,7 @@ try {
       </div>
 
       <div
-        class="bg-white rounded-[1.5rem] shadow-sm p-6 border border-gray-100"
+        class="bg-white rounded-[1.5rem] shadow-sm p-6 border border-gray-100 mb-6"
       >
         <h4 class="font-bold text-gray-900 mb-4 flex items-center gap-2">
           <svg
@@ -143,6 +139,10 @@ try {
             Configuration serveur
           </a>
         </div>
+      </div>
+
+      <div>
+        <ActivityLive client:load />
       </div>
     </div>
   </div>

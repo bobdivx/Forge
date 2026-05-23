@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { exec } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
+import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
 
 const execPromise = util.promisify(exec);
 
@@ -14,21 +15,34 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     let command = '';
+    const execOptions: any = {};
 
     if (action === 'start' || action === 'start_prod') {
       if (!scriptPath) return new Response(JSON.stringify({ error: 'scriptPath required to start' }), { status: 400 });
-      // Build env variables string
-      let envString = '';
+
+      // Resolve the project path dynamically (handles NAS host vs Docker vs Windows root differences)
+      const resolvedPath = await resolveProjectPathFromDbProject({ name: appName, path: scriptPath });
+      if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+        return new Response(
+          JSON.stringify({
+            error: `Le dossier du projet n'a pas pu être trouvé. Chemin recherché : ${resolvedPath || scriptPath}`
+          }),
+          { status: 404 }
+        );
+      }
+
+      execOptions.cwd = resolvedPath;
       if (env) {
-        for (const [key, value] of Object.entries(env)) {
-          envString += `${key}="${value}" `;
-        }
+        execOptions.env = {
+          ...process.env,
+          ...env
+        };
       }
       
       let npmScript = action === 'start_prod' ? 'start' : 'dev';
       
       // Auto-detect the right script from package.json if default not found
-      const pkgPath = scriptPath + '/package.json';
+      const pkgPath = resolvedPath + '/package.json';
       try {
         if (fs.existsSync(pkgPath)) {
           const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
@@ -60,12 +74,12 @@ export const POST: APIRoute = async ({ request }) => {
           } catch(e) {}
           
           if (hasBuild) {
-              command = `cd ${scriptPath} && npm run build && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              command = `npm run build && npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
           } else {
-              command = `cd ${scriptPath} && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
           }
       } else {
-          command = `cd ${scriptPath} && ${envString} npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+          command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
       }
     } else if (action === 'stop') {
       command = `npx -y pm2 stop "${appName}"`;
@@ -77,7 +91,7 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
     }
 
-    const { stdout, stderr } = await execPromise(command);
+    const { stdout, stderr } = await execPromise(command, execOptions);
 
     return new Response(JSON.stringify({ status: 'ok', stdout, stderr }), {
       status: 200,

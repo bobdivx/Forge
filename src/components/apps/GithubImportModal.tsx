@@ -60,7 +60,7 @@ export default function GithubImportModal() {
     <>
       <button
         onClick={() => setOpen(true)}
-        class="flex items-center gap-2 border border-gray-300 text-gray-700 text-sm font-medium px-4 py-2 rounded-full hover:bg-gray-50 transition-colors bg-white"
+        class="flex items-center gap-2 border text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all bg-white text-gray-700 border-gray-200 hover:border-[#175B37]/50 hover:bg-[#E9F3EB] hover:text-[#175B37]"
         title="Importer depuis GitHub"
       >
         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

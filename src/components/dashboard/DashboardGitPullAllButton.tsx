@@ -63,66 +63,70 @@ export default function DashboardGitPullAllButton() {
   const results = data?.results ?? [];
 
   return (
-    <div class="flex flex-col gap-2">
+    <div class="flex flex-col gap-2 relative">
       <div class="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => setOpen(!open)}
-          class="btn btn-sm btn-outline border-emerald-700 text-emerald-200 hover:bg-emerald-900/30 hover:border-emerald-500"
+          class={`flex items-center gap-2 border text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all ${
+            open
+              ? 'border-[#175B37] bg-[#E9F3EB] text-[#175B37]'
+              : 'bg-white text-gray-700 border-gray-200 hover:border-[#175B37]/50 hover:bg-[#E9F3EB] hover:text-[#175B37]'
+          }`}
         >
-          ↓ Mettre à jour depuis GitHub (tous les projets)
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>Mettre à jour depuis GitHub (tous)</span>
         </button>
         {open && (
-          <div class="flex flex-col gap-2 rounded-xl border border-gray-600 bg-gray-900/80 p-4 text-sm text-gray-200 max-w-lg">
-            <p class="text-xs text-gray-400">
-              Exécute <code class="text-emerald-300">git pull origin &lt;branche courante&gt;</code> pour chaque
-              dépôt. Les projets sans Git ou avec HEAD détachée sont ignorés ou signalés.
+          <div class="absolute top-full left-0 mt-2 z-30 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-700 shadow-xl w-80 max-w-sm pointer-events-auto">
+            <p class="text-xs text-gray-500 leading-relaxed">
+              Exécute <code class="text-[#175B37] bg-gray-50 px-1 py-0.5 rounded font-mono">git pull origin &lt;branche&gt;</code> pour chaque dépôt. Les projets sans Git ou avec HEAD détachée sont ignorés.
             </p>
-            <fieldset class="space-y-2">
-              <label class="flex cursor-pointer items-start gap-2">
+            <fieldset class="space-y-2 border-t border-gray-100 pt-3">
+              <label class="flex cursor-pointer items-start gap-2 text-xs">
                 <input
                   type="radio"
                   name="dirty"
                   checked={strategy === 'skip'}
                   onChange={() => setStrategy('skip')}
-                  class="mt-1"
+                  class="mt-0.5 text-[#175B37] focus:ring-[#175B37]"
                 />
                 <span>
-                  <strong class="text-gray-100">Ignorer</strong> les dépôts avec des modifications locales non
-                  commitées (liste fournie ensuite).
+                  <strong class="text-gray-900">Ignorer</strong> les dépôts avec modifications locales.
                 </span>
               </label>
-              <label class="flex cursor-pointer items-start gap-2">
+              <label class="flex cursor-pointer items-start gap-2 text-xs">
                 <input
                   type="radio"
                   name="dirty"
                   checked={strategy === 'stash'}
                   onChange={() => setStrategy('stash')}
-                  class="mt-1"
+                  class="mt-0.5 text-[#175B37] focus:ring-[#175B37]"
                 />
                 <span>
-                  <strong class="text-gray-100">Mettre de côté (stash)</strong> les fichiers locaux y compris non
-                  suivis, puis tirer depuis GitHub et réappliquer le stash.
+                  <strong class="text-gray-900">Stash & Pull</strong>: met de côté, pull, puis réapplique les modifs.
                 </span>
               </label>
             </fieldset>
-            <div class="flex gap-2 pt-1">
+            <div class="flex items-center gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
                 onClick={run}
                 disabled={state === 'loading'}
-                class="btn btn-sm btn-primary"
+                class="flex-1 bg-[#175B37] text-white py-2 rounded-lg text-xs font-bold hover:bg-[#134d2e] transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {state === 'loading' ? (
-                  <span class="flex items-center gap-2">
-                    <span class="loading loading-spinner loading-xs" />
-                    Mise à jour…
-                  </span>
+                  <>
+                    <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Tirage...
+                  </>
                 ) : (
-                  'Lancer'
+                  'Lancer la mise à jour'
                 )}
               </button>
-              <button type="button" class="btn btn-sm btn-ghost" onClick={() => setOpen(false)}>
+              <button type="button" class="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors" onClick={() => setOpen(false)}>
                 Annuler
               </button>
             </div>
@@ -132,19 +136,18 @@ export default function DashboardGitPullAllButton() {
 
       {summary && state !== 'idle' && state !== 'loading' && (
         <div
-          class={`text-xs px-3 py-2 rounded-lg max-w-3xl ${
-            state === 'done' ? 'bg-emerald-900/40 text-emerald-200' : 'bg-amber-900/40 text-amber-100'
+          class={`text-xs px-3 py-2 rounded-xl max-w-3xl border font-medium ${
+            state === 'done' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-amber-50 border-amber-100 text-amber-700'
           }`}
         >
           <p>
-            {summary.total} dépôt(s) examiné(s) — {summary.pulled} mis à jour, {summary.skippedDirty} ignoré(s) (modifs
-            locales), {summary.failed} échec(s).
+            {summary.total} dépôt(s) examiné(s) — {summary.pulled} mis à jour, {summary.skippedDirty} ignoré(s) (modifs locales), {summary.failed} échec(s).
           </p>
         </div>
       )}
 
       {data?.error && !summary && (
-        <span class="text-xs px-3 py-2 rounded-lg bg-red-900/50 text-red-200 max-w-xl">{data.error}</span>
+        <span class="text-xs px-3 py-2 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 max-w-xl font-medium">{data.error}</span>
       )}
 
       {results.length > 0 && state !== 'loading' && (

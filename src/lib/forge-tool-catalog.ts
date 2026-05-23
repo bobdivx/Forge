@@ -1228,6 +1228,7 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
       { identifier: 'module-docker', name: 'Docker / ZimaOS', description: 'Outils de gestion des conteneurs locaux et ZimaOS.' },
       { identifier: 'module-vercel', name: 'Vercel Deployments', description: 'Gestion des déploiements Vercel.' },
       { identifier: 'module-pet', name: 'Agent Pet', description: 'Compagnon virtuel et système de récompenses pour les développeurs.' },
+      { identifier: 'module-turso', name: 'Base de données Turso', description: 'Outils de gestion et d\'administration de base de données SQLite distribuée Turso.' },
     ];
     try {
       if (ForgeModule) {
