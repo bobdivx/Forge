@@ -187,14 +187,14 @@ export async function listSubagentRuns(filter?: {
   if (filter?.parentAgentId) conditions.push(eq(SubagentRun.parentAgentId, filter.parentAgentId));
   if (filter?.childAgentId) conditions.push(eq(SubagentRun.childAgentId, filter.childAgentId));
   if (filter?.status) conditions.push(eq(SubagentRun.status, filter.status));
-  let query = db.select().from(SubagentRun).orderBy(desc(SubagentRun.id));
+  let query: any = db.select().from(SubagentRun);
   if (conditions.length === 1) {
     query = query.where(conditions[0] as never);
   } else if (conditions.length > 1) {
     query = query.where(and(...(conditions as never[])) as never);
   }
-  const rows = await query.limit(filter?.limit ?? 50);
-  return rows.map((r) => mapRow(r as Record<string, unknown>));
+  const rows = await query.orderBy(desc(SubagentRun.id)).limit(filter?.limit ?? 50);
+  return rows.map((r: any) => mapRow(r as Record<string, unknown>));
 }
 
 /**

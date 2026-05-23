@@ -12,7 +12,6 @@ import WorkScheduleTab from './WorkScheduleTab';
 import AgentRulesTab from './AgentRulesTab';
 import PermissionsTab from './PermissionsTab';
 
-
 type Config = {
   forgePublicUrl: string;
   zimaosContainerName: string;
