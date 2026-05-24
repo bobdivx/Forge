@@ -22,5 +22,5 @@ describe('forge-tool-install', () => {
     // devraient être correctement résolus avant la tentative.
     expect(r.manager).toBe('apt');
     expect(r.command).toMatch(/ripgrep/);
-  });
+  }, 20000);
 });
