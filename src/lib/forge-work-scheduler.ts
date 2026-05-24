@@ -230,8 +230,11 @@ async function maybeEnqueueIdleDiscoveryTask(agentIds: string[]): Promise<void> 
     const busyAudit = tasks.some(
       (t) =>
         String(t.agentId) === agentId &&
-        ['pending', 'running', 'bug'].includes(String(t.status).toLowerCase()) &&
-        String(t.task || '').includes('[Audit proactif]'),
+        String(t.task || '').includes('[Audit proactif]') &&
+        (
+          ['pending', 'running', 'bug'].includes(String(t.status).toLowerCase()) ||
+          (Date.now() - new Date(t.createdAt).getTime() < 4 * 60 * 60 * 1000)
+        )
     );
     if (busyAudit) return;
 
@@ -1112,7 +1115,7 @@ async function tick() {
 /** Démarrage le scheduler interne (idempotent). Appelé depuis le middleware au boot. */
 export function startScheduler() {
   if (sched().intervalHandle) {
-    console.log('[work-scheduler] already running');
+    // Silenced spammy log: console.log('[work-scheduler] already running');
     return;
   }
   
