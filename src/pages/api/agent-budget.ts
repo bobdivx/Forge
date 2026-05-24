@@ -17,9 +17,12 @@ export async function GET({ url }: { url: URL }) {
     const agentId = url.searchParams.get('agentId');
 
     // Récupérer tous les budgets (avec infos agents)
-    const budgets = await db.select().from(AgentBudget);
-    const allEvents = await db.select().from(CostEvent);
-    const instructions = await db.select().from(AgentInstruction);
+    // ⚡ Bolt: Concurrent query execution to avoid sequential I/O bottlenecks
+    const [budgets, allEvents, instructions] = await Promise.all([
+      db.select().from(AgentBudget),
+      db.select().from(CostEvent),
+      db.select().from(AgentInstruction),
+    ]);
 
     // Map agentId → model name
     const agentModels: Record<string, string> = {};
