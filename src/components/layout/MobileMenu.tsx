@@ -29,10 +29,10 @@ export default function MobileMenu({
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors md:hidden"
+        class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
         aria-label="Ouvrir le menu"
       >
-        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
@@ -43,9 +43,10 @@ export default function MobileMenu({
             {/* Backdrop */}
             <button
               type="button"
-              class="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              class="absolute inset-0 bg-black/30 backdrop-blur-sm cursor-default"
               aria-label="Fermer le menu"
               onClick={closeDrawer}
+              tabIndex={-1}
             />
 
             {/* Drawer */}
@@ -64,11 +65,11 @@ export default function MobileMenu({
                 </div>
                 <button
                   type="button"
-                  class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+                  class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
                   aria-label="Fermer le menu"
                   onClick={closeDrawer}
                 >
-                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
