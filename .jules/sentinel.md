@@ -1,0 +1,4 @@
+## 2024-05-24 - [CRITICAL] Command Injection in docker logs API
+**Vulnerability:** The API endpoint `src/pages/api/docker-logs.ts` utilized `execSync` with unsanitized user inputs (`id` and `tail` query parameters) concatenated directly into a shell command string, creating a critical risk of arbitrary command execution.
+**Learning:** Shell strings generated with external user input inherently trust that input to not contain shell metacharacters or secondary commands (e.g., using `;` or `&&`). Relying solely on `execSync` without passing an arguments array bypasses proper encoding.
+**Prevention:** Always use `execFile` (or its async wrapper) with an array of arguments for external commands instead of string concatenation. Validate and strictly cast types (e.g., parsing integers for numeric limits), sanitize error outputs to avoid stack trace leaks, and block flags from being injected by rejecting inputs starting with hyphens (`-`).
