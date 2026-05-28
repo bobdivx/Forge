@@ -484,7 +484,8 @@ export default function DiscussionComposer() {
         <div class="fixed inset-0 z-[100] flex items-stretch lg:hidden" role="dialog" aria-modal="true" aria-labelledby="discussion-team-picker-title">
           <button
             type="button"
-            class="absolute inset-0 z-0 bg-black/40"
+            class="absolute inset-0 z-0 bg-black/40 cursor-default"
+            tabIndex={-1}
             aria-label="Fermer"
             onClick={() => setTeamPickerOpen(false)}
           />
@@ -530,7 +531,8 @@ export default function DiscussionComposer() {
         <div class="fixed inset-0 z-[101] flex items-stretch lg:hidden" role="dialog" aria-modal="true" aria-labelledby="discussion-profile-drawer-title">
           <button
             type="button"
-            class="absolute inset-0 z-0 bg-black/40"
+            class="absolute inset-0 z-0 bg-black/40 cursor-default"
+            tabIndex={-1}
             aria-label="Fermer"
             onClick={() => setProfileDrawerOpen(false)}
           />

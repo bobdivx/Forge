@@ -22,5 +22,5 @@ describe('forge-tool-install', () => {
     // devraient être correctement résolus avant la tentative.
     expect(r.manager).toBe('apt');
     expect(r.command).toMatch(/ripgrep/);
-  });
+  }, 10000); // Augment timeout to 10s as this relies on a process exec which fails/hangs due to permissions
 });

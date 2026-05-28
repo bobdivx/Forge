@@ -1,0 +1,3 @@
+## 2024-05-28 - Full-screen background elements receiving focus
+**Learning:** In the app's modals and drawers (`MobileMenu.tsx`, `DiscussionComposer.tsx`), full-screen backdrop overlay elements implemented with `<button>` receive keyboard focus by default, which creates invisible and confusing tab stops for users relying on keyboard navigation.
+**Action:** When implementing clickable `<button>` elements that act purely as visual backdrops (e.g., for "click away to close"), ensure they include `tabIndex={-1}` to remove them from the tab order and `cursor-default` to indicate they are not standard interactive buttons.
