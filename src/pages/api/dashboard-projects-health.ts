@@ -31,6 +31,9 @@ function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean 
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
 
+  // Démarre la requête gateway ZimaOS le plus tôt possible pour qu'elle s'exécute en parallèle
+  const zimaosFetchPromise = fetchZimaOSSessionsPayload(email).catch((e) => e);
+
   const payload: {
     projects: Array<{
       id: number;
@@ -69,9 +72,16 @@ export const GET: APIRoute = async ({ locals }) => {
 
   try {
     const { db, Project, AgentTask } = await loadAstroDb();
-    const projects = await db.select().from(Project).orderBy(desc(Project.updatedAt)).limit(12);
 
-    const tasksAll = await db.select().from(AgentTask).limit(500);
+    // Parallélise les requêtes DB (Project et AgentTask) et getWorkSystemStatus
+    const [projectsRes, tasksAll, workScheduler] = await Promise.all([
+      db.select().from(Project).orderBy(desc(Project.updatedAt)).limit(12),
+      db.select().from(AgentTask).limit(500),
+      getWorkSystemStatus()
+    ]);
+
+    const projects = projectsRes as ProjectRow[];
+    payload.swarm.workScheduler = workScheduler;
 
     const countForProject = (pid: number | null | undefined) => {
       const pend = tasksAll.filter(
@@ -83,7 +93,8 @@ export const GET: APIRoute = async ({ locals }) => {
       return { pendingOrRunning: pend.length, running };
     };
 
-    for (const p of projects as ProjectRow[]) {
+    // Prépare les promesses pour la résolution I/O des projets en parallèle
+    const projectPromises = projects.map(async (p) => {
       let dev: {
         ok: boolean;
         running?: boolean;
@@ -131,16 +142,20 @@ export const GET: APIRoute = async ({ locals }) => {
         dev.hint = 'Erreur lecture disque';
       }
 
-      payload.projects.push({
+      return {
         id: p.id,
         name: p.name,
         swarmEnabled: Number(p.swarmEnabled) === 1,
         devServer: dev,
         tasks: countForProject(p.id),
-      });
+      };
+    });
+
+    // Attendre les résultats dans le même ordre pour préserver l'ordre du tri DB (desc(Project.updatedAt))
+    for (const promise of projectPromises) {
+      payload.projects.push(await promise);
     }
 
-    payload.swarm.workScheduler = await getWorkSystemStatus();
   } catch (e) {
     payload.dbError = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify(payload), {
@@ -150,7 +165,10 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   try {
-    const oc = await fetchZimaOSSessionsPayload(email);
+    const oc = await zimaosFetchPromise;
+    if (oc instanceof Error) {
+      throw oc;
+    }
     payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
       ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])

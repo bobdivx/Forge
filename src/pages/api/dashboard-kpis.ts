@@ -25,6 +25,9 @@ function isOpenQueueStatus(st: string): boolean {
 }
 
 export const GET: APIRoute = async () => {
+  // Démarre la requête gateway ZimaOS le plus tôt possible pour qu'elle s'exécute en parallèle avec la DB
+  const zimaosFetchPromise = fetchZimaOSSessionsPayload(undefined).catch((e) => e);
+
   const base = {
     projectCount: 0,
     tasksTotal: 0,
@@ -76,7 +79,10 @@ export const GET: APIRoute = async () => {
   }
 
   try {
-    const zimaosResult = await fetchZimaOSSessionsPayload(undefined);
+    const zimaosResult = await zimaosFetchPromise;
+    if (zimaosResult instanceof Error) {
+      throw zimaosResult;
+    }
     const ocSessions = zimaosResult.ok
       ? (normalizeZimaOSSessions(zimaosResult.data) as Record<string, unknown>[])
       : [];
