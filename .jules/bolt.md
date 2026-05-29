@@ -1,0 +1,3 @@
+## 2024-03-24 - Optimize Gateway API Fetch Concurrency in Astro API routes
+**Learning:** Initiating slow external network requests sequentially after local database queries and filesystem checks creates a bottleneck in Astro API route response times.
+**Action:** When an API handler requires both external fetches and local data, start the external fetch as a Promise at the very beginning of the handler (with a dummy catch to prevent unhandled rejection crashes), execute the local operations, and then `await` the Promise at the end to parallelize the workloads.
