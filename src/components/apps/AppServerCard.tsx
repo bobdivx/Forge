@@ -70,8 +70,8 @@ export default function AppServerCard({
   return (
     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
       {/* ── Ligne principale ─────────────────────────────────────────── */}
-      <div class="flex flex-col lg:flex-row lg:items-end gap-3">
-        <div class="flex-1 grid sm:grid-cols-2 gap-3">
+      <div class="flex flex-col gap-3">
+        <div class="flex-1 grid grid-cols-2 gap-3">
           {/* Libellé */}
           <div>
             <label class={labelCls}>Libellé</label>

@@ -1278,9 +1278,22 @@ export async function ensureBuiltinToolsSeeded(): Promise<void> {
       console.warn('[tool-catalog] doctrine seed failed:', e);
     }
 
-    // 2. Outils builtin - upsert par name
+    // 2. Outils builtin et outils de plugins - upsert par name
+    let pluginTools: BuiltinToolDefinition[] = [];
+    try {
+      const { PluginLoader } = await import('./forge-plugin-loader');
+      const { join } = await import('node:path');
+      const pluginDir = join(process.cwd(), 'plugins');
+      const loader = new PluginLoader(pluginDir);
+      await loader.loadPlugins();
+      pluginTools = loader.getTools();
+    } catch (e) {
+      console.warn('[tool-catalog] Failed to load plugins:', e);
+    }
+    const ALL_TOOLS = [...BUILTIN_TOOLS, ...pluginTools];
+
     const seededIds: number[] = [];
-    for (const def of BUILTIN_TOOLS) {
+    for (const def of ALL_TOOLS) {
       // Injecter la classification (Phase 2) dans implementationConfig pour
       // qu'elle survive au round-trip DB.
       const cfgWithClassification: Record<string, unknown> = {

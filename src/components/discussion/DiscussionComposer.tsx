@@ -19,12 +19,12 @@ import { handleDiscussionSlashCommand } from './composer/slashCommands';
 const POLL_ATTEMPTS = 48; // 48 * 2.5s = ~2 minutes
 const POLL_INTERVAL_MS = 2500;
 
-export default function DiscussionComposer() {
+export default function DiscussionComposer({ initialProjectId }: { initialProjectId?: string }) {
   type PolicyBadgeState = { mode: 'off' | 'warn' | 'enforce'; state: 'idle' | 'compliant' | 'non_compliant' };
   const [projects, setProjects] = useState<Project[]>([]);
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [projectId, setProjectId] = useState<string>('');
+  const [projectId, setProjectId] = useState<string>(initialProjectId || '');
   const [requestId, setRequestId] = useState<string>('');
   const [agentId, setAgentId] = useState<string>('');
   const [message, setMessage] = useState('');

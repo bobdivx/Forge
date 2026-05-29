@@ -1,4 +1,6 @@
 import { getAllConfig, getOllamaOriginResolved } from './config-db';
+import { IterationBudget } from './forge-iteration-budget';
+import { classifyApiError } from './forge-error-classifier';
 import { buildAgentPolicyContext } from './agent-rules';
 import {
   runForgeTool,
@@ -458,14 +460,13 @@ export async function runForgeOrchestrator(
     { role: 'user' as const, content: input.message },
   ];
 
-  let turn = 0;
-  const maxTurns = 8;
+  const budget = new IterationBudget(8);
   let finalReply = '';
   let finalPlan: ForgePlanItem[] | null = null;
   let lastToolResult: ForgeToolResult | undefined;
 
-  while (turn < maxTurns) {
-    turn++;
+  while (budget.consume()) {
+    const turn = budget.getUsed();
     const llmLabelBase = provider === 'gemini' ? 'gemini_chat' : 'ollama_chat';
     await persistStep({
       type: 'llm',
@@ -552,29 +553,32 @@ export async function runForgeOrchestrator(
         }));
         model = workModel;
         provider = 'gemini';
-      } else if (isRetriableGeminiHttpStatus(chat.status)) {
-        await persistStep({
-          type: 'llm',
-          label: 'gemini_ollama_failover',
-          payload: String(workModel),
-          status: 'running',
-        });
-        const fb = await resolveAvailableModel(preferredModel, { skipGemini: true });
-        if (fb.provider !== 'ollama') {
-          const err = `Erreur Gemini ${chat.status}: ${chat.error || 'inconnue'}`;
+      } else {
+        const classified = classifyApiError(chat, { provider: 'gemini', model: workModel });
+        if (classified.retryable && isRetriableGeminiHttpStatus(chat.status)) {
+          await persistStep({
+            type: 'llm',
+            label: 'gemini_ollama_failover',
+            payload: String(workModel),
+            status: 'running',
+          });
+          const fb = await resolveAvailableModel(preferredModel, { skipGemini: true });
+          if (fb.provider !== 'ollama') {
+            const err = `Erreur Gemini ${chat.status}: ${chat.error || 'inconnue'}`;
+            await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
+            return { reply: err, provider: 'gemini', model: workModel, steps, plan: null };
+          }
+          workProvider = 'ollama';
+          workModel = fb.model;
+          workOrigin = fb.origin;
+          provider = 'ollama';
+          model = workModel;
+          origin = workOrigin;
+        } else {
+          const err = `Erreur Gemini ${chat.status}: ${chat.error || 'inconnue'} (${classified.reason})`;
           await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
           return { reply: err, provider: 'gemini', model: workModel, steps, plan: null };
         }
-        workProvider = 'ollama';
-        workModel = fb.model;
-        workOrigin = fb.origin;
-        provider = 'ollama';
-        model = workModel;
-        origin = workOrigin;
-      } else {
-        const err = `Erreur Gemini ${chat.status}: ${chat.error || 'inconnue'}`;
-        await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
-        return { reply: err, provider: 'gemini', model: workModel, steps, plan: null };
       }
     }
 
@@ -592,7 +596,11 @@ export async function runForgeOrchestrator(
       });
 
       if (!res.ok) {
-        const err = `Erreur Ollama HTTP ${res.status}`;
+        const classified = classifyApiError({ status: res.status, message: await res.text().catch(() => '') }, { provider: 'ollama', model: workModel });
+        if (classified.shouldFallback) {
+           // fallback logic could go here
+        }
+        const err = `Erreur Ollama HTTP ${res.status} (${classified.reason})`;
         await persistStep({ type: 'llm', label: 'error', payload: err, status: 'failed' });
         return { reply: err, provider: 'ollama', model: workModel, steps, plan: null };
       }
@@ -651,6 +659,11 @@ export async function runForgeOrchestrator(
           content: formatToolResultForModel(tool, args, toolResult),
           tool_call_id: toolCallId,
         });
+
+        // Refund budget on successful programmatic tool execution to allow deeper reasoning
+        if (tool.category !== 'llm' && toolResult.ok) {
+          budget.refund();
+        }
       }
       continue;
     }

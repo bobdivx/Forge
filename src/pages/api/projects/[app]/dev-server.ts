@@ -251,7 +251,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     cwd,
     detached: true,
     stdio: ['ignore', fd, fd],
-    shell: false,
+    shell: process.platform === 'win32',
     env: spawnEnv,
   });
 

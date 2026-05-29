@@ -66,7 +66,8 @@ export async function listGitBranchesDetailed(cwd: string): Promise<BranchListRe
 }
 
 function gitWithGithubAuth(cwd: string, token: string, gitArgs: string[]) {
-  return execFileAsync('git', ['-c', `http.extraHeader=Authorization: Bearer ${token}`, ...gitArgs], {
+  const b64 = Buffer.from(`x-access-token:${token}`).toString('base64');
+  return execFileAsync('git', ['-c', `http.extraHeader=Authorization: Basic ${b64}`, ...gitArgs], {
     cwd,
     encoding: 'utf8',
     maxBuffer: 4 * 1024 * 1024,

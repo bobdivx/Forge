@@ -745,7 +745,20 @@ export async function executeDynamicTool(
 
   if (tool.implementationKind === 'builtin') {
     const handlerName = String((tool.implementationConfig.handler as string) || tool.name);
-    const handler = BUILTIN_HANDLERS[handlerName];
+    let handler = BUILTIN_HANDLERS[handlerName];
+    if (!handler && (globalThis as any).__forgePluginHandlers) {
+      const pluginHandler = (globalThis as any).__forgePluginHandlers[handlerName];
+      if (typeof pluginHandler === 'function') {
+        handler = async (args: any, ctx: any) => {
+          try {
+            const res = await pluginHandler(args, ctx);
+            return { ok: true, tool: tool.name, output: typeof res === 'string' ? res : JSON.stringify(res) };
+          } catch (e: any) {
+            return { ok: false, tool: tool.name, error: e.message };
+          }
+        };
+      }
+    }
     if (!handler) {
       return { ok: false, tool: tool.name, error: `Handler builtin "${handlerName}" inconnu.` };
     }

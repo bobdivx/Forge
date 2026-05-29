@@ -3,19 +3,13 @@
 export const prerender = false;
 
 import DashboardLayout from '../../../layouts/DashboardLayout.astro';
-import ProjectDemandesForm from '../../../components/apps/ProjectDemandesForm';
-import AppProjectOps from '../../../components/apps/AppProjectOps';
+import DiscussionComposer from '../../../components/discussion/DiscussionComposer';
 import AppGitPanel from '../../../components/apps/AppGitPanel';
-import AuditLauncher from '../../../components/apps/AuditLauncher';
-import GitHistoryCard from '../../../components/apps/GitHistoryCard';
-import GithubFolderCard from '../../../components/apps/GithubFolderCard';
-import AgentActivityCanvas from '../../../components/apps/AgentActivityCanvas';
-import AppCloudflarePublish from '../../../components/apps/AppCloudflarePublish';
+import AppProjectOps from '../../../components/apps/AppProjectOps';
 import path from 'path';
-import { db, Project, Request, eq, desc } from 'astro:db';
+import { db, Project, Request, AgentAppIssue, eq, desc } from 'astro:db';
 import { resolveProjectPathFromDbProject, isSafeRepoDirName } from '../../../lib/forge-repos';
-import { getGitCommits, getGitSummary } from '../../../lib/project-git';
-import { summarizeGithubFolder } from '../../../lib/project-github-meta';
+import { getGitCommits } from '../../../lib/project-git';
 import { mapDbRequestToUi } from '../../../lib/forge-request-mapper';
 
 const rawId = Astro.params.id;
@@ -48,198 +42,169 @@ if (!isSafeRepoDirName(folderKey)) {
 
 const displayName = row.name || folderKey;
 
-const { commits, error: gitLogError } = getGitCommits(projectPath, 30);
-const gitSummary = getGitSummary(projectPath);
-
-let githubSummary;
-try {
-  githubSummary = summarizeGithubFolder(projectPath);
-} catch {
-  githubSummary = {
-    present: false,
-    workflows: [],
-    dependabot: false,
-    codeowners: false,
-    funding: false,
-    issueTemplatesCount: 0,
-    pullRequestTemplatePaths: [],
-    notablePaths: [],
-    remoteOriginUrl: null,
-  };
-}
+// Fetch Data for the IDE-like Sidebar
+const { commits } = getGitCommits(projectPath, 20);
 
 let requests = [];
+let issues = [];
 try {
   const dbReq = await db
     .select()
     .from(Request)
     .where(eq(Request.projectId, row.id))
     .orderBy(desc(Request.updatedAt))
-    .limit(100);
+    .limit(20);
   requests = dbReq.map(mapDbRequestToUi);
+
+  issues = await db
+    .select()
+    .from(AgentAppIssue)
+    .where(eq(AgentAppIssue.projectId, row.id))
+    .orderBy(desc(AgentAppIssue.updatedAt))
+    .limit(20);
 } catch {
   /* Astro DB */
 }
 
-const lastSync = commits[0]?.date || '—';
 const app = {
-  name: displayName,
-  status: gitSummary.isRepo ? (gitSummary.dirty ? 'Modifications locales' : 'Dépôt Git') : 'Dépôt local',
-  lastSync,
   url: `${folderKey.toLowerCase()}.forge.local`,
 };
 ---
 
-<DashboardLayout title={`Application: ${displayName}`} currentPath="/apps">
-  <div class="max-w-7xl mx-auto space-y-6">
+<DashboardLayout title={`Chat Studio: ${displayName}`} currentPath="/apps">
+  <div class="max-w-[95%] mx-auto space-y-4 h-full flex flex-col">
 
-    <!-- Header projet -->
-    <div class="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6">
-      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <a href="/apps" class="text-xs uppercase tracking-widest text-gray-400 hover:text-[#175B37] transition-colors">
-            ← Retour aux projets
-          </a>
-          <h1 class="mt-2 text-2xl font-bold text-gray-900">{displayName}</h1>
-          <p class="mt-1 text-[10px] font-mono text-gray-400">
-            Projet #{row.id} ·{' '}
-            <a href={`/apps/${encodeURIComponent(folderKey)}`} class="hover:underline" style="color:#175B37">
-              /apps/{folderKey}
-            </a>
-          </p>
-          {displayName !== folderKey && (
-            <p class="mt-1 text-[10px] font-mono text-gray-400">Dépôt : {folderKey}</p>
-          )}
-          <p class="mt-1 text-[11px] font-mono text-gray-400 break-all">{projectPath}</p>
-        </div>
-        <div class="flex flex-col items-end gap-2">
-          <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-50 text-green-600">{app.status}</span>
-          {gitSummary.isRepo && (
-            <div class="text-right text-[11px] font-mono space-y-0.5 text-gray-400">
-              <div>
-                branche <span class="text-blue-500">{gitSummary.branch || '—'}</span>
-                {gitSummary.dirty && <span class="text-yellow-500 ml-2">● non commité</span>}
-              </div>
-              {gitSummary.aheadBehind && <div>{gitSummary.aheadBehind} vs upstream</div>}
-              {gitSummary.error && <div class="text-yellow-500">{gitSummary.error}</div>}
-            </div>
-          )}
-        </div>
+    <!-- Header projet super clean -->
+    <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between px-2 shrink-0">
+      <div>
+        <a href="/dashboard" class="text-xs uppercase tracking-widest text-gray-400 hover:text-[#175B37] transition-colors flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+          Retour aux applications
+        </a>
+        <h1 class="mt-2 text-2xl font-bold text-gray-900 flex items-center gap-3">
+          <div class="h-8 w-8 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-sm" style="background:#175B37">
+            {displayName.charAt(0).toUpperCase()}
+          </div>
+          {displayName}
+        </h1>
+        <p class="mt-1 text-xs text-gray-400">
+          Chemin: <span class="font-mono bg-gray-100 px-1 py-0.5 rounded text-gray-500">{projectPath}</span>
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+          <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+          Studio Actif
+        </span>
       </div>
     </div>
 
-    <AppCloudflarePublish client:load appFolderKey={folderKey} />
-
-    <!-- HERO : ce que les agents ont fait sur ce projet -->
-    <AgentActivityCanvas client:load appName={folderKey} />
-
-    <!-- Création rapide de demande -->
-    <ProjectDemandesForm client:load appName={folderKey} />
-
-    <!-- Sections secondaires : repliées par défaut -->
-    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
-        <span class="flex items-center gap-2">
-          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
-          Demandes utilisateur ({requests.length})
-        </span>
-        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
-      </summary>
-      <div class="px-6 pb-6">
-        {requests.length > 0 ? (
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {requests.map((request) => (
-              <article class="border border-gray-100 rounded-xl p-4 bg-gray-50">
-                <div class="flex items-center justify-between gap-3">
-                  <p class="text-[10px] text-gray-400 font-mono">{request.id}</p>
-                  <span
-                    class={`text-[10px] uppercase font-semibold px-2 py-1 rounded ${
-                      request.status === 'Traite'
-                        ? 'bg-green-50 text-green-600'
-                        : request.status === 'En cours'
-                          ? 'bg-blue-50 text-blue-600'
-                          : request.status === 'Rejetée'
-                            ? 'bg-red-50 text-red-500'
-                            : 'bg-yellow-50 text-yellow-600'
-                    }`}
-                  >
-                    {request.status}
-                  </span>
-                </div>
-                <p class="mt-2 text-sm text-gray-800 font-medium">{request.title}</p>
-                {request.detail && <p class="mt-1.5 text-xs text-gray-400">{request.detail}</p>}
-                <p class="mt-2 text-xs text-gray-400">
-                  Type : <span class="text-gray-600">{request.type}</span>
-                </p>
-                <p class="text-xs text-gray-400">
-                  Agent : <span class="font-mono" style="color:#175B37">{request.agent}</span>
-                </p>
-                <p class="text-xs text-gray-400 mt-2">
-                  {new Date(request.updatedAt).toLocaleString('fr-FR')}
-                </p>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div class="border border-gray-100 rounded-xl p-4 bg-gray-50 text-sm text-gray-400">
-            Aucune demande enregistrée. Utilisez le formulaire ci-dessus.
-          </div>
-        )}
-      </div>
-    </details>
-
-    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
-        <span class="flex items-center gap-2">
-          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
-          Audit & exécution
-        </span>
-        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
-      </summary>
-      <div class="px-6 pb-6 space-y-5">
-        <AuditLauncher client:load projectName={displayName} projectPath={projectPath} />
-      </div>
-    </details>
-
-    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
-        <span class="flex items-center gap-2">
-          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
-          Serveurs de dev & ports
-        </span>
-        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
-      </summary>
-      <div class="px-6 pb-6">
+    <!-- Interface Antigravity-like (Le Chat + IDE Sidebar) -->
+    <div class="animate-fade-in pt-2 flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
+      
+      <!-- IDE Sidebar (Activity, Bugs, Features) -->
+      <aside class="w-full lg:w-[400px] shrink-0 flex flex-col gap-4 overflow-y-auto pr-1 pb-4 custom-scrollbar">
+        
+        {/* Contrôles Serveur de Dev */}
         <AppProjectOps client:load appName={folderKey} forgeVirtualHost={app.url} />
-      </div>
-    </details>
 
-    <details class="group bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-      <summary class="cursor-pointer px-6 py-4 flex items-center justify-between text-sm font-semibold text-gray-700 hover:text-[#175B37] transition-colors">
-        <span class="flex items-center gap-2">
-          <span class="text-[10px] uppercase tracking-widest text-gray-400">Section</span>
-          Git & GitHub
-        </span>
-        <span class="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
-      </summary>
-      <div class="px-6 pb-6 space-y-5">
+        {/* Contrôles Git (Pull, Commit, Checkout) */}
         <AppGitPanel
           client:load
           appName={folderKey}
           initialGithubBranchDev={row.githubBranchDev ?? 'dev'}
           initialGithubBranchProd={row.githubBranchProd ?? 'main'}
         />
-        <GithubFolderCard client:load summary={githubSummary} />
-        <GitHistoryCard
-          client:load
-          commits={commits}
-          appName={folderKey}
-          gitLogError={gitLogError}
-          isRepo={gitSummary.isRepo}
-          appHttpUrl={`http://${app.url}`}
-        />
-      </div>
-    </details>
 
+        {/* Historique Git (Ce que les agents ont fait) */}
+        <div class="bg-white rounded-[1.5rem] border border-gray-200/90 shadow-sm p-4">
+          <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Activité Récente (Git)
+          </h3>
+          <div class="space-y-3">
+            {commits && commits.length > 0 ? commits.slice(0, 5).map(commit => (
+              <div class="text-xs border-l-2 border-gray-200 pl-3 py-1">
+                <p class="text-gray-800 font-medium truncate" title={commit.message}>{commit.message}</p>
+                <div class="flex items-center justify-between mt-1">
+                  <span class="text-[10px] text-gray-400 font-mono">{commit.hash.substring(0,7)}</span>
+                  <span class="text-[10px] text-gray-400">{commit.author_name}</span>
+                </div>
+              </div>
+            )) : (
+              <p class="text-xs text-gray-400 italic">Aucun historique Git trouvé.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Fonctionnalités & Demandes */}
+        <div class="bg-white rounded-[1.5rem] border border-gray-200/90 shadow-sm p-4">
+          <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+            Demandes & Fonctionnalités
+          </h3>
+          <div class="space-y-2">
+            {requests && requests.length > 0 ? requests.map(req => (
+              <div class="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                <div class="flex items-center justify-between mb-1">
+                  <span class={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${req.status === 'Traite' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {req.status}
+                  </span>
+                  <span class="text-[9px] text-gray-400">{new Date(req.updatedAt).toLocaleDateString()}</span>
+                </div>
+                <p class="text-xs text-gray-700 font-medium line-clamp-2" title={req.title}>{req.title}</p>
+              </div>
+            )) : (
+              <p class="text-xs text-gray-400 italic">Aucune fonctionnalité tracée.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Bugs & Résolutions */}
+        <div class="bg-white rounded-[1.5rem] border border-gray-200/90 shadow-sm p-4">
+          <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" /></svg>
+            Bugs & Résolutions
+          </h3>
+          <div class="space-y-2">
+            {issues && issues.length > 0 ? issues.map(issue => (
+              <div class="bg-red-50/50 rounded-lg p-2.5 border border-red-100/50">
+                <div class="flex items-center justify-between mb-1">
+                  <span class={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${issue.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {issue.status}
+                  </span>
+                  <span class="text-[9px] text-gray-400">{new Date(issue.updatedAt || issue.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p class="text-xs text-gray-800 font-medium line-clamp-2" title={issue.title}>{issue.title}</p>
+              </div>
+            )) : (
+              <p class="text-xs text-gray-400 italic">Aucun bug signalé.</p>
+            )}
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- Main Chat Area -->
+      <main class="flex-1 min-w-0 flex flex-col">
+        <section class="flex-1 rounded-[1.75rem] border border-gray-200/90 bg-white p-1 shadow-sm ring-1 ring-black/[0.03] sm:p-2 flex flex-col min-h-0 relative">
+          <DiscussionComposer client:load initialProjectId={projectId.toString()} />
+        </section>
+      </main>
+
+    </div>
   </div>
+
+  <style>
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: rgba(156, 163, 175, 0.3);
+      border-radius: 20px;
+    }
+  </style>
 </DashboardLayout>
