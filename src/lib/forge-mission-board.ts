@@ -121,17 +121,21 @@ export type MissionBoardOverview = {
 export async function getMissionBoardOverview(): Promise<MissionBoardOverview> {
   const { db, Request, AgentAppIssue, AgentTask, TechWatchSuggestion, Project } = await loadAstroDb();
 
-  const projects = await db.select().from(Project);
+  // ⚡ Bolt Optimization: Group independent database queries in a Promise.all block.
+  // This executes queries concurrently rather than sequentially, reducing total wait time
+  // to the duration of the single longest query and significantly speeding up the Mission Board API.
+  const [projects, requests, issues, tasks, techRows] = await Promise.all([
+    db.select().from(Project),
+    db.select().from(Request).orderBy(desc(Request.id)).limit(300),
+    db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.id)).limit(300),
+    db.select().from(AgentTask).limit(800),
+    TechWatchSuggestion
+      ? db.select().from(TechWatchSuggestion).orderBy(desc(TechWatchSuggestion.id)).limit(200)
+      : Promise.resolve([]),
+  ]);
+
   const projectNames: Record<number, string> = {};
   for (const p of projects) projectNames[p.id] = String(p.name || '');
-
-  const requests = await db.select().from(Request).orderBy(desc(Request.id)).limit(300);
-  const issues = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.id)).limit(300);
-  const tasks = await db.select().from(AgentTask).limit(800);
-
-  const techRows = TechWatchSuggestion
-    ? await db.select().from(TechWatchSuggestion).orderBy(desc(TechWatchSuggestion.id)).limit(200)
-    : [];
 
   // Index task ↔ issue
   const issueTaskMap = new Map<number, { id: number; status: string }>();
