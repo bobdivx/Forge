@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getReposRootResolved } from '../../lib/forge-repos';
 import { getConfig } from '../../lib/config-db';
 
-const execPromise = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -14,6 +14,11 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (!repoUrl || !repoName) {
       return new Response(JSON.stringify({ error: 'repoUrl et repoName requis' }), { status: 400 });
+    }
+
+    // 🛡️ Sentinel: Validate repoName to prevent directory traversal and command injection
+    if (!/^[a-zA-Z0-9_.-]+$/.test(repoName) || repoName.includes('..')) {
+      return new Response(JSON.stringify({ error: 'Nom de dépôt invalide' }), { status: 400 });
     }
 
     const githubToken = await getConfig('githubToken', true);
@@ -30,19 +35,16 @@ export const POST: APIRoute = async ({ request }) => {
 
     // Inject token into URL for private repo cloning
     // Assuming format https://github.com/user/repo.git
+    // 🛡️ Sentinel: Make sure repoUrl is basically valid before injecting
+    if (!repoUrl.startsWith('https://github.com/')) {
+        return new Response(JSON.stringify({ error: 'URL Github invalide' }), { status: 400 });
+    }
     const authUrl = repoUrl.replace('https://', `https://oauth2:${githubToken}@`);
 
     // Clone the repository
-    const { stdout, stderr } = await execPromise(`git clone ${authUrl} ${repoName}`, { cwd: reposRoot });
-
-    // Try to auto-sync it into the database
-    try {
-      const syncScript = path.join(process.cwd(), 'src/pages/api/sync-projects.ts');
-      // Just ping the sync endpoint internally or rely on the user clicking "Sync"
-      // For simplicity, we just clone here. The user can click "Synchroniser" on the dashboard.
-    } catch(e) {
-      // Ignore sync error
-    }
+    // 🛡️ Sentinel: Prevent command injection using execFile instead of exec with string interpolation,
+    // and use `--` to indicate end of options.
+    const { stdout, stderr } = await execFileAsync('git', ['clone', '--', authUrl, repoName], { cwd: reposRoot });
 
     return new Response(JSON.stringify({ 
       status: 'ok', 
@@ -53,7 +55,11 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message || 'Erreur lors du clonage' }), {
+    // 🛡️ Sentinel: Prevent token leak in error messages
+    let msg = error.message || 'Erreur lors du clonage';
+    msg = msg.replace(/https:\/\/[^@]+@/g, 'https://***@');
+
+    return new Response(JSON.stringify({ error: msg }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

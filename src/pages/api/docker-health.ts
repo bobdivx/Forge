@@ -1,10 +1,15 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async () => {
   try {
     const format = '{"ID":"{{.ID}}","Names":"{{.Names}}","Image":"{{.Image}}","Status":"{{.Status}}","State":"{{.State}}","Ports":"{{.Ports}}"}';
-    const output = execSync(`docker ps -a --format '${format}'`).toString().trim();
+    // 🛡️ Sentinel: Use execFileAsync with argument arrays instead of execSync to prevent command injection
+    const { stdout } = await execFileAsync('docker', ['ps', '-a', '--format', format]);
+    const output = stdout.trim();
     
     if (!output) {
       return new Response(JSON.stringify({ containers: [] }), {
