@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,12 +24,25 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
+    // Validation stricte pour éviter l'injection de commandes/flags
+    if (!/^[a-zA-Z0-9_-]+$/.test(containerId) || !/^\d+$/.test(tail)) {
+      return new Response(JSON.stringify({ error: "Paramètres invalides" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Utilisation d'un tableau d'arguments pour empêcher l'injection via shell
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        // Docker logs output can be stdout or stderr
+        logs = stdout ? stdout.trim().split('\n') : [];
+        if (stderr && stderr.trim().length > 0 && logs.length === 0) {
+            logs = stderr.trim().split('\n');
+        } else if (stderr && stderr.trim().length > 0) {
+            logs.push(...stderr.trim().split('\n'));
+        }
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
