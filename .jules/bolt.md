@@ -1,0 +1,5 @@
+## 2024-06-02 - Drizzle ORM Imports and Astro DB Module Resolution
+
+**Learning:** When attempting to resolve Drizzle ORM imports (like `count`, `eq`, `inArray`) for performance optimizations in Astro API routes, NEVER manually install `drizzle-orm` via `package.json` to resolve `tsc` or `vitest` missing module errors. The project uses Astro's custom module resolution for `@astrojs/db` and built-in wrappers. Attempting to force-install external Drizzle dependencies breaks the internal `vite` resolution matrix and causes massive downstream test failures (e.g., `Failed to load url drizzle-orm` and `SQL<unknown> is not assignable to SQL<unknown>`).
+
+**Action:** Rely exclusively on imports provided by internal wrappers (e.g., `import { loadAstroDb } from '../../lib/load-astro-db'`) to extract Drizzle helpers (`eq`, `count`, `inArray`, `gte`). If `pnpm run check` complains about missing modules after code changes, use `pnpm reinstall` to clean and re-link the workspace patches instead of adding dependencies directly.
