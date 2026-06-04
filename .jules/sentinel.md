@@ -1,0 +1,9 @@
+## 2024-05-18 - [Fix Command Injection in Docker Logs API]
+**Vulnerability:** A critical command injection vulnerability existed in `src/pages/api/docker-logs.ts` where unsanitized user inputs (`id` and `tail` from URL query parameters) were concatenated into a shell command string (`docker logs --tail ${tail} ${containerId}`) and executed using `execSync`. This allowed attackers to potentially execute arbitrary commands on the host by supplying a crafted `id` or `tail` parameter containing shell metacharacters like `;`, `&&`, or `|`.
+**Learning:** Shell string concatenation with user input in functions like `execSync` or `exec` is extremely dangerous and a classic vector for command injection. Even seemingly benign endpoints for fetching logs can expose the entire host system if inputs aren't sanitized. Furthermore, synchronous execution via `execSync` can block the Node.js event loop, causing denial of service.
+**Prevention:**
+1.  **Never use `exec` or `execSync` with unsanitized user input.**
+2.  **Use Argument Arrays:** Use `execFile` (or its promisified version `execFileAsync`) and pass arguments as an array (`['logs', '--tail', tail.toString(), '--', containerId]`). This guarantees that inputs are treated strictly as arguments and not evaluated by the shell.
+3.  **Strict Input Validation:** Always validate parameters. Check that `containerId` only contains safe characters (e.g., `/^[a-zA-Z0-9_-]+$/`) and does not start with a hyphen (`-`) to prevent flag injection. Parse numeric inputs like `tail` and verify they are valid numbers.
+4.  **Use Asynchronous Execution:** Prefer asynchronous functions like `execFileAsync` to prevent blocking the event loop.
+5.  **Use the `--` argument separator:** When passing user input as the final argument (e.g., a file path or container name), prepend it with `--` to signify the end of command options and prevent the executable from interpreting the input as a flag.
