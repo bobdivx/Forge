@@ -1,0 +1,3 @@
+## 2024-06-06 - Concurrent Data Fetching in SSR/API Routes
+**Learning:** Initiating slow external gateway calls (like `fetchZimaOSSessionsPayload`) early in an Astro API route as un-awaited Promises (with defensive `.catch(() => {})` handlers to prevent `UnhandledPromiseRejection`) allows them to run concurrently with internal `astro:db` queries. This eliminates sequential blocking.
+**Action:** When an API route depends on both internal database reads and external network fetches, start the network fetch immediately at the top of the handler, group independent DB queries with `Promise.all`, and only `await` the external fetch just before its result is strictly needed.
