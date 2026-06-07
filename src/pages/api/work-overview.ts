@@ -108,14 +108,20 @@ export const GET: APIRoute = async () => {
   try {
     const { db, AgentAppIssue, AgentTask, AgentDependencyRequest, Request, Project, desc } = await loadAstroDb();
 
-    const projectRows = await db.select().from(Project);
+    // ⚡ Bolt: Execute independent database queries concurrently to minimize total I/O latency
+    const [projectRows, issues, taskRows, requestRows, depRows] = await Promise.all([
+      db.select().from(Project),
+      db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt)).limit(400),
+      db.select().from(AgentTask).limit(1200),
+      db.select().from(Request).orderBy(desc(Request.createdAt)).limit(200),
+      db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt)).limit(120),
+    ]);
+
     const projectNames: Record<number, string> = {};
     for (const p of projectRows) {
       projectNames[p.id] = String(p.name || '');
     }
 
-    const issues = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt)).limit(400);
-    const taskRows = await db.select().from(AgentTask).limit(1200);
     const issueTaskMap = buildIssueTaskMap(taskRows);
 
     const enriched: WorkOverviewIssue[] = issues.map((i) => {
@@ -150,7 +156,6 @@ export const GET: APIRoute = async () => {
       };
     });
 
-    const requestRows = await db.select().from(Request).orderBy(desc(Request.createdAt)).limit(200);
     const agentIdeas = requestRows.filter((r) => {
       const rt = String(r.requestType || '');
       if (rt === 'Amélioration') return true;
@@ -196,8 +201,6 @@ export const GET: APIRoute = async () => {
     }));
 
     const proposalsPending = requestRows.filter((r) => String(r.status) === 'pending').length;
-
-    const depRows = await db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt)).limit(120);
 
     const requestsPreview = requestRows.map((r) => ({
       id: r.id,
