@@ -1,0 +1,3 @@
+## 2024-11-20 - Accessible Icon-Only Buttons
+**Learning:** Icon-only buttons (like Start/Stop work and Configure inside AgentCard) require `aria-label` attributes to be decipherable by screen readers, and internal decorative `svg` elements should be hidden with `aria-hidden="true"` to prevent redundant reading. Additionally, explicit `focus-visible` classes (e.g. `focus-visible:ring-2 focus-visible:ring-[#175B37]`) are essential to ensure the interactive elements are obvious to keyboard users when navigating.
+**Action:** Always add `aria-label` to buttons without text content, hide internal icons via `aria-hidden="true"`, and apply standard `focus-visible` styles to ensure full keyboard and screen reader accessibility.
