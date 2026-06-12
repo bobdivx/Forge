@@ -1,0 +1,3 @@
+## 2024-06-12 - Icon-only buttons accessibility in Agent Cards
+**Learning:** Found that icon-only action buttons (like start/stop, configure) on `AgentCard` lack proper screen reader attributes and visible keyboard focus states. Relying solely on the `title` attribute is insufficient for robust accessibility, and the internal SVG icons can clutter screen reader output if not explicitly hidden.
+**Action:** When adding or reviewing icon-only interactive elements, ensure they always have an explicit `aria-label`, their child SVG icons are marked with `aria-hidden="true"`, and they include `focus-visible:ring-2` styling to clearly indicate focus for keyboard navigation.
