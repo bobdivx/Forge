@@ -1,13 +1,21 @@
 import type { APIRoute } from 'astro';
 import os from 'os';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { db, Config, eq } from 'astro:db';
 
 /** BusyBox `df` (Alpine) ne supporte pas `--output=pcent`. Lit la colonne capacité type `85%`. */
 function diskUsagePercentFromDf(targetPath: string): number | null {
   try {
-    const dfOutput = execSync(`df -P "${targetPath}" 2>/dev/null || df -P / 2>/dev/null || true`)
-      .toString();
+    let dfOutput = '';
+    try {
+      dfOutput = execFileSync('df', ['-P', targetPath]).toString();
+    } catch {
+      try {
+        dfOutput = execFileSync('df', ['-P', '/']).toString();
+      } catch {
+        dfOutput = '';
+      }
+    }
     const lines = dfOutput.trim().split('\n').filter(Boolean);
     const last = lines[lines.length - 1];
     const parts = last?.trim().split(/\s+/);
@@ -57,7 +65,7 @@ export const GET: APIRoute = async () => {
       diskUsage = diskUsagePercentFromDf('/mnt/Docker');
       githubDiskUsage = diskUsagePercentFromDf('/mnt/GitHub');
       
-      const unhealthy = execSync('docker ps --filter "health=unhealthy" --format "{{.Names}}"').toString();
+      const unhealthy = execFileSync('docker', ['ps', '--filter', 'health=unhealthy', '--format', '{{.Names}}']).toString();
       unhealthyContainers = unhealthy.split('\n').filter(Boolean);
     } catch (e) {
       console.error('Failed to fetch system data', e);
