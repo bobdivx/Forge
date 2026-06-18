@@ -1,0 +1,3 @@
+## 2024-06-18 - Accessible Icon Buttons in Dashboards
+**Learning:** Found multiple instances where text entities (like `&times;` or `✕`) are used inside `<button>` elements for close/dismiss actions without ARIA labels or focus rings. Screen readers will read out these HTML entities verbatim, which is confusing, and keyboard users lack visual feedback for focus state.
+**Action:** Always wrap text icons in `<span aria-hidden="true">` when the parent button has an `aria-label`, and use standard Tailwind `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]` styling to ensure accessibility and consistent UI.
