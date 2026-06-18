@@ -3,8 +3,13 @@ import { db, AgentTask, AgentMessage, desc } from 'astro:db';
 
 export const GET: APIRoute = async () => {
   try {
-    const tasks = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(50);
-    const messages = await db.select().from(AgentMessage).orderBy(desc(AgentMessage.timestamp)).limit(50);
+    // ⚡ Bolt Performance Optimization:
+    // Execute independent database queries concurrently using Promise.all
+    // to reduce overall latency (max(T1, T2) instead of T1 + T2).
+    const [tasks, messages] = await Promise.all([
+      db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(50),
+      db.select().from(AgentMessage).orderBy(desc(AgentMessage.timestamp)).limit(50)
+    ]);
 
     const mergedLogs = [
       ...tasks.map((task) => ({
