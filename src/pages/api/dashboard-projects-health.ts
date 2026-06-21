@@ -1,10 +1,13 @@
-import type { APIRoute } from 'astro';
-import { desc } from 'drizzle-orm';
-import { loadAstroDb } from '../../lib/load-astro-db';
-import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
-import { getPrimaryDevServerStatus } from '../../lib/dev-server-status';
-import { getWorkSystemStatus } from '../../lib/forge-work-scheduler';
-import { fetchZimaOSSessionsPayload, normalizeZimaOSSessions } from '../../lib/forge-gateway';
+import type { APIRoute } from "astro";
+import { desc } from "drizzle-orm";
+import { loadAstroDb } from "../../lib/load-astro-db";
+import { resolveProjectPathFromDbProject } from "../../lib/forge-repos";
+import { getPrimaryDevServerStatus } from "../../lib/dev-server-status";
+import { getWorkSystemStatus } from "../../lib/forge-work-scheduler";
+import {
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
+} from "../../lib/forge-gateway";
 
 type ProjectRow = {
   id: number;
@@ -15,15 +18,17 @@ type ProjectRow = {
   updatedAt: Date | null;
 };
 
-function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean } {
+function mapSessionToRunState(raw: Record<string, unknown>): {
+  running: boolean;
+} {
   const mapped = raw as Record<string, unknown>;
-  const st = String(mapped.status ?? mapped.state ?? '').toLowerCase();
+  const st = String(mapped.status ?? mapped.state ?? "").toLowerCase();
   const active =
-    st === 'running' ||
-    st === 'active' ||
-    st === 'connected' ||
-    st === 'online' ||
-    st === 'actif';
+    st === "running" ||
+    st === "active" ||
+    st === "connected" ||
+    st === "online" ||
+    st === "actif";
   return { running: active };
 }
 
@@ -69,7 +74,11 @@ export const GET: APIRoute = async ({ locals }) => {
 
   try {
     const { db, Project, AgentTask } = await loadAstroDb();
-    const projects = await db.select().from(Project).orderBy(desc(Project.updatedAt)).limit(12);
+    const projects = await db
+      .select()
+      .from(Project)
+      .orderBy(desc(Project.updatedAt))
+      .limit(12);
 
     const tasksAll = await db.select().from(AgentTask).limit(500);
 
@@ -77,13 +86,17 @@ export const GET: APIRoute = async ({ locals }) => {
       const pend = tasksAll.filter(
         (t) =>
           t.projectId === pid &&
-          ['pending', 'bug', 'running'].includes(String(t.status || '').toLowerCase()),
+          ["pending", "bug", "running"].includes(
+            String(t.status || "").toLowerCase(),
+          ),
       );
-      const running = pend.filter((t) => String(t.status || '').toLowerCase() === 'running').length;
+      const running = pend.filter(
+        (t) => String(t.status || "").toLowerCase() === "running",
+      ).length;
       return { pendingOrRunning: pend.length, running };
     };
 
-    for (const p of projects as ProjectRow[]) {
+    const projectPromises = (projects as ProjectRow[]).map(async (p) => {
       let dev: {
         ok: boolean;
         running?: boolean;
@@ -94,7 +107,7 @@ export const GET: APIRoute = async ({ locals }) => {
         hint?: string;
       } = {
         ok: false,
-        hint: 'Chemin projet introuvable sur le serveur Forge',
+        hint: "Chemin projet introuvable sur le serveur Forge",
       };
 
       try {
@@ -123,21 +136,25 @@ export const GET: APIRoute = async ({ locals }) => {
           } else {
             dev = {
               ok: true,
-              hint: 'Ajoutez `.forge/app-dashboard.json` avec une entrée `servers` pour suivre le dev local.',
+              hint: "Ajoutez `.forge/app-dashboard.json` avec une entrée `servers` pour suivre le dev local.",
             };
           }
         }
       } catch {
-        dev.hint = 'Erreur lecture disque';
+        dev.hint = "Erreur lecture disque";
       }
 
-      payload.projects.push({
+      return {
         id: p.id,
         name: p.name,
         swarmEnabled: Number(p.swarmEnabled) === 1,
         devServer: dev,
         tasks: countForProject(p.id),
-      });
+      };
+    });
+
+    for (const p of projectPromises) {
+      payload.projects.push(await p);
     }
 
     payload.swarm.workScheduler = await getWorkSystemStatus();
@@ -145,7 +162,7 @@ export const GET: APIRoute = async ({ locals }) => {
     payload.dbError = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify(payload), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
@@ -161,13 +178,13 @@ export const GET: APIRoute = async ({ locals }) => {
       if (mapSessionToRunState(s as Record<string, unknown>).running) busy++;
     }
     payload.swarm.agentsBusy = busy;
-    payload.swarm.zimaosError = oc.ok ? null : oc.error ?? null;
+    payload.swarm.zimaosError = oc.ok ? null : (oc.error ?? null);
   } catch (e) {
     payload.swarm.zimaosError = e instanceof Error ? e.message : String(e);
   }
 
   return new Response(JSON.stringify(payload), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 };
