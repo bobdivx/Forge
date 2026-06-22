@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,18 +24,35 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Strict validation to prevent injection
+    if (!/^[a-zA-Z0-9_-]+$/.test(containerId)) {
+      return new Response(JSON.stringify({ error: "Format d'ID de conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!/^\d+$/.test(tail)) {
+      return new Response(JSON.stringify({ error: "Le paramètre tail doit être un nombre" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        // Docker logs may output to either stdout or stderr depending on the application
+        const combinedOutput = (stdout + '\n' + stderr).trim();
+        logs = combinedOutput ? combinedOutput.split('\n') : [];
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
+        // Some errors output via stderr property in child_process exceptions
         if (err.stderr) {
             logs = err.stderr.toString().trim().split('\n');
         } else {
-            throw err;
+            // Sanitize error messages to prevent leakage
+            const sanitizedError = err.message ? err.message.replace(/['"]/g, '') : "Erreur inconnue";
+            throw new Error(`Erreur d'exécution: ${sanitizedError.substring(0, 100)}`);
         }
     }
 
@@ -41,7 +61,7 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
