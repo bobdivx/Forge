@@ -1,0 +1,3 @@
+## 2026-06-25 - Optimizing Sequential Operations in Astro API Routes
+**Learning:** In Astro API routes, sequential database queries and independent network requests (e.g. `fetch` calls) can silently bottleneck performance, especially when placed in `for...of` loops or chained sequentially. Early initiation of Promises with a detached `.catch(() => {})` is an effective pattern to start work parallel to database loads without risking `UnhandledPromiseRejection` crashes.
+**Action:** Group independent `db.select()` queries using `Promise.all()`. Refactor sequential operations over arrays to map items to Promises first, then iterate and `await` them to maintain order while executing concurrently.
