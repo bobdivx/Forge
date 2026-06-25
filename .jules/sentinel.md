@@ -1,0 +1,4 @@
+## 2024-05-24 - Command Injection via exec and JSON body
+**Vulnerability:** Command injection vulnerability identified in `src/pages/api/docker/containers.ts` where arbitrary JSON body properties (`id` and `action`) were parsed into a URL string and blindly passed to the shell via `exec('curl ...')`.
+**Learning:** Shell `exec` combined with interpolated strings containing unvalidated user input creates severe command injection vectors, even when inputs are purportedly identifiers. Specifically, using string template literals with unsanitized parameters directly inside `exec` calls circumvents safety measures.
+**Prevention:** Always substitute shell `exec`/`execSync` functions with `execFile`/`execFileSync` (or `execFileAsync`) alongside an array of strict command arguments. This completely bypasses intermediate shell evaluation and mitigates injection risks directly at the execution environment boundary.
