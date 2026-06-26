@@ -26,12 +26,15 @@ let appIssues = [];
 let depRequests = [];
 try {
   const { db, AgentTask, AgentAppIssue, AgentDependencyRequest, AgentInstruction, eq, desc } = await loadAstroDb();
-  const instRows = await db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentKey)).limit(1);
+  const [instRows, tasksRows, allIssues, allDeps] = await Promise.all([
+    db.select().from(AgentInstruction).where(eq(AgentInstruction.agentId, agentKey)).limit(1),
+    db.select().from(AgentTask).where(eq(AgentTask.agentId, agentKey)).orderBy(desc(AgentTask.createdAt)),
+    db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt)).limit(120),
+    db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt)).limit(120)
+  ]);
   instructionRow = instRows[0] ?? null;
-  tasks = await db.select().from(AgentTask).where(eq(AgentTask.agentId, agentKey)).orderBy(desc(AgentTask.createdAt));
-  const allIssues = await db.select().from(AgentAppIssue).orderBy(desc(AgentAppIssue.createdAt)).limit(120);
+  tasks = tasksRows;
   appIssues = allIssues.filter((r) => r.reportedByAgentId === agentKey || r.assigneeAgentId === agentKey);
-  const allDeps = await db.select().from(AgentDependencyRequest).orderBy(desc(AgentDependencyRequest.createdAt)).limit(120);
   depRequests = allDeps.filter((r) => r.requestedByAgentId === agentKey || r.assigneeAgentId === agentKey);
 } catch { /* tables absentes ou DB indisponible */ }
 
