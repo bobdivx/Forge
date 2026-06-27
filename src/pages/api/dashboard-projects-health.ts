@@ -83,7 +83,7 @@ export const GET: APIRoute = async ({ locals }) => {
       return { pendingOrRunning: pend.length, running };
     };
 
-    for (const p of projects as ProjectRow[]) {
+    const projectPromises = (projects as ProjectRow[]).map(async (p) => {
       let dev: {
         ok: boolean;
         running?: boolean;
@@ -131,13 +131,17 @@ export const GET: APIRoute = async ({ locals }) => {
         dev.hint = 'Erreur lecture disque';
       }
 
-      payload.projects.push({
+      return {
         id: p.id,
         name: p.name,
         swarmEnabled: Number(p.swarmEnabled) === 1,
         devServer: dev,
         tasks: countForProject(p.id),
-      });
+      };
+    });
+
+    for (const promise of projectPromises) {
+      payload.projects.push(await promise);
     }
 
     payload.swarm.workScheduler = await getWorkSystemStatus();
