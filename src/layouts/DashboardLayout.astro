@@ -25,15 +25,14 @@ const userName = userEmail.split('@')[0];
     <aside class="hidden md:flex w-64 shrink-0 bg-white rounded-[2rem] p-6 flex-col justify-between shadow-sm" style="min-height: calc(100vh - 2rem)">
       <div>
         <!-- Logo -->
-        <div class="flex items-center gap-3 mb-10">
+        <a href="/" class="flex items-center gap-3 mb-10 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37] p-1 -m-1" aria-label="Accueil Ageton">
           <img
             src="/brand/logo.png"
-            alt="Logo Ageton"
-            class="h-9 w-9 rounded-full object-contain cursor-pointer"
-            onclick="window.location.href='/'"
+            alt=""
+            class="h-9 w-9 rounded-full object-contain"
           />
           <span class="text-xl font-bold text-gray-900">Ageton</span>
-        </div>
+        </a>
 
 
         {navGroups.map((group) => (
@@ -70,16 +69,17 @@ const userName = userEmail.split('@')[0];
         <!-- Left: mobile menu + search -->
         <div class="flex items-center gap-3 flex-1 min-w-0">
           <MobileMenu client:load currentPath={currentPath} />
-          <div class="hidden sm:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-4 py-2 flex-1 max-w-xs">
-            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="hidden sm:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-4 py-2 flex-1 max-w-xs focus-within:ring-2 focus-within:ring-[#175B37] focus-within:border-transparent">
+            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
             </svg>
             <input
               type="text"
               placeholder="Rechercher…"
+              aria-label="Rechercher"
               class="bg-transparent border-none focus:outline-none text-sm w-full text-gray-600 placeholder-gray-400"
             />
-            <kbd class="shrink-0 text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">⌘F</kbd>
+            <kbd class="shrink-0 text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded" aria-hidden="true">⌘F</kbd>
           </div>
           <div class="sm:hidden flex items-center gap-2 overflow-x-auto">
             {navGroups[1].items.slice(0, 2).map((item) => (
@@ -97,13 +97,13 @@ const userName = userEmail.split('@')[0];
 
         <!-- Right: icons + user -->
         <div class="flex items-center gap-2 shrink-0">
-          <button class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
-            <svg class="w-4.5 h-4.5 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]" aria-label="Messages">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
             </svg>
           </button>
-          <button class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
-            <NotificationBellIcon class="w-5 h-5" />
+          <button class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]" aria-label="Notifications">
+            <NotificationBellIcon class="w-5 h-5" aria-hidden="true" />
           </button>
           <!-- Avatar + nom -->
           <div class="flex items-center gap-2.5 pl-1">
