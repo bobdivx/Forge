@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -14,7 +14,12 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'action and appName are required' }), { status: 400 });
     }
 
-    let command = '';
+    if (!/^[a-zA-Z0-9_.-]+$/.test(appName)) {
+      return new Response(JSON.stringify({ error: 'Invalid appName' }), { status: 400 });
+    }
+
+    let runBuild = false;
+    let pm2Args: string[] = [];
     const execOptions: any = {};
 
     if (action === 'start' || action === 'start_prod') {
@@ -74,31 +79,40 @@ export const POST: APIRoute = async ({ request }) => {
           } catch(e) {}
           
           if (hasBuild) {
-              command = `npm run build && npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
-          } else {
-              command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              runBuild = true;
           }
-      } else {
-          command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
       }
+      pm2Args = ['-y', 'pm2', 'start', 'npm', '--name', appName, '--', 'run', npmScript];
     } else if (action === 'stop') {
-      command = `npx -y pm2 stop "${appName}"`;
+      pm2Args = ['-y', 'pm2', 'stop', appName];
     } else if (action === 'delete') {
-      command = `npx -y pm2 delete "${appName}"`;
+      pm2Args = ['-y', 'pm2', 'delete', appName];
     } else if (action === 'restart') {
-      command = `npx -y pm2 restart "${appName}"`;
+      pm2Args = ['-y', 'pm2', 'restart', appName];
     } else {
       return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
     }
 
-    const { stdout, stderr } = await execPromise(command, execOptions);
+    let stdout = '';
+    let stderr = '';
+
+    if (runBuild) {
+      const buildResult = await execFilePromise('npm', ['run', 'build'], execOptions);
+      stdout += buildResult.stdout + '\n';
+      stderr += buildResult.stderr + '\n';
+    }
+
+    const pm2Result = await execFilePromise('npx', pm2Args, execOptions);
+    stdout += pm2Result.stdout;
+    stderr += pm2Result.stderr;
 
     return new Response(JSON.stringify({ status: 'ok', stdout, stderr }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message || 'Error executing PM2 command' }), {
+    const safeError = error.message ? error.message.replace(/https:\/\/[^@]+@/g, 'https://***@') : 'Error executing PM2 command';
+    return new Response(JSON.stringify({ error: safeError }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -107,7 +121,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const GET: APIRoute = async () => {
   try {
-    const { stdout } = await execPromise('npx -y pm2 jlist');
+    const { stdout } = await execFilePromise('npx', ['-y', 'pm2', 'jlist']);
     const list = JSON.parse(stdout);
     return new Response(JSON.stringify(list), {
       status: 200,
