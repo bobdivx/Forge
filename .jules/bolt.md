@@ -1,0 +1,3 @@
+## 2024-07-02 - Parallelize independent queries in Astro DB endpoints
+**Learning:** Independent Drizzle database queries in Astro SSR endpoints or API routes can often run in sequential waterfall cascades due to default `await` structures. Using `Promise.all` allows them to execute concurrently.
+**Action:** Always look to group sequential independent database calls using `Promise.all` to reduce total fetch time to the longest single query. Handle optional queries (like checking for an optional table before fetching) using conditional checks that resolve to empty arrays if omitted to integrate smoothly into `Promise.all`.
