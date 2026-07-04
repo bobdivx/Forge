@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 function dockerCliRowToContainer(row: Record<string, unknown>) {
   const names = String(row.Names || row.Name || '')
@@ -22,7 +22,7 @@ function dockerCliRowToContainer(row: Record<string, unknown>) {
 }
 
 async function readContainersFromDockerCli() {
-  const { stdout } = await execAsync('docker ps -a --format "{{json .}}"');
+  const { stdout } = await execFileAsync('docker', ['ps', '-a', '--format', '{{json .}}']);
   return stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -32,7 +32,7 @@ async function readContainersFromDockerCli() {
 
 export const GET: APIRoute = async () => {
   try {
-    const { stdout } = await execAsync('curl -s --unix-socket /var/run/docker.sock http://localhost/containers/json?all=1');
+    const { stdout } = await execFileAsync('curl', ['-s', '--unix-socket', '/var/run/docker.sock', 'http://localhost/containers/json?all=1']);
     const containers = JSON.parse(stdout);
     return new Response(JSON.stringify(containers), {
       status: 200,
@@ -63,6 +63,10 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'Missing id or action' }), { status: 400 });
     }
 
+    if (!/^[a-zA-Z0-9_.-]+$/.test(id) || !/^[a-zA-Z0-9_.-]+$/.test(action)) {
+      return new Response(JSON.stringify({ error: 'Invalid id or action format' }), { status: 400 });
+    }
+
     let url = '';
     let method = 'POST';
     
@@ -73,7 +77,7 @@ export const POST: APIRoute = async ({ request }) => {
       url = `http://localhost/containers/${id}/${action}`;
     }
 
-    const { stdout } = await execAsync(`curl -s -X ${method} --unix-socket /var/run/docker.sock "${url}"`);
+    const { stdout } = await execFileAsync('curl', ['-s', '-X', method, '--unix-socket', '/var/run/docker.sock', url]);
     
     return new Response(JSON.stringify({ success: true, result: stdout }), {
       status: 200,
