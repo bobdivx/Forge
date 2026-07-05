@@ -58,11 +58,12 @@ export default function ComposerInput({
         />
         <button
           type="button"
+          aria-label="Envoyer le message"
           onClick={() => void send()}
           disabled={sending || historyLoading || sessionUnavailable || !message.trim() || !agentId}
-          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#175B37] text-white disabled:opacity-40"
+          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#175B37] text-white disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
         >
-          &gt;
+          <span aria-hidden="true">&gt;</span>
         </button>
       </div>
     </div>
