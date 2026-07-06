@@ -43,9 +43,10 @@ export default function MobileMenu({
             {/* Backdrop */}
             <button
               type="button"
-              class="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              class="absolute inset-0 bg-black/30 backdrop-blur-sm cursor-default"
               aria-label="Fermer le menu"
               onClick={closeDrawer}
+              tabIndex={-1}
             />
 
             {/* Drawer */}
