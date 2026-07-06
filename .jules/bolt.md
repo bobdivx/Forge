@@ -1,0 +1,3 @@
+## 2024-10-24 - Optimizing Astro API Routes via Concurrent DB Queries
+**Learning:** Sequential, independent database queries inside Astro API routes (e.g., fetching metrics, budgets, or dashboard tasks separately) cause cumulative latency due to repeated N+1 execution pauses. In SSR pages or endpoints, `await db.select...` immediately halts execution, waiting for the full round trip per table.
+**Action:** Use `Promise.all([db.select()..., db.select()....])` to group independent queries so they execute concurrently. This reduces total wait time to the duration of the longest individual query, rather than the sum of all queries. Applied this successfully to `src/pages/api/agent-budget.ts` and `src/pages/api/work-overview.ts`.
