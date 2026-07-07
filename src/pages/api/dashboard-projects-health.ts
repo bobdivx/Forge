@@ -1,10 +1,13 @@
-import type { APIRoute } from 'astro';
-import { desc } from 'drizzle-orm';
-import { loadAstroDb } from '../../lib/load-astro-db';
-import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
-import { getPrimaryDevServerStatus } from '../../lib/dev-server-status';
-import { getWorkSystemStatus } from '../../lib/forge-work-scheduler';
-import { fetchZimaOSSessionsPayload, normalizeZimaOSSessions } from '../../lib/forge-gateway';
+import type { APIRoute } from "astro";
+import { desc } from "drizzle-orm";
+import { loadAstroDb } from "../../lib/load-astro-db";
+import { resolveProjectPathFromDbProject } from "../../lib/forge-repos";
+import { getPrimaryDevServerStatus } from "../../lib/dev-server-status";
+import { getWorkSystemStatus } from "../../lib/forge-work-scheduler";
+import {
+  fetchZimaOSSessionsPayload,
+  normalizeZimaOSSessions,
+} from "../../lib/forge-gateway";
 
 type ProjectRow = {
   id: number;
@@ -15,21 +18,27 @@ type ProjectRow = {
   updatedAt: Date | null;
 };
 
-function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean } {
+function mapSessionToRunState(raw: Record<string, unknown>): {
+  running: boolean;
+} {
   const mapped = raw as Record<string, unknown>;
-  const st = String(mapped.status ?? mapped.state ?? '').toLowerCase();
+  const st = String(mapped.status ?? mapped.state ?? "").toLowerCase();
   const active =
-    st === 'running' ||
-    st === 'active' ||
-    st === 'connected' ||
-    st === 'online' ||
-    st === 'actif';
+    st === "running" ||
+    st === "active" ||
+    st === "connected" ||
+    st === "online" ||
+    st === "actif";
   return { running: active };
 }
 
 /** GET — état synthétique pour la carte Projets du dashboard (poll léger). */
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
+
+  // Start slow external fetch immediately
+  const zimaosPromise = fetchZimaOSSessionsPayload(email);
+  zimaosPromise.catch(() => {}); // prevent UnhandledPromiseRejection if it fails early
 
   const payload: {
     projects: Array<{
@@ -69,7 +78,11 @@ export const GET: APIRoute = async ({ locals }) => {
 
   try {
     const { db, Project, AgentTask } = await loadAstroDb();
-    const projects = await db.select().from(Project).orderBy(desc(Project.updatedAt)).limit(12);
+    const projects = await db
+      .select()
+      .from(Project)
+      .orderBy(desc(Project.updatedAt))
+      .limit(12);
 
     const tasksAll = await db.select().from(AgentTask).limit(500);
 
@@ -77,13 +90,18 @@ export const GET: APIRoute = async ({ locals }) => {
       const pend = tasksAll.filter(
         (t) =>
           t.projectId === pid &&
-          ['pending', 'bug', 'running'].includes(String(t.status || '').toLowerCase()),
+          ["pending", "bug", "running"].includes(
+            String(t.status || "").toLowerCase(),
+          ),
       );
-      const running = pend.filter((t) => String(t.status || '').toLowerCase() === 'running').length;
+      const running = pend.filter(
+        (t) => String(t.status || "").toLowerCase() === "running",
+      ).length;
       return { pendingOrRunning: pend.length, running };
     };
 
-    for (const p of projects as ProjectRow[]) {
+    // Initiate file I/O operations concurrently
+    const projectPromises = (projects as ProjectRow[]).map(async (p) => {
       let dev: {
         ok: boolean;
         running?: boolean;
@@ -94,7 +112,7 @@ export const GET: APIRoute = async ({ locals }) => {
         hint?: string;
       } = {
         ok: false,
-        hint: 'Chemin projet introuvable sur le serveur Forge',
+        hint: "Chemin projet introuvable sur le serveur Forge",
       };
 
       try {
@@ -123,14 +141,20 @@ export const GET: APIRoute = async ({ locals }) => {
           } else {
             dev = {
               ok: true,
-              hint: 'Ajoutez `.forge/app-dashboard.json` avec une entrée `servers` pour suivre le dev local.',
+              hint: "Ajoutez `.forge/app-dashboard.json` avec une entrée `servers` pour suivre le dev local.",
             };
           }
         }
       } catch {
-        dev.hint = 'Erreur lecture disque';
+        dev.hint = "Erreur lecture disque";
       }
 
+      return { p, dev };
+    });
+
+    // Await them sequentially to preserve sorting order
+    for (const promise of projectPromises) {
+      const { p, dev } = await promise;
       payload.projects.push({
         id: p.id,
         name: p.name,
@@ -145,12 +169,12 @@ export const GET: APIRoute = async ({ locals }) => {
     payload.dbError = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify(payload), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 
   try {
-    const oc = await fetchZimaOSSessionsPayload(email);
+    const oc = await zimaosPromise;
     payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
       ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])
@@ -161,13 +185,13 @@ export const GET: APIRoute = async ({ locals }) => {
       if (mapSessionToRunState(s as Record<string, unknown>).running) busy++;
     }
     payload.swarm.agentsBusy = busy;
-    payload.swarm.zimaosError = oc.ok ? null : oc.error ?? null;
+    payload.swarm.zimaosError = oc.ok ? null : (oc.error ?? null);
   } catch (e) {
     payload.swarm.zimaosError = e instanceof Error ? e.message : String(e);
   }
 
   return new Response(JSON.stringify(payload), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 };
