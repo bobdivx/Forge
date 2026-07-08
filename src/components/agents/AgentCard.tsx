@@ -224,13 +224,14 @@ export default function AgentCard({
               key={cmd}
               onClick={() => onSwarmCommand?.(agent.id, cmd)}
               disabled={commandBusy}
-              class={`rounded-xl border p-2 transition-all disabled:opacity-50 ${cmd === 'start_work' ? 'bg-gray-900 border-gray-900 text-white hover:bg-black' : 'bg-white border-gray-200 text-gray-400 hover:text-rose-500 hover:border-rose-200'}`}
+              class={`rounded-xl border p-2 transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37] ${cmd === 'start_work' ? 'bg-gray-900 border-gray-900 text-white hover:bg-black' : 'bg-white border-gray-200 text-gray-400 hover:text-rose-500 hover:border-rose-200'}`}
               title={cmd === 'start_work' ? 'Lancer une mission' : 'Arrêter'}
+              aria-label={cmd === 'start_work' ? 'Lancer une mission' : 'Arrêter la mission'}
             >
               {cmd === 'start_work' ? (
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
               ) : (
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
               )}
             </button>
           ))}
@@ -239,10 +240,11 @@ export default function AgentCard({
               e.preventDefault();
               setConfigOpen(true);
             }}
-            class="rounded-xl border border-gray-200 bg-white p-2 text-gray-400 transition-all hover:border-[#175B37]/30 hover:text-[#175B37]"
+            class="rounded-xl border border-gray-200 bg-white p-2 text-gray-400 transition-all hover:border-[#175B37]/30 hover:text-[#175B37] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
             title="Configurer cet agent (outils, prompt)"
+            aria-label="Configurer cet agent"
           >
-            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
