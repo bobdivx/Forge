@@ -1,0 +1,4 @@
+## 2024-05-18 - Critical Command Injection in API Logs
+**Vulnerability:** Unsanitized user query parameters (`id` and `tail`) were being passed directly into an `execSync` bash command string inside `src/pages/api/docker-logs.ts` without validation, exposing the application to severe shell injection.
+**Learning:** Node.js API handlers must never string interpolate external data to `exec` or `execSync` because malicious input strings can break out of arguments and execute arbitrary shell commands on the host server. Furthermore, Vercel API routing doesn't isolate the environment securely against such executions without explicit environment checks.
+**Prevention:** Instead of `exec` or `execSync`, use `execFile` (or `promisify(execFile)`) taking an argument array to safely pass parameters to the target binary. Also perform strict input validation (e.g. `^[a-zA-Z0-9_.-]+$`) and ensure variables do not begin with a hyphen (`-`) to avoid flag injection vulnerabilities.
