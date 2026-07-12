@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 
 type ServerDef = {
   id: string;
@@ -16,17 +16,17 @@ type Props = {
 const LINE_COUNTS = [100, 200, 500];
 
 export default function AppLogsPage({ appName, initialServerId }: Props) {
-  const [servers, setServers]       = useState<ServerDef[]>([]);
-  const [serverId, setServerId]     = useState<string>(initialServerId ?? '');
-  const [lines, setLines]           = useState<string[]>([]);
-  const [exists, setExists]         = useState<boolean | null>(null);
-  const [logPath, setLogPath]       = useState('');
-  const [error, setError]           = useState<string | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [paused, setPaused]         = useState(false);
+  const [servers, setServers] = useState<ServerDef[]>([]);
+  const [serverId, setServerId] = useState<string>(initialServerId ?? "");
+  const [lines, setLines] = useState<string[]>([]);
+  const [exists, setExists] = useState<boolean | null>(null);
+  const [logPath, setLogPath] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [paused, setPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [lineCount, setLineCount]   = useState(200);
-  const [filter, setFilter]         = useState('');
+  const [lineCount, setLineCount] = useState(200);
+  const [filter, setFilter] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Chargement de la liste des serveurs
@@ -47,16 +47,19 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(appName)}/server-logs` +
-        `?serverId=${encodeURIComponent(serverId)}&lines=${lineCount}`
+          `?serverId=${encodeURIComponent(serverId)}&lines=${lineCount}`,
       );
-      if (!res.ok) { setError('Erreur chargement logs'); return; }
+      if (!res.ok) {
+        setError("Erreur chargement logs");
+        return;
+      }
       const data = await res.json();
       setExists(data.exists);
       setLines(data.lines ?? []);
-      setLogPath(data.path ?? '');
+      setLogPath(data.path ?? "");
       setError(null);
     } catch {
-      setError('Erreur réseau');
+      setError("Erreur réseau");
     }
   }, [appName, serverId, lineCount, paused]);
 
@@ -68,14 +71,14 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
 
   useEffect(() => {
     if (autoScroll && bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [lines, autoScroll]);
 
   const downloadLogs = () => {
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `${appName}-${serverId}.log`;
     a.click();
@@ -112,11 +115,12 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
   }
 
   return (
-    <div class="flex flex-col h-full min-h-0" style="height: calc(100vh - 160px)">
-
+    <div
+      class="flex flex-col h-full min-h-0"
+      style="height: calc(100vh - 160px)"
+    >
       {/* ── Barre d'outils ─────────────────────────────────────────── */}
       <div class="bg-gray-950 border-b border-gray-800 px-4 py-3 flex flex-wrap items-center gap-3">
-
         {/* Sélecteur de serveur */}
         <div class="flex items-center gap-2">
           <span class="text-gray-500 text-xs shrink-0">Serveur</span>
@@ -127,8 +131,8 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
                 onClick={() => setServerId(s.id)}
                 class={`text-xs px-3 py-1.5 rounded-full border transition-colors font-medium ${
                   s.id === serverId
-                    ? 'border-green-600 bg-green-900/30 text-green-300'
-                    : 'border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500'
+                    ? "border-green-600 bg-green-900/30 text-green-300"
+                    : "border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500"
                 }`}
               >
                 {s.label}
@@ -144,11 +148,15 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
           {/* Nb lignes */}
           <select
             value={lineCount}
-            onChange={(e) => setLineCount(parseInt((e.target as HTMLSelectElement).value, 10))}
+            onChange={(e) =>
+              setLineCount(parseInt((e.target as HTMLSelectElement).value, 10))
+            }
             class="text-xs bg-gray-900 border border-gray-700 text-gray-300 rounded px-2 py-1"
           >
             {LINE_COUNTS.map((n) => (
-              <option key={n} value={n}>{n} lignes</option>
+              <option key={n} value={n}>
+                {n} lignes
+              </option>
             ))}
           </select>
 
@@ -157,19 +165,24 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
             onClick={() => setPaused((v) => !v)}
             class={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
               paused
-                ? 'border-yellow-600 text-yellow-400 bg-yellow-900/20'
-                : 'border-gray-700 text-gray-400 hover:text-gray-200'
+                ? "border-yellow-600 text-yellow-400 bg-yellow-900/20"
+                : "border-gray-700 text-gray-400 hover:text-gray-200"
             }`}
           >
-            {paused ? '▶ Reprendre' : '⏸ Pause'}
+            {paused ? "▶ Reprendre" : "⏸ Pause"}
           </button>
 
           {/* Rafraîchir */}
           <button
-            onClick={() => { setPaused(false); fetchLogs(); }}
+            type="button"
+            aria-label="Rafraîchir les logs"
+            onClick={() => {
+              setPaused(false);
+              fetchLogs();
+            }}
             class="text-xs text-gray-400 hover:text-gray-200 px-2 py-1.5 rounded-full border border-gray-700"
           >
-            ↻
+            <span aria-hidden="true">↻</span>
           </button>
 
           {/* Télécharger */}
@@ -204,12 +217,21 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
               <span class="text-gray-600 text-[10px]">
                 {displayLines.length}/{lines.length}
               </span>
-              <button onClick={() => setFilter('')} class="text-gray-600 hover:text-gray-300 text-xs">✕</button>
+              <button
+                type="button"
+                aria-label="Effacer le filtre"
+                onClick={() => setFilter("")}
+                class="text-gray-600 hover:text-gray-300 text-xs"
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
             </>
           )}
         </div>
         {paused && (
-          <span class="text-yellow-600 text-[10px] font-mono shrink-0">⏸ en pause</span>
+          <span class="text-yellow-600 text-[10px] font-mono shrink-0">
+            ⏸ en pause
+          </span>
         )}
       </div>
 
@@ -221,7 +243,9 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
           <div class="text-gray-500 text-center py-16">
             <p class="text-3xl mb-3">📭</p>
             <p>Aucun fichier de log.</p>
-            <p class="text-[10px] mt-1 text-gray-600">Démarrez le serveur pour générer des logs.</p>
+            <p class="text-[10px] mt-1 text-gray-600">
+              Démarrez le serveur pour générer des logs.
+            </p>
             <a
               href={`/apps/${encodeURIComponent(appName)}`}
               class="mt-4 inline-block text-xs text-blue-500 hover:underline"
@@ -236,26 +260,35 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
         )}
 
         {displayLines.map((line, i) => {
-          const isError   = /\berror\b|exception|fatal|traceback|crash|panic/i.test(line);
-          const isWarn    = /\bwarn(?:ing)?\b/i.test(line) && !isError;
-          const isSuccess = /\bsuccess\b|ready|started|listening|compiled|✓|✔/i.test(line) && !isError && !isWarn;
-          const isInfo    = /\binfo\b|\[info\]/i.test(line) && !isError && !isWarn;
-          const hasFilter = filter && line.toLowerCase().includes(filter.toLowerCase());
+          const isError =
+            /\berror\b|exception|fatal|traceback|crash|panic/i.test(line);
+          const isWarn = /\bwarn(?:ing)?\b/i.test(line) && !isError;
+          const isSuccess =
+            /\bsuccess\b|ready|started|listening|compiled|✓|✔/i.test(line) &&
+            !isError &&
+            !isWarn;
+          const isInfo = /\binfo\b|\[info\]/i.test(line) && !isError && !isWarn;
+          const hasFilter =
+            filter && line.toLowerCase().includes(filter.toLowerCase());
 
           return (
             <div
               key={i}
               class={`whitespace-pre-wrap break-all px-1 rounded-sm ${
-                hasFilter ? 'bg-yellow-900/30' : isError ? 'bg-red-950/30' : ''
+                hasFilter ? "bg-yellow-900/30" : isError ? "bg-red-950/30" : ""
               } ${
-                isError   ? 'text-red-400' :
-                isWarn    ? 'text-yellow-400' :
-                isSuccess ? 'text-green-400' :
-                isInfo    ? 'text-blue-400' :
-                'text-gray-300'
+                isError
+                  ? "text-red-400"
+                  : isWarn
+                    ? "text-yellow-400"
+                    : isSuccess
+                      ? "text-green-400"
+                      : isInfo
+                        ? "text-blue-400"
+                        : "text-gray-300"
               }`}
             >
-              {line || '\u00A0'}
+              {line || "\u00A0"}
             </div>
           );
         })}
@@ -265,14 +298,16 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <div class="bg-gray-950 border-t border-gray-800 px-4 py-2 flex items-center justify-between text-[10px] text-gray-600 font-mono">
         <span>
-          {displayLines.length} ligne{displayLines.length !== 1 ? 's' : ''}
-          {filter ? ` filtrées sur ${lines.length}` : ''}
+          {displayLines.length} ligne{displayLines.length !== 1 ? "s" : ""}
+          {filter ? ` filtrées sur ${lines.length}` : ""}
         </span>
         <label class="flex items-center gap-1.5 cursor-pointer">
           <input
             type="checkbox"
             checked={autoScroll}
-            onChange={(e) => setAutoScroll((e.target as HTMLInputElement).checked)}
+            onChange={(e) =>
+              setAutoScroll((e.target as HTMLInputElement).checked)
+            }
           />
           Auto-scroll
         </label>
