@@ -1,0 +1,3 @@
+## 2024-07-12 - Concurrent Database Queries in SSR
+**Learning:** Found sequential independent database queries in `src/pages/api/agent-budget.ts`. Sequential queries are a significant performance bottleneck in Server-Side Rendered (SSR) endpoints, causing the endpoint to wait for each query to complete individually before starting the next, even if they don't depend on each other's results.
+**Action:** Used `Promise.all([db.select()..., db.select()...])` to group independent sequential database queries in SSR pages or API endpoints, executing them concurrently and reducing total wait time to the longest single query.
