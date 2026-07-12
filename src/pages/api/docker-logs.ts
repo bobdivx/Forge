@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,14 +24,28 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // 🛡️ SECURITY: Prevent flag injection and command injection
+    if (!/^[a-zA-Z0-9_.-]+$/.test(containerId) || containerId.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "ID du conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    if (!/^\d+$/.test(tail)) {
+      return new Response(JSON.stringify({ error: "Paramètre tail invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 🛡️ SECURITY: Use execFileAsync with argument arrays instead of exec/execSync
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId], { maxBuffer: 10 * 1024 * 1024 });
+        // Combine stdout and stderr
+        logs = (stdout + stderr).trim().split('\n');
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
+        // Certains logs sortent sur stderr, checkons stderr si erreur
         if (err.stderr) {
             logs = err.stderr.toString().trim().split('\n');
         } else {

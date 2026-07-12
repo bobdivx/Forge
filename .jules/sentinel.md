@@ -1,0 +1,4 @@
+## 2024-05-24 - [CRITICAL] Fix command injection in Node.js child_process
+**Vulnerability:** Node.js API endpoints were using `execSync` with raw string concatenation (e.g. `docker logs --tail ${tail} ${containerId}`) to execute shell commands, creating a critical command injection risk if user inputs were uncontrolled.
+**Learning:** Shell command construction via string template literals in `exec`/`execSync` makes it extremely easy to overlook proper escaping, especially for HTTP parameters. Moreover, flags injected via `-` prefixes can bypass rudimentary checks.
+**Prevention:** Always prefer `execFile` or `execFileAsync` (via `promisify(execFile)`) when executing binaries, passing arguments as a dedicated string array. In addition, rigorously validate all dynamic parameters against restrictive allowlists (like `/^[a-zA-Z0-9_.-]+$/`) and explicitly reject inputs that start with `-` to thwart argument flag injection vulnerabilities.
