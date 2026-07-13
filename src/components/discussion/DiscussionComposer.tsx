@@ -495,11 +495,11 @@ export default function DiscussionComposer({ initialProjectId }: { initialProjec
               </h2>
               <button
                 type="button"
-                class="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                class="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
                 onClick={() => setTeamPickerOpen(false)}
                 aria-label="Fermer la liste"
               >
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -541,11 +541,11 @@ export default function DiscussionComposer({ initialProjectId }: { initialProjec
               </h2>
               <button
                 type="button"
-                class="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                class="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
                 onClick={() => setProfileDrawerOpen(false)}
                 aria-label="Fermer le profil"
               >
-                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>

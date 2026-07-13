@@ -113,10 +113,11 @@ export default function DiscussionHeader({
         </button>
         <button
           type="button"
-          class="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+          class="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#175B37]"
           onClick={() => setHeaderMenuOpen((v: boolean) => !v)}
+          aria-label="Options de session"
         >
-          <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+          <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 8a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4zm0 6a2 2 0 110-4 2 2 0 010 4z" />
           </svg>
         </button>
