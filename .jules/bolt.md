@@ -1,0 +1,3 @@
+## 2024-07-24 - Concurrent Sequential Promise Loop
+**Learning:** In Astro DB or external environments that mandate sequential iteration to prevent rate-limiting or concurrency bugs (e.g. `await` inside loops), I/O wait times severely degrade performance when queries/calls themselves are independent.
+**Action:** Always map arrays to execute asynchronous tasks concurrently returning an array of Promises, then use a `for (const p of promises)` loop to `await` them sequentially. Initiate early decoupled fetches (like slow network requests) as unawaited promises with detached `.catch(() => {})` handlers to prevent unhandled rejections if they fail before being explicitly awaited.

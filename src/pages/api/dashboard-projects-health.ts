@@ -31,6 +31,10 @@ function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean 
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
 
+  // Initiate slow external network request early so it runs concurrently with database queries
+  const zimaosPromise = fetchZimaOSSessionsPayload(email);
+  zimaosPromise.catch(() => {});
+
   const payload: {
     projects: Array<{
       id: number;
@@ -83,7 +87,7 @@ export const GET: APIRoute = async ({ locals }) => {
       return { pendingOrRunning: pend.length, running };
     };
 
-    for (const p of projects as ProjectRow[]) {
+    const projectPromises = (projects as ProjectRow[]).map(async (p) => {
       let dev: {
         ok: boolean;
         running?: boolean;
@@ -131,13 +135,17 @@ export const GET: APIRoute = async ({ locals }) => {
         dev.hint = 'Erreur lecture disque';
       }
 
-      payload.projects.push({
+      return {
         id: p.id,
         name: p.name,
         swarmEnabled: Number(p.swarmEnabled) === 1,
         devServer: dev,
         tasks: countForProject(p.id),
-      });
+      };
+    });
+
+    for (const promise of projectPromises) {
+      payload.projects.push(await promise);
     }
 
     payload.swarm.workScheduler = await getWorkSystemStatus();
@@ -150,7 +158,7 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   try {
-    const oc = await fetchZimaOSSessionsPayload(email);
+    const oc = await zimaosPromise;
     payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
       ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])
