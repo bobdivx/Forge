@@ -1,0 +1,6 @@
+🎨 Palette: [UX improvement]
+
+💡 What: Added focus-visible styles to the mobile menu open/close buttons and `aria-hidden="true"` to their internal SVG icons.
+🎯 Why: To improve keyboard navigation accessibility by providing a clear focus ring, and to prevent screen readers from redundantly announcing the SVG icon when the button already has an `aria-label`.
+📸 Before/After: The buttons now display a distinct green ring when navigated to via keyboard.
+♿ Accessibility: Improved keyboard focus visibility and reduced screen reader verbosity.
