@@ -153,22 +153,25 @@ export async function runGithubWatcherNow(): Promise<{ ok: boolean; prCount: num
       const existingRequests = await db.select().from(Request).where(eq(Request.projectId, project.id));
       const knownTitles = new Set(existingRequests.map((r) => r.title.toLowerCase().trim()));
 
+      // Charge décisions récentes (24h) pour éviter doublons (N+1 query fix)
+      const since = new Date(Date.now() - 24 * 3600 * 1000);
+      const recentDecisions = new Set<number>();
+      if (GithubWatchDecision) {
+        const recent = await db
+          .select({ prNumber: GithubWatchDecision.prNumber })
+          .from(GithubWatchDecision)
+          .where(
+            and(
+              eq(GithubWatchDecision.projectId, project.id),
+              gte(GithubWatchDecision.createdAt, since)
+            )
+          );
+        for (const r of recent) recentDecisions.add(r.prNumber);
+      }
+
       for (const pr of prs) {
         // Skip si décision récente (24h) déjà enregistrée.
-        const since = new Date(Date.now() - 24 * 3600 * 1000);
-        if (GithubWatchDecision) {
-          const recent = await db
-            .select()
-            .from(GithubWatchDecision)
-            .where(
-              and(
-                eq(GithubWatchDecision.projectId, project.id),
-                eq(GithubWatchDecision.prNumber, pr.number),
-                gte(GithubWatchDecision.createdAt, since),
-              ),
-            );
-          if (recent.length > 0) continue;
-        }
+        if (recentDecisions.has(pr.number)) continue;
 
         const { decision, justification } = classifyHeuristic(pr, knownTitles);
 
