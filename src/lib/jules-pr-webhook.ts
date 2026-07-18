@@ -3,6 +3,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { loadAstroDb } from './load-astro-db';
+import { getForgeHookBaseUrl } from './forge-hook-base-url';
 import { invokeOpenClawSessionsSend, resolveSessionsSendKey } from './openclaw-gateway';
 
 export function verifyGithubSignature256(
@@ -40,15 +41,6 @@ function julesLoginSet(): Set<string> {
 export function isJulesPullRequestAuthor(login: string | undefined): boolean {
   if (!login) return false;
   return julesLoginSet().has(login.trim().toLowerCase());
-}
-
-function forgeHookBaseUrl(): string {
-  const u =
-    process.env.FORGE_HOOK_BASE_URL?.trim() ||
-    process.env.PUBLIC_FORGE_URL?.trim() ||
-    process.env.PUBLIC_SITE_URL?.trim();
-  if (u) return u.replace(/\/$/, '');
-  return 'http://127.0.0.1:4321';
 }
 
 const PR_ACTIONS = new Set(['opened', 'reopened', 'ready_for_review']);
@@ -193,7 +185,7 @@ export async function handleGithubJulesPullRequest(
     baseRef: String(base?.ref || ''),
   };
 
-  const hookBase = forgeHookBaseUrl();
+  const hookBase = await getForgeHookBaseUrl();
   const now = new Date();
   const results: Array<{ agentId: string; taskId?: number; openclaw: string }> = [];
 
