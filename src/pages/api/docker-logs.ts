@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,7 +12,7 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const containerId = url.searchParams.get('id');
-    const tail = url.searchParams.get('tail') || '100';
+    let tailParam = url.searchParams.get('tail') || '100';
 
     if (!containerId) {
       return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
@@ -21,11 +21,28 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Input validation: prevent command injection and flag injection
+    if (typeof containerId !== 'string' || !/^[a-zA-Z0-9_.-]+$/.test(containerId) || containerId.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "ID du conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const tailNum = parseInt(tailParam, 10);
+    if (isNaN(tailNum) || tailNum < 0) {
+      tailParam = '100'; // Default fallback if invalid
+    } else {
+      tailParam = tailNum.toString();
+    }
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+        // Use execFileSync with array arguments to prevent command injection
+        const output = execFileSync('docker', ['logs', '--tail', tailParam, containerId], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          encoding: 'utf-8'
+        });
         logs = output.trim().split('\n');
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur

@@ -1,0 +1,4 @@
+## 2025-02-23 - Command Injection via execSync with string interpolation in API route
+**Vulnerability:** User input (`id` and `tail`) was being passed directly into a string executed by `execSync` (`docker logs --tail ${tail} ${containerId}`) in `src/pages/api/docker-logs.ts`. An attacker could inject arbitrary shell commands by appending `; command` to the `containerId`.
+**Learning:** In Astro API routes, never use `exec` or `execSync` with string interpolation when handling query parameters or request bodies.
+**Prevention:** Always use `execFile` or `execFileSync` passing arguments as an array (`['logs', '--tail', tailParam, containerId]`). Furthermore, enforce strict input validation using regex to allow only valid characters, and specifically block parameters starting with hyphens (`-`) to prevent flag injection into the target binary.
