@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 function dockerCliRowToContainer(row: Record<string, unknown>) {
   const names = String(row.Names || row.Name || '')
@@ -63,6 +64,11 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'Missing id or action' }), { status: 400 });
     }
 
+    // Input validation: ensure id and action only contain safe characters
+    if (!/^[a-zA-Z0-9_.-]+$/.test(id) || !/^[a-zA-Z0-9_.-]+$/.test(action)) {
+      return new Response(JSON.stringify({ error: 'Invalid id or action format' }), { status: 400 });
+    }
+
     let url = '';
     let method = 'POST';
     
@@ -73,7 +79,7 @@ export const POST: APIRoute = async ({ request }) => {
       url = `http://localhost/containers/${id}/${action}`;
     }
 
-    const { stdout } = await execAsync(`curl -s -X ${method} --unix-socket /var/run/docker.sock "${url}"`);
+    const { stdout } = await execFileAsync('curl', ['-s', '-X', method, '--unix-socket', '/var/run/docker.sock', url]);
     
     return new Response(JSON.stringify({ success: true, result: stdout }), {
       status: 200,
