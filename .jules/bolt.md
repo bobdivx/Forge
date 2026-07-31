@@ -1,0 +1,3 @@
+## 2025-05-12 - Parallelize Gateway Surface Fetching
+**Learning:** In gateway surface aggregation (`src/lib/forge-openai-surface.ts`), querying multiple paths sequentially with await blocks the event loop on I/O.
+**Action:** Use `Promise.all` to fetch parallel paths for API routes, iterating through the returned results array sequentially afterward to maintain state-dependent side effects exactly identical to the original behavior (such as `lastStatus` and `lastRaw`).
