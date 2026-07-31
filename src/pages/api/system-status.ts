@@ -1,20 +1,26 @@
-import type { APIRoute } from 'astro';
-import os from 'os';
-import { execSync } from 'child_process';
-import { db, Config, eq } from 'astro:db';
+import type { APIRoute } from "astro";
+import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { db, Config, eq } from "astro:db";
+
+const execAsync = promisify(exec);
 
 /** BusyBox `df` (Alpine) ne supporte pas `--output=pcent`. Lit la colonne capacité type `85%`. */
-function diskUsagePercentFromDf(targetPath: string): number | null {
+async function diskUsagePercentFromDf(
+  targetPath: string,
+): Promise<number | null> {
   try {
-    const dfOutput = execSync(`df -P "${targetPath}" 2>/dev/null || df -P / 2>/dev/null || true`)
-      .toString();
-    const lines = dfOutput.trim().split('\n').filter(Boolean);
+    const { stdout } = await execAsync(
+      `df -P "${targetPath}" 2>/dev/null || df -P / 2>/dev/null || true`,
+    );
+    const lines = stdout.trim().split("\n").filter(Boolean);
     const last = lines[lines.length - 1];
     const parts = last?.trim().split(/\s+/);
     const pct =
       parts?.find((p) => /^\d+%$/.test(p)) ??
       parts?.find((p, i) => i >= 4 && /^\d+%$/.test(p));
-    if (pct) return parseInt(pct.replace('%', ''), 10);
+    if (pct) return parseInt(pct.replace("%", ""), 10);
   } catch {
     /* ignore */
   }
@@ -32,12 +38,12 @@ export const GET: APIRoute = async () => {
           cpuLoad: null,
           uptime: null,
           diskUsage: null,
-          platform: 'vercel-edge',
-          note: 'Métriques hôte non disponibles en serverless (pas de lecture OS réelle).',
+          platform: "vercel-edge",
+          note: "Métriques hôte non disponibles en serverless (pas de lecture OS réelle).",
         }),
         {
           status: 200,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
         },
       );
     }
@@ -53,17 +59,30 @@ export const GET: APIRoute = async () => {
     let diskUsage: number | null = null;
     let githubDiskUsage: number | null = null;
     let unhealthyContainers: string[] = [];
+
     try {
-      diskUsage = diskUsagePercentFromDf('/mnt/Docker');
-      githubDiskUsage = diskUsagePercentFromDf('/mnt/GitHub');
-      
-      const unhealthy = execSync('docker ps --filter "health=unhealthy" --format "{{.Names}}"').toString();
-      unhealthyContainers = unhealthy.split('\n').filter(Boolean);
+      // ⚡ Bolt: Execute I/O bound metrics retrieval concurrently to unblock the main thread
+      // and reduce overall API response latency
+      const [dockerDisk, githubDisk, unhealthyStats] = await Promise.all([
+        diskUsagePercentFromDf("/mnt/Docker"),
+        diskUsagePercentFromDf("/mnt/GitHub"),
+        execAsync(
+          'docker ps --filter "health=unhealthy" --format "{{.Names}}"',
+        ).catch(() => ({ stdout: "" })),
+      ]);
+
+      diskUsage = dockerDisk;
+      githubDiskUsage = githubDisk;
+      unhealthyContainers = unhealthyStats.stdout.split("\n").filter(Boolean);
     } catch (e) {
-      console.error('Failed to fetch system data', e);
+      console.error("Failed to fetch system data", e);
     }
 
-    const lastMaint = await db.select().from(Config).where(eq(Config.key, 'lastMaintenanceCycle')).get();
+    const lastMaint = await db
+      .select()
+      .from(Config)
+      .where(eq(Config.key, "lastMaintenanceCycle"))
+      .get();
 
     return new Response(
       JSON.stringify({
@@ -78,14 +97,14 @@ export const GET: APIRoute = async () => {
       }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       },
     );
   } catch (error) {
-    console.error('System status error:', error);
-    return new Response(JSON.stringify({ error: 'Sonde indisponible' }), {
+    console.error("System status error:", error);
+    return new Response(JSON.stringify({ error: "Sonde indisponible" }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 };
