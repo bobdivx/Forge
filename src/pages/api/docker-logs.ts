@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,16 +24,35 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
+    // SECURITY: Validate inputs to prevent command injection or malformed args
+    // Container ID should be alphanumeric with dashes/underscores
+    if (!/^[a-zA-Z0-9_-]+$/.test(containerId)) {
+      return new Response(JSON.stringify({ error: "Invalid container ID format" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Tail should be a number or 'all'
+    if (!/^(all|\d+)$/.test(tail)) {
+        return new Response(JSON.stringify({ error: "Invalid tail parameter format" }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
+
+    // SECURITY: Use execFileAsync with array arguments instead of execSync with string concatenation
+    // This completely prevents command injection attacks.
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        // Docker logs can sometimes go to stderr depending on the container, try stdout first
+        const outputStr = stdout.trim() ? stdout : stderr;
+        logs = outputStr.trim().split('\n').filter(Boolean);
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
-            logs = err.stderr.toString().trim().split('\n');
+            logs = err.stderr.toString().trim().split('\n').filter(Boolean);
         } else {
             throw err;
         }
