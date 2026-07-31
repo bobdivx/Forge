@@ -1,0 +1,11 @@
+💡 **What:**
+Refactored the `/api/dashboard-kpis.ts` endpoint to use Drizzle ORM aggregation primitives (`count()`, `gte()`, `inArray()`) instead of fetching full tables into memory.
+
+🎯 **Why:**
+Previously, queries like `db.select().from(AgentTask)` were fetching potentially thousands of records into Node.js memory just to execute a `.length` operation. This caused an O(N) memory allocation scaling issue that degraded the dashboard's load performance.
+
+📊 **Impact:**
+Eliminates O(N) memory scaling for KPI database operations. Reduces Node.js memory usage and payload size significantly by offloading aggregations natively to SQLite.
+
+🔬 **Measurement:**
+Run the endpoint locally, memory utilization limits drop.
