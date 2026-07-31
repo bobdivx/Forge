@@ -1,0 +1,4 @@
+## 2025-02-27 - Fix command injection in system-status.ts
+**Vulnerability:** The API endpoint `src/pages/api/system-status.ts` passed unvalidated user input (`targetPath`) directly into a shell command using `execSync(\`df -P "\${targetPath}" ...\`)`. This allowed arbitrary command execution. Additionally, `execSync` for commands like `docker ps` unnecessarily spawned a shell environment.
+**Learning:** Shell operators like `||` should be replaced by JavaScript control flow (e.g., `try...catch` with subsequent execution) when attempting fallbacks for OS commands.
+**Prevention:** Always use `execFile` or `execFileAsync` alongside argument arrays (`['df', ['-P', '--', targetPath]]`) rather than string-concatenated shell execution. The double-dash (`--`) ensures the target path is treated strictly as a positional argument and not interpreted as a command flag, eliminating both command injection and argument injection risks.
