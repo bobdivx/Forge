@@ -1,0 +1,3 @@
+## 2024-05-25 - Accessibility for textual icon buttons
+**Learning:** Textual icons (like `>`) used in icon-only buttons can be read confusingly by screen readers (e.g. "greater than"). It is necessary to hide them with `aria-hidden="true"` while providing a descriptive `aria-label` on the parent `<button>`, particularly localized strings like "Envoyer le message" in this application's French context.
+**Action:** Always wrap literal text icons in `<span aria-hidden="true">` when the parent button has an `aria-label` to prevent redundant or confusing screen reader announcements.
