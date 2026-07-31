@@ -204,7 +204,7 @@ export default function AppLogsPage({ appName, initialServerId }: Props) {
               <span class="text-gray-600 text-[10px]">
                 {displayLines.length}/{lines.length}
               </span>
-              <button onClick={() => setFilter('')} class="text-gray-600 hover:text-gray-300 text-xs">✕</button>
+              <button onClick={() => setFilter('')} class="text-gray-600 hover:text-gray-300 text-xs" aria-label="Effacer le filtre">✕</button>
             </>
           )}
         </div>
