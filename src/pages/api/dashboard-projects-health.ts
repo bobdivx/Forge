@@ -30,6 +30,10 @@ function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean 
 /** GET — état synthétique pour la carte Projets du dashboard (poll léger). */
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
+  const zimaosSessionPromise = fetchZimaOSSessionsPayload(email);
+  // Attach a dummy catch handler immediately to prevent UnhandledPromiseRejection
+  // if the fetch fails before we await it later in the final try/catch block.
+  zimaosSessionPromise.catch(() => {});
 
   const payload: {
     projects: Array<{
@@ -150,7 +154,7 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   try {
-    const oc = await fetchZimaOSSessionsPayload(email);
+    const oc = await zimaosSessionPromise;
     payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
       ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])
