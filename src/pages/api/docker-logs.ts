@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,7 +15,7 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const containerId = url.searchParams.get('id');
-    const tail = url.searchParams.get('tail') || '100';
+    let tail = url.searchParams.get('tail') || '100';
 
     if (!containerId) {
       return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
@@ -21,18 +24,35 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Validation stricte de l'ID du conteneur pour éviter l'injection de commandes ou d'arguments
+    if (containerId.startsWith('-') || !/^[a-zA-Z0-9_.-]+$/.test(containerId)) {
+      return new Response(JSON.stringify({ error: "Format d'ID de conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Validation du paramètre tail
+    const parsedTail = parseInt(tail, 10);
+    if (isNaN(parsedTail) || parsedTail < 0) {
+      tail = '100';
+    } else {
+      tail = parsedTail.toString();
+    }
+
+    // Commande Docker pour récupérer les logs via execFileAsync
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        const output = stdout + stderr;
+        logs = output.trim().split('\n').filter(Boolean);
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
-            logs = err.stderr.toString().trim().split('\n');
+            logs = err.stderr.toString().trim().split('\n').filter(Boolean);
         } else {
-            throw err;
+            // Ne pas exposer les détails de l'erreur
+            throw new Error('Erreur lors de la récupération des logs');
         }
     }
 
