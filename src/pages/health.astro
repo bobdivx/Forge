@@ -7,12 +7,14 @@ import { getAllConfig, getConfig } from '../lib/config-db';
 const config = await getAllConfig();
 const { db, AgentInstruction, ActivityLog, AgentBudget, Heartbeat, sql, desc } = await loadAstroDb();
 
-// 1. Forge Agents
-const forgeAgents = await db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`);
+// 1. Forge Agents & Budgets (Concurrent)
+const [forgeAgents, budgets] = await Promise.all([
+  db.select().from(AgentInstruction).where(sql`${AgentInstruction.enabled} = 1`),
+  db.select().from(AgentBudget)
+]);
 const forgeIds = forgeAgents.map(a => a.agentId);
 
-// 2. Budgets
-let budgets = await db.select().from(AgentBudget);
+// 2. Budgets processing
 const activeBudgetsCount = budgets.filter(b => b.enabled === 1 || (b as any).enabled === undefined || (b as any).enabled === null).length;
 const totalMonthSpent = budgets.reduce((acc, b) => acc + (Number(b.spentThisMonth) || 0), 0);
 
@@ -32,9 +34,12 @@ try {
   ollamaError = 'Serveur injoignable';
 }
 
-// 4. Activity Logs
-const recentLogs = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(8);
-const rawPulse = await db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(50);
+// 4. Activity Logs (Concurrent)
+const [recentLogs, rawPulse] = await Promise.all([
+  db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(8),
+  db.select().from(ActivityLog).orderBy(desc(ActivityLog.createdAt)).limit(50)
+]);
+
 const recentPulse = rawPulse.filter(p => p.action.startsWith('scheduler.') || p.action.startsWith('work_cycle.'));
 
 const recentHeartbeats = (recentPulse.length > 0) 
