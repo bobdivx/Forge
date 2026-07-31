@@ -1,0 +1,4 @@
+## 2024-11-20 - Fix Command Injection in docker logs API
+**Vulnerability:** The `src/pages/api/docker-logs.ts` endpoint was vulnerable to Command Injection because user input (`containerId` and `tail`) was directly interpolated into a shell string executed via `execSync` (`docker logs --tail ${tail} ${containerId}`).
+**Learning:** Directly concatenating user inputs into commands evaluated by a shell (`execSync` or `exec`) is a critical security risk. It allows attackers to execute arbitrary shell commands.
+**Prevention:** Always use safe execution methods like `execFile` (or `execFileAsync`) where arguments are passed as an array, not a shell string. Use `--` to separate command flags from arguments. Furthermore, validate all inputs (e.g., matching against a strict regex `/^[a-zA-Z0-9_.-]+$/` for container IDs and parsing integers for `tail`). Sanitize error messages in responses to avoid leaking internal errors.
