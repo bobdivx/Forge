@@ -1,0 +1,4 @@
+## 2024-06-01 - Fix Command Injection in API endpoints using Docker logs
+**Vulnerability:** The API route `src/pages/api/docker-logs.ts` constructed shell commands using unvalidated, unsanitized user input (`id` and `tail` query parameters) directly into `execSync`, creating a severe command injection vulnerability.
+**Learning:** Shell-based execution (`execSync` or `exec`) implicitly runs commands within a shell environment where operators like `;` and `&&` evaluate, allowing an attacker to inject arbitrary system commands via user-supplied parameters if not strictly validated or escaped.
+**Prevention:** Always use `execFile` or `execFileAsync` which execute specific binaries directly and accept an array of arguments, bypassing shell parsing. Additionally, strictly validate all query parameters (e.g., using regex `^[a-zA-Z0-9_-]+$`) to prevent flag/argument injection.
