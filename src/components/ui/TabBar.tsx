@@ -16,7 +16,7 @@ export default function TabBar({ tabs, active, onChange, className = '', tone = 
     : 'flex flex-wrap gap-1 p-1 bg-gray-100 rounded-xl w-fit';
 
   return (
-    <div class={`${rail} ${className}`}>
+    <div role="tablist" class={`${rail} ${className}`}>
       {tabs.map((tab) => {
         const selected = active === tab.id;
         const base =
@@ -32,6 +32,8 @@ export default function TabBar({ tabs, active, onChange, className = '', tone = 
         return (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={selected}
             type="button"
             onClick={() => onChange(tab.id)}
             class={`${base} ${sizing} ${selected ? activeCls : idleCls}`}
