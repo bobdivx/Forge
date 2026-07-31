@@ -31,6 +31,11 @@ function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean 
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
 
+  // Bolt: Optimize Astro API route performance by initiating slow external network/gateway calls
+  // at the beginning of the request handler as un-awaited Promises.
+  const zimaosSessionPromise = fetchZimaOSSessionsPayload(email);
+  zimaosSessionPromise.catch(() => {}); // prevent UnhandledPromiseRejection if it fails before await
+
   const payload: {
     projects: Array<{
       id: number;
@@ -83,7 +88,24 @@ export const GET: APIRoute = async ({ locals }) => {
       return { pendingOrRunning: pend.length, running };
     };
 
-    for (const p of projects as ProjectRow[]) {
+    // Bolt: Concurrently initiate project status checks to optimize sequential file I/O and network calls.
+    const projectPromises = (projects as ProjectRow[]).map((p) => {
+      const resolvedPromise = resolveProjectPathFromDbProject({
+        name: p.name,
+        path: p.path,
+      })
+        .then((resolved) => {
+          if (resolved) {
+            return getPrimaryDevServerStatus(resolved).then((st) => ({ resolved, st }));
+          }
+          return { resolved: null as string | null, st: null as Awaited<ReturnType<typeof getPrimaryDevServerStatus>> };
+        })
+        .catch(() => ({ resolved: null as string | null, st: null as Awaited<ReturnType<typeof getPrimaryDevServerStatus>> }));
+
+      return { p, resolvedPromise };
+    });
+
+    for (const { p, resolvedPromise } of projectPromises) {
       let dev: {
         ok: boolean;
         running?: boolean;
@@ -98,12 +120,10 @@ export const GET: APIRoute = async ({ locals }) => {
       };
 
       try {
-        const resolved = await resolveProjectPathFromDbProject({
-          name: p.name,
-          path: p.path,
-        });
+        const res = await resolvedPromise;
+        const resolved = res?.resolved;
+        const st = res?.st;
         if (resolved) {
-          const st = await getPrimaryDevServerStatus(resolved);
           if (st) {
             dev = {
               ok: true,
@@ -150,7 +170,7 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   try {
-    const oc = await fetchZimaOSSessionsPayload(email);
+    const oc = await zimaosSessionPromise;
     payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
       ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])
