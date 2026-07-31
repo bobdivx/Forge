@@ -1,0 +1,3 @@
+## 2024-05-16 - Icon-only Buttons Missing Accessibility Patterns
+**Learning:** Discovered a pattern in the application's core composer components where icon-only buttons (like the send message `&gt;` button and options menu SVG button) lacked proper ARIA labels, descriptive titles, and visible keyboard focus states (`focus-visible`). Furthermore, literal characters used as icons (like `&gt;`) were not hidden from screen readers.
+**Action:** Added `aria-label`, `title`, and `focus-visible` ring classes to these buttons. Wrapped text-based icons in `<span aria-hidden="true">` and added `aria-hidden="true"` to decorative SVGs. Going forward, will proactively check all new interactive elements for proper labeling and keyboard navigability.
