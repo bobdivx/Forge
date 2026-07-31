@@ -35,45 +35,63 @@ export const POST: APIRoute = async ({ request }) => {
   const results: { name: string; status: string; errorMessage?: string }[] = [];
   console.log(`[sync-projects] Scanned ${reposRoot}. Found directories: ${dirs.join(', ')}`);
 
-  for (const dirName of dirs) {
-    const fullPath = path.join(reposRoot, dirName);
-    const hasGit = fs.existsSync(path.join(fullPath, '.git'));
-    if (!hasGit) {
-      console.log(`[sync-projects] Skipping ${dirName}: no .git folder`);
-      continue;
-    }
+  try {
+    // Optimization: Resolve N+1 query problem by fetching all projects in a single query
+    // and using a Map for O(1) lookups instead of querying the DB in a loop.
+    const allProjects = await db.select().from(Project);
+    const projectMap = new Map(allProjects.map(p => [p.name, p]));
 
-    try {
-      const existing = await db.select().from(Project).where(eq(Project.name, dirName)).limit(1);
-      if (existing.length) {
-        const row = existing[0];
+    const toInsert: any[] = [];
+    const updatePromises: Promise<any>[] = [];
+
+    for (const dirName of dirs) {
+      const fullPath = path.join(reposRoot, dirName);
+      const hasGit = fs.existsSync(path.join(fullPath, '.git'));
+      if (!hasGit) {
+        console.log(`[sync-projects] Skipping ${dirName}: no .git folder`);
+        continue;
+      }
+
+      const row = projectMap.get(dirName);
+      if (row) {
         const samePath = String(row.path ?? '') === fullPath;
         if (!samePath) {
-          await db
-            .update(Project)
-            .set({ path: fullPath, updatedAt: new Date() })
-            .where(eq(Project.id, row.id));
+          updatePromises.push(
+            db.update(Project)
+              .set({ path: fullPath, updatedAt: new Date() })
+              .where(eq(Project.id, row.id))
+          );
           results.push({ name: dirName, status: 'path_updated' });
         } else {
           results.push({ name: dirName, status: 'exists' });
         }
-        continue;
+      } else {
+        toInsert.push({
+          name: dirName,
+          path: fullPath,
+          status: 'active',
+          swarmEnabled: 1,
+          description: 'Dépôt détecté automatiquement',
+        });
+        results.push({ name: dirName, status: 'added' });
       }
-
-      await db.insert(Project).values({
-        name: dirName,
-        path: fullPath,
-        status: 'active',
-        swarmEnabled: 1,
-        description: 'Dépôt détecté automatiquement',
-      });
-      console.log(`[sync-projects] Added ${dirName}`);
-      results.push({ name: dirName, status: 'added' });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[sync-projects] Database error for element ${dirName}:`, msg);
-      results.push({ name: dirName, status: 'error', errorMessage: msg });
     }
+
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+    }
+
+    if (toInsert.length > 0) {
+      await db.insert(Project).values(toInsert);
+      console.log(`[sync-projects] Added ${toInsert.length} projects: ${toInsert.map(i => i.name).join(', ')}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[sync-projects] Batch database error:`, msg);
+    return new Response(
+      JSON.stringify({ ok: false, error: msg }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   return new Response(
