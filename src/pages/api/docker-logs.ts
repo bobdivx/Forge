@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,7 +15,7 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const containerId = url.searchParams.get('id');
-    const tail = url.searchParams.get('tail') || '100';
+    let tail = url.searchParams.get('tail') || '100';
 
     if (!containerId) {
       return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
@@ -21,15 +24,30 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
+    // Validate containerId to prevent argument injection
+    if (!/^[a-zA-Z0-9_.-]+$/.test(containerId) || containerId.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "Format de l'ID du conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Validate tail to ensure it's a number
+    if (!/^\d+$/.test(tail)) {
+      tail = '100';
+    }
+
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, '--', containerId]);
+        if (stdout.trim()) {
+            logs = stdout.trim().split('\n');
+        } else if (stderr.trim()) {
+            logs = stderr.trim().split('\n');
+        }
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
-        if (err.stderr) {
+        if (err.stderr && err.stderr.toString().trim()) {
             logs = err.stderr.toString().trim().split('\n');
         } else {
             throw err;
@@ -41,7 +59,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // Sanitize error message to prevent leaking sensitive info
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
