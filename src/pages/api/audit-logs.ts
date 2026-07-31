@@ -3,8 +3,10 @@ import { db, AgentTask, AgentMessage, desc } from 'astro:db';
 
 export const GET: APIRoute = async () => {
   try {
-    const tasks = await db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(50);
-    const messages = await db.select().from(AgentMessage).orderBy(desc(AgentMessage.timestamp)).limit(50);
+    const [tasks, messages] = await Promise.all([
+      db.select().from(AgentTask).orderBy(desc(AgentTask.createdAt)).limit(50),
+      db.select().from(AgentMessage).orderBy(desc(AgentMessage.timestamp)).limit(50)
+    ]);
 
     const mergedLogs = [
       ...tasks.map((task) => ({
