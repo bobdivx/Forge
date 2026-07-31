@@ -1,0 +1,3 @@
+## 2026-06-09 - AgentCard Button Accessibility
+**Learning:** Found multiple icon-only buttons in AgentCard.tsx that use `title` for hover tooltips but lack proper `aria-label` for screen readers. Also, interactive SVGs should be marked with `aria-hidden="true"` when parent button has aria-label to prevent redundant reading. Keyboard focus styles (`focus-visible:ring-2 focus-visible:outline-none`) are also missing on these icon buttons.
+**Action:** When implementing icon-only buttons with `title` attributes, always duplicate the value to `aria-label` (or better, use just aria-label if tooltip isn't necessary, but keep title for mouse users), add `focus-visible` utility classes for keyboard navigation, and hide child SVGs.
