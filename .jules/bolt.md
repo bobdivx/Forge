@@ -1,0 +1,3 @@
+## 2024-03-24 - [Avoid N+1 Full-Table Fetches in API Endpoints]
+**Learning:** Found an API endpoint (`src/pages/api/dashboard-kpis.ts`) that fetched entire database tables (e.g., `db.select().from(AgentTask)`) to memory just to count rows or filter rows (e.g., `.filter(t => d >= today)`), which causes severe memory bottlenecks and slow response times as the dataset grows.
+**Action:** Use Drizzle ORM's native SQL functions like `count()` destructured from `loadAstroDb()` to push aggregations and filtering to the database level, drastically reducing network overhead and memory consumption. Group independent aggregate queries with `Promise.all` to maintain parallel execution.
