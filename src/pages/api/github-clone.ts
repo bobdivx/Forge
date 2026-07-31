@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getReposRootResolved } from '../../lib/forge-repos';
 import { getConfig } from '../../lib/config-db';
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -32,8 +32,9 @@ export const POST: APIRoute = async ({ request }) => {
     // Assuming format https://github.com/user/repo.git
     const authUrl = repoUrl.replace('https://', `https://oauth2:${githubToken}@`);
 
-    // Clone the repository
-    const { stdout, stderr } = await execPromise(`git clone ${authUrl} ${repoName}`, { cwd: reposRoot });
+    // Clone the repository securely using execFile to prevent command injection.
+    // We use '--' to prevent argument injection if the repo URL or name starts with '-'.
+    const { stdout, stderr } = await execFilePromise('git', ['clone', '--', authUrl, repoName], { cwd: reposRoot });
 
     // Try to auto-sync it into the database
     try {
@@ -53,7 +54,11 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message || 'Erreur lors du clonage' }), {
+    // 🛡️ Sentinel: Prevent GitHub token from leaking in error messages
+    const rawError = error.message || 'Erreur lors du clonage';
+    const safeError = rawError.replace(/https:\/\/[^@]+@/g, 'https://***@');
+
+    return new Response(JSON.stringify({ error: safeError }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
