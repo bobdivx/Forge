@@ -120,7 +120,7 @@ function BudgetModal({
       <div class="bg-white rounded-[2rem] shadow-2xl p-8 w-full max-w-md space-y-5">
         <div class="flex items-center justify-between">
           <h3 class="text-xl font-bold text-gray-900">Budget — <span class="font-mono text-[#175B37]">{agent.agentId}</span></h3>
-          <button onClick={onClose} class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          <button onClick={onClose} class="text-gray-400 hover:text-gray-600 text-2xl leading-none" aria-label="Fermer" title="Fermer">&times;</button>
         </div>
 
         <div class="space-y-4">
