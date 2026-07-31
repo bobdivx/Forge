@@ -1,0 +1,3 @@
+## 2024-06-17 - Loading State and Accessibility in Composer Actions
+**Learning:** Adding visual loading states (like spinners) coupled with accessible attributes (ARIA labels, titles, and `aria-hidden` spans for raw text/icons) on chat composer actions significantly clarifies user feedback during async operations, ensuring a smooth experience for both sighted and screen-reader users without relying purely on disabled state opacities.
+**Action:** Always include a visual loading state with appropriate ARIA attributes for primary async action buttons in interactive chat or form components. Use `aria-hidden="true"` on text-based icons (like `>`) when they are accompanied by a descriptive `aria-label`.
