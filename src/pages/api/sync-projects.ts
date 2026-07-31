@@ -35,6 +35,12 @@ export const POST: APIRoute = async ({ request }) => {
   const results: { name: string; status: string; errorMessage?: string }[] = [];
   console.log(`[sync-projects] Scanned ${reposRoot}. Found directories: ${dirs.join(', ')}`);
 
+  // ⚡ Bolt Performance Optimization:
+  // Pre-fetch all existing projects to prevent N+1 query problem during directory synchronization.
+  // This reduces O(N) database queries into a single query and O(1) in-memory map lookups.
+  const allProjects = await db.select().from(Project);
+  const projectsByName = new Map(allProjects.map((p) => [p.name, p]));
+
   for (const dirName of dirs) {
     const fullPath = path.join(reposRoot, dirName);
     const hasGit = fs.existsSync(path.join(fullPath, '.git'));
@@ -44,15 +50,14 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     try {
-      const existing = await db.select().from(Project).where(eq(Project.name, dirName)).limit(1);
-      if (existing.length) {
-        const row = existing[0];
-        const samePath = String(row.path ?? '') === fullPath;
+      const existingRow = projectsByName.get(dirName);
+      if (existingRow) {
+        const samePath = String(existingRow.path ?? '') === fullPath;
         if (!samePath) {
           await db
             .update(Project)
             .set({ path: fullPath, updatedAt: new Date() })
-            .where(eq(Project.id, row.id));
+            .where(eq(Project.id, existingRow.id));
           results.push({ name: dirName, status: 'path_updated' });
         } else {
           results.push({ name: dirName, status: 'exists' });
