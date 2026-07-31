@@ -19,11 +19,6 @@ function countRunningSessions(sessions: unknown[]): number {
   }).length;
 }
 
-function isOpenQueueStatus(st: string): boolean {
-  const s = String(st).toLowerCase();
-  return s === 'open' || s === 'in_progress';
-}
-
 export const GET: APIRoute = async () => {
   const base = {
     projectCount: 0,
@@ -42,30 +37,27 @@ export const GET: APIRoute = async () => {
   };
 
   try {
-    const { db, Project, AgentTask, Request, AgentAppIssue, AgentDependencyRequest, eq } =
+    const { db, Project, AgentTask, Request, AgentAppIssue, AgentDependencyRequest, eq, count, gte, inArray } =
       await loadAstroDb();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [projects, tasksAll, openRequests, issuesAll, depsAll] = await Promise.all([
-      db.select().from(Project),
-      db.select().from(AgentTask),
-      db.select().from(Request).where(eq(Request.status, 'pending')),
-      db.select().from(AgentAppIssue),
-      db.select().from(AgentDependencyRequest),
+    // Bolt Optimization: Replace full table fetches with SQL count aggregates to reduce memory and processing overhead
+    const [projectsCount, tasksAllCount, tasksTodayCount, openRequestsCount, issuesAllCount, depsAllCount] = await Promise.all([
+      db.select({ count: count() }).from(Project),
+      db.select({ count: count() }).from(AgentTask),
+      db.select({ count: count() }).from(AgentTask).where(gte(AgentTask.createdAt, today)),
+      db.select({ count: count() }).from(Request).where(eq(Request.status, 'pending')),
+      db.select({ count: count() }).from(AgentAppIssue).where(inArray(AgentAppIssue.status, ['open', 'in_progress'])),
+      db.select({ count: count() }).from(AgentDependencyRequest).where(inArray(AgentDependencyRequest.status, ['open', 'in_progress'])),
     ]);
 
-    const tasksTodayCount = tasksAll.filter((t) => {
-      const d = t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt as Date);
-      return d >= today;
-    }).length;
-
-    base.projectCount = projects.length;
-    base.tasksTotal = tasksAll.length;
-    base.tasksToday = tasksTodayCount;
-    base.openRequests = openRequests.length;
-    base.openAppIssues = issuesAll.filter((r) => isOpenQueueStatus(String(r.status))).length;
-    base.openDependencyRequests = depsAll.filter((r) => isOpenQueueStatus(String(r.status))).length;
+    base.projectCount = projectsCount[0]?.count || 0;
+    base.tasksTotal = tasksAllCount[0]?.count || 0;
+    base.tasksToday = tasksTodayCount[0]?.count || 0;
+    base.openRequests = openRequestsCount[0]?.count || 0;
+    base.openAppIssues = issuesAllCount[0]?.count || 0;
+    base.openDependencyRequests = depsAllCount[0]?.count || 0;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     base.dbError = msg;
