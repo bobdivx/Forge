@@ -1,0 +1,3 @@
+## 2026-05-31 - [Optimize Sequential DB queries]
+**Learning:** Sequential database queries in Astro DB (like getting projects, tasks, issues) can become a bottleneck when they are independent and can be executed concurrently. Using Promise.all with conditionally resolved promises (e.g., `Promise.resolve([])`) for optional schemas optimally groups execution without blocking.
+**Action:** When working on Astro SSR endpoints and data heavy libraries like `mission-board`, proactively look for unlinked `await db.select()` queries and group them into `Promise.all()` concurrently to optimize wait times.
