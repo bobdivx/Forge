@@ -1,0 +1,3 @@
+## 2023-10-27 - [Dashboard KPI DB Aggregations]
+**Learning:** Found an anti-pattern in the dashboard KPIs endpoint (`src/pages/api/dashboard-kpis.ts`) where entire database tables (Project, AgentTask, Request, etc.) were fetched into Node.js memory (`db.select().from(Table)`) just to count lengths or perform client-side filtering (`.filter().length`). In Astro DB/Drizzle ORM, fetching massive tables into memory creates severe bottlenecks.
+**Action:** Always use SQL aggregation (`db.select({ value: count() }).from(Table)`) with the appropriate WHERE clauses (`gte`, `inArray`, `eq`) instead of retrieving raw collections to evaluate counts. Make sure to retrieve SQL helper functions (like `count`, `inArray`, etc.) from the `loadAstroDb()` utility.
