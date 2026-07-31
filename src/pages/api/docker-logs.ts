@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import util from 'util';
+
+const execFileAsync = util.promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,21 +15,27 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const containerId = url.searchParams.get('id');
-    const tail = url.searchParams.get('tail') || '100';
+    const tailRaw = url.searchParams.get('tail') || '100';
 
-    if (!containerId) {
-      return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
+    if (!containerId || containerId.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "ID du conteneur manquant ou invalide" }), {
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Convert tail to a valid string representing a positive integer
+    const tailParsed = parseInt(tailRaw, 10);
+    const tailStr = isNaN(tailParsed) || tailParsed < 0 ? '100' : tailParsed.toString();
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        // [Security] Prevent command injection by using execFile with argument arrays
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tailStr, containerId]);
+        const output = stdout.trim() || stderr.trim();
+        if (output) {
+            logs = output.split('\n');
+        }
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
@@ -41,7 +50,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // [Security] Sanitize error message to avoid leaking internal paths or sensitive details
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
