@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,18 +24,27 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Validation des entrées pour prévenir l'injection d'arguments
+    if (containerId.startsWith('-') || tail.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "Format d'entrée invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        // Certains logs sortent sur stderr, fusionnons ou prenons stdout si dispo
+        const output = stdout.trim() || stderr.trim();
+        logs = output ? output.split('\n') : [];
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
+        // En cas d'erreur de commande (ex: conteneur introuvable), docker renvoie les infos sur stderr
         if (err.stderr) {
             logs = err.stderr.toString().trim().split('\n');
         } else {
-            throw err;
+            // Ne pas fuiter le message d'erreur brut au client pour des raisons de sécurité
+            throw new Error("Erreur d'exécution de la commande");
         }
     }
 
@@ -41,7 +53,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // Ne pas fuiter le message d'erreur brut au client pour des raisons de sécurité
+    return new Response(JSON.stringify({ error: "Logs indisponibles suite à une erreur interne" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
