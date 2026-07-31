@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,14 +24,26 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
+    // 🛡️ Sentinel: Validate containerId to prevent argument injection
+    if (!/^[a-zA-Z0-9_.-]+$/.test(containerId)) {
+      return new Response(JSON.stringify({ error: "ID de conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const tailNum = parseInt(tail, 10);
+    const validTail = isNaN(tailNum) ? '100' : String(tailNum);
+
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+        // 🛡️ Sentinel: Use execFileAsync with argument arrays instead of execSync with string concatenation
+        // to prevent command injection via shell operators.
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', validTail, containerId]);
+        // Docker logs may output to stdout or stderr depending on the container
+        const output = stdout || stderr;
         logs = output.trim().split('\n');
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
         if (err.stderr) {
             logs = err.stderr.toString().trim().split('\n');
         } else {
@@ -41,7 +56,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // 🛡️ Sentinel: Don't leak raw error details
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
