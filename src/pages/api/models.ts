@@ -44,17 +44,19 @@ export const GET: APIRoute = async ({ request }) => {
           dbCatalog = await db.select().from(AgentModel);
         } else {
           const existing = new Set(dbCatalog.map((m) => String(m.id).trim()));
-          for (const m of FORGE_DEFAULT_AGENT_MODELS) {
-            if (existing.has(m.id)) continue;
-            await db.insert(AgentModel).values({
+          const toInsert = FORGE_DEFAULT_AGENT_MODELS
+            .filter((m) => !existing.has(m.id))
+            .map((m) => ({
               id: m.id,
               label: m.label,
               source: 'seed',
               enabled: 1,
               updatedAt: now,
-            });
+            }));
+          if (toInsert.length > 0) {
+            await db.insert(AgentModel).values(toInsert);
+            dbCatalog = await db.select().from(AgentModel);
           }
-          dbCatalog = await db.select().from(AgentModel);
         }
         dbEnabled = dbCatalog
           .filter((m) => Number(m.enabled) === 1)
