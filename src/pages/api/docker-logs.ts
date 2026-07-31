@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -22,15 +25,20 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        // Utilisation de execFile pour éviter l'injection de commandes
+        const { stdout, stderr } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+
+        // docker logs sort souvent sur stderr même en cas de succès, on combine ou on priorise
+        const output = stdout.trim() || stderr.trim();
+        logs = output ? output.split('\n') : [];
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
+        // En cas d'erreur de la commande docker
         if (err.stderr) {
             logs = err.stderr.toString().trim().split('\n');
+        } else if (err.stdout) {
+            logs = err.stdout.toString().trim().split('\n');
         } else {
             throw err;
         }
