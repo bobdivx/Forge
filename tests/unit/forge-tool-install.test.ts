@@ -17,10 +17,10 @@ describe('forge-tool-install', () => {
   it('accepte un nom simple avec un manager explicite', async () => {
     // Note : on n'appelle pas réellement infra.exec ici car le test runtime
     // ne dispose pas d'astro:db / SSH. On vérifie juste le path de validation.
+    // L'exec va échouer en test (pas d'infra ou DB timeout), mais le commande/manager
+    // devraient être correctement résolus et retournés.
     const r = await installToolPackage({ pkg: 'ripgrep', manager: 'apt' });
-    // L'exec va échouer en test (pas d'infra), mais le commande/manager
-    // devraient être correctement résolus avant la tentative.
     expect(r.manager).toBe('apt');
     expect(r.command).toMatch(/ripgrep/);
-  });
+  }, 10000);
 });
