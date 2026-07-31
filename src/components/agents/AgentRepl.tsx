@@ -152,6 +152,7 @@ export default function AgentRepl() {
           <button
             type="button"
             title="Effacer"
+            aria-label="Effacer"
             class="w-3 h-3 rounded-full bg-gray-300 hover:bg-rose-400 transition-colors border border-gray-200"
             onClick={(e) => {
               e.stopPropagation();
@@ -262,6 +263,7 @@ export default function AgentRepl() {
           class="shrink-0 p-2 rounded-full border border-transparent transition-colors disabled:opacity-25 hover:bg-white hover:border-gray-200 hover:shadow-sm"
           style={{ color: FORGE }}
           title="Exécuter (Entrée)"
+          aria-label="Exécuter"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
