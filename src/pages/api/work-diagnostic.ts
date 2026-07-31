@@ -7,10 +7,13 @@ import { getWorkSystemStatus } from '../../lib/forge-work-scheduler';
 export const GET: APIRoute = async () => {
   try {
     const { db, Project, AgentInstruction, ActivityLog, AgentBudget, CostEvent, sql } = await loadAstroDb();
-    const projects = await db.select().from(Project);
-    const agents = await db.select().from(AgentInstruction);
 
-    const budgets = await db.select().from(AgentBudget);
+    // ⚡ Bolt: Fetch projects, agents, and budgets concurrently
+    const [projects, agents, budgets] = await Promise.all([
+      db.select().from(Project),
+      db.select().from(AgentInstruction),
+      db.select().from(AgentBudget),
+    ]);
     const activeBudgets = budgets.filter((b) => b.enabled === 1);
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
