@@ -1,0 +1,3 @@
+## 2024-06-25 - Parallelizing State-Dependent Array Fetches
+**Learning:** Sequential network calls inside a loop (`for...of`) create cumulative latency, especially when collecting configuration items across multiple potential reverse proxy paths. It's safe to parallelize these requests if the state side-effects (e.g., updating `lastStatus`, `lastError`, `lastRaw`) depend strictly on the sequence order.
+**Action:** Replace sequential loops with `await Promise.all(paths.map(fetchFn))`. Then, iterate through the resolved results array (`for (const r of results)`) to process side effects. This guarantees order-dependent logic remains identical while shifting the I/O bottleneck from serial to parallel execution.
