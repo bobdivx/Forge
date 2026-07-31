@@ -1,0 +1,4 @@
+## 2024-05-24 - [Fix Command Injection in GitHub Clone API]
+**Vulnerability:** The `src/pages/api/github-clone.ts` API route used `exec` to clone repositories using a string built directly from unsanitized `repoUrl` and `repoName` parameters provided by the client. It also failed to scrub the GitHub token from error output before returning it to the user.
+**Learning:** Concatenating user inputs into a shell execution via `exec` allows command injection and exposes the execution context to exploitation. The system can leak internal tokens if errors thrown by the shell are surfaced directly.
+**Prevention:** Use `execFile` with explicitly separated arguments instead of `exec`. Enforce tight input validation (`/^[a-zA-Z0-9_.-]+$/` for filenames and avoid leading hyphens for option injections). Explicitly sanitize errors, catching them, obscuring secrets, and returning generic error messages to the client API response.
