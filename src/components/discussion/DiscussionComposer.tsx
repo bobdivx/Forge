@@ -484,9 +484,10 @@ export default function DiscussionComposer({ initialProjectId }: { initialProjec
         <div class="fixed inset-0 z-[100] flex items-stretch lg:hidden" role="dialog" aria-modal="true" aria-labelledby="discussion-team-picker-title">
           <button
             type="button"
-            class="absolute inset-0 z-0 bg-black/40"
+            class="absolute inset-0 z-0 bg-black/40 cursor-default"
             aria-label="Fermer"
             onClick={() => setTeamPickerOpen(false)}
+            tabIndex={-1}
           />
           <div class="relative z-10 flex h-full w-[min(100%,340px)] min-h-0 flex-col overflow-hidden bg-white shadow-2xl">
             <div class="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
@@ -530,9 +531,10 @@ export default function DiscussionComposer({ initialProjectId }: { initialProjec
         <div class="fixed inset-0 z-[101] flex items-stretch lg:hidden" role="dialog" aria-modal="true" aria-labelledby="discussion-profile-drawer-title">
           <button
             type="button"
-            class="absolute inset-0 z-0 bg-black/40"
+            class="absolute inset-0 z-0 bg-black/40 cursor-default"
             aria-label="Fermer"
             onClick={() => setProfileDrawerOpen(false)}
+            tabIndex={-1}
           />
           <div class="relative z-10 ml-auto flex h-full w-[min(100%,360px)] min-h-0 flex-col overflow-hidden bg-white shadow-2xl">
             <div class="flex shrink-0 items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
