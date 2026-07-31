@@ -226,6 +226,7 @@ export default function AgentCard({
               disabled={commandBusy}
               class={`rounded-xl border p-2 transition-all disabled:opacity-50 ${cmd === 'start_work' ? 'bg-gray-900 border-gray-900 text-white hover:bg-black' : 'bg-white border-gray-200 text-gray-400 hover:text-rose-500 hover:border-rose-200'}`}
               title={cmd === 'start_work' ? 'Lancer une mission' : 'Arrêter'}
+              aria-label={cmd === 'start_work' ? 'Lancer une mission' : 'Arrêter'}
             >
               {cmd === 'start_work' ? (
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
