@@ -1,0 +1,4 @@
+## 2024-05-24 - Command Injection Vector via String Substitution in `exec`
+**Vulnerability:** The `src/pages/api/pm2.ts` endpoint executed PM2 commands by directly substituting HTTP POST inputs (`appName`, `scriptPath`, etc.) into a shell string passed to `exec`. This allows an attacker to run arbitrary shell commands by crafting malicious payloads (e.g., `appName = "myapp; rm -rf /"`).
+**Learning:** Even internal API routes accepting application identifiers can be exploited if inputs flow into `exec` or `execSync`. String concatenation with untrusted inputs inside a shell-executing function is a critical command injection risk.
+**Prevention:** Never use `exec` or `execSync` with strings constructed from user input. Always use `execFile`, `execFileSync`, or `spawn` where arguments are passed securely as an array, completely bypassing the shell environment.
