@@ -7,36 +7,36 @@ import { getWorkSystemStatus } from '../../lib/forge-work-scheduler';
 export const GET: APIRoute = async () => {
   try {
     const { db, Project, AgentInstruction, ActivityLog, AgentBudget, CostEvent, sql } = await loadAstroDb();
-    const projects = await db.select().from(Project);
-    const agents = await db.select().from(AgentInstruction);
-
-    const budgets = await db.select().from(AgentBudget);
-    const activeBudgets = budgets.filter((b) => b.enabled === 1);
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const costs = await db
-      .select({
+
+    // ⚡ Bolt: Run independent queries concurrently to reduce waterfall latency
+    const [projects, agents, budgets, costs, logs, work] = await Promise.all([
+      db.select().from(Project),
+      db.select().from(AgentInstruction),
+      db.select().from(AgentBudget),
+      db.select({
         total: sql`sum(${CostEvent.costCents})`,
       })
       .from(CostEvent)
-      .where(sql`${CostEvent.occurredAt} >= ${startOfMonth}`);
+      .where(sql`${CostEvent.occurredAt} >= ${startOfMonth}`),
+      db.select()
+        .from(ActivityLog)
+        .where(
+          or(
+            eq(ActivityLog.action, 'swarm.task.dispatch_failed'),
+            eq(ActivityLog.action, 'swarm.issue.dispatch_failed'),
+          ),
+        )
+        .orderBy(desc(ActivityLog.createdAt))
+        .limit(20),
+      getWorkSystemStatus()
+    ]);
+
+    const activeBudgets = budgets.filter((b) => b.enabled === 1);
     const currentMonthlyCents = Number(costs[0]?.total || 0);
     const globalHardStopCents =
       activeBudgets.reduce((acc, b) => acc + Number(b.monthlyCents || 0), 0) || 5000;
-
-    const logs = await db
-      .select()
-      .from(ActivityLog)
-      .where(
-        or(
-          eq(ActivityLog.action, 'swarm.task.dispatch_failed'),
-          eq(ActivityLog.action, 'swarm.issue.dispatch_failed'),
-        ),
-      )
-      .orderBy(desc(ActivityLog.createdAt))
-      .limit(20);
-
-    const work = await getWorkSystemStatus();
 
     return new Response(
       JSON.stringify({
