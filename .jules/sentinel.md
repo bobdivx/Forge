@@ -1,0 +1,4 @@
+## 2024-05-18 - Fix Command Injection in API Logs Endpoint
+**Vulnerability:** A Command Injection vulnerability existed in `src/pages/api/docker-logs.ts` where unvalidated query parameters (`id`, `tail`) were concatenated directly into a `docker logs` shell command executed via `execSync()`.
+**Learning:** Node.js API endpoints must never use `execSync` with strings constructed from user input because it spawns a full shell that can interpret metacharacters. Even parameters that appear to be identifiers or numbers can be manipulated by malicious actors to achieve Remote Code Execution (RCE).
+**Prevention:** Always use `execFileSync`, `execFile`, or `spawn` when interacting with external processes in Node.js. Provide arguments as an explicit array of strings to bypass shell interpretation entirely, treating the arguments strictly as data.

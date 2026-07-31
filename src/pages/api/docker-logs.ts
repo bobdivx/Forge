@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,11 +21,10 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
+    // Commande Docker pour récupérer les logs (sécurisé contre l'injection)
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+        const output = execFileSync('docker', ['logs', '--tail', tail, containerId], { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
         logs = output.trim().split('\n');
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
