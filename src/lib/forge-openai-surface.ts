@@ -118,8 +118,13 @@ export async function collectZimaOSV1ModelEntries(
   let lastError: string | undefined;
   let lastRaw: unknown = null;
 
-  for (const path of V1_MODELS_PATHS) {
-    const r = await fetchZimaOSJson(email, path);
+  // ⚡ Bolt: Initiate all network requests concurrently to avoid sequential network delays.
+  // We don't await Promise.all so we process them individually as they arrive
+  // while preserving the original stateful fallback resolution logic.
+  const fetches = V1_MODELS_PATHS.map((path) => fetchZimaOSJson(email, path));
+
+  for (const p of fetches) {
+    const r = await p;
     lastStatus = r.status;
     lastError = r.error;
     lastRaw = r.data;
