@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getReposRootResolved } from '../../lib/forge-repos';
 import { getConfig } from '../../lib/config-db';
 
-const execPromise = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -14,6 +14,11 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (!repoUrl || !repoName) {
       return new Response(JSON.stringify({ error: 'repoUrl et repoName requis' }), { status: 400 });
+    }
+
+    // 🛡️ Security: Prevent flag injection by ensuring repoName doesn't start with a hyphen
+    if (repoName.startsWith('-')) {
+      return new Response(JSON.stringify({ error: 'Nom de dépôt invalide' }), { status: 400 });
     }
 
     const githubToken = await getConfig('githubToken', true);
@@ -33,7 +38,8 @@ export const POST: APIRoute = async ({ request }) => {
     const authUrl = repoUrl.replace('https://', `https://oauth2:${githubToken}@`);
 
     // Clone the repository
-    const { stdout, stderr } = await execPromise(`git clone ${authUrl} ${repoName}`, { cwd: reposRoot });
+    // 🛡️ Security: Use execFile to prevent command injection
+    const { stdout, stderr } = await execFileAsync('git', ['clone', authUrl, repoName], { cwd: reposRoot });
 
     // Try to auto-sync it into the database
     try {
