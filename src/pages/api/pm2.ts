@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -15,6 +15,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     let command = '';
+    let args: string[] = [];
     const execOptions: any = {};
 
     if (action === 'start' || action === 'start_prod') {
@@ -74,24 +75,29 @@ export const POST: APIRoute = async ({ request }) => {
           } catch(e) {}
           
           if (hasBuild) {
-              command = `npm run build && npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
-          } else {
-              command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+              await execFilePromise('npm', ['run', 'build'], execOptions);
           }
+
+          command = 'npx';
+          args = ['-y', 'pm2', 'start', 'npm', '--name', appName, '--', 'run', npmScript];
       } else {
-          command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
+          command = 'npx';
+          args = ['-y', 'pm2', 'start', 'npm', '--name', appName, '--', 'run', npmScript];
       }
     } else if (action === 'stop') {
-      command = `npx -y pm2 stop "${appName}"`;
+      command = 'npx';
+      args = ['-y', 'pm2', 'stop', appName];
     } else if (action === 'delete') {
-      command = `npx -y pm2 delete "${appName}"`;
+      command = 'npx';
+      args = ['-y', 'pm2', 'delete', appName];
     } else if (action === 'restart') {
-      command = `npx -y pm2 restart "${appName}"`;
+      command = 'npx';
+      args = ['-y', 'pm2', 'restart', appName];
     } else {
       return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
     }
 
-    const { stdout, stderr } = await execPromise(command, execOptions);
+    const { stdout, stderr } = await execFilePromise(command, args, execOptions);
 
     return new Response(JSON.stringify({ status: 'ok', stdout, stderr }), {
       status: 200,
@@ -107,7 +113,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const GET: APIRoute = async () => {
   try {
-    const { stdout } = await execPromise('npx -y pm2 jlist');
+    const { stdout } = await execFilePromise('npx', ['-y', 'pm2', 'jlist']);
     const list = JSON.parse(stdout);
     return new Response(JSON.stringify(list), {
       status: 200,

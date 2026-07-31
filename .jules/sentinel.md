@@ -1,0 +1,4 @@
+## 2024-05-18 - Fix Command Injection Risk in pm2 API
+**Vulnerability:** The API route `src/pages/api/pm2.ts` allowed command injection via user-provided inputs (`appName`, `scriptPath`, `action`) because it used `exec` which executes commands via a shell and resolves variables implicitly, creating a risk where crafted inputs could execute arbitrary shell commands.
+**Learning:** Using `exec` or `execSync` with unsanitized dynamic user input (even if it's concatenated into strings safely) is an anti-pattern. Node.js natively supports executing files without shell resolution.
+**Prevention:** Always use `execFile` or `spawn` directly with an array of arguments, instead of `exec`, when you need to run external commands dynamically with user input. This avoids implicit shell evaluations and keeps commands secure by separating the command and its arguments.
