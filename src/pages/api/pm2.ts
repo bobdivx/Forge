@@ -1,10 +1,10 @@
 import type { APIRoute } from 'astro';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import util from 'node:util';
 import fs from 'node:fs';
 import { resolveProjectPathFromDbProject } from '../../lib/forge-repos';
 
-const execPromise = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -14,7 +14,9 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: 'action and appName are required' }), { status: 400 });
     }
 
-    let command = '';
+    let bin = 'npx';
+    let args: string[] = [];
+    let hasBuild = false;
     const execOptions: any = {};
 
     if (action === 'start' || action === 'start_prod') {
@@ -65,33 +67,38 @@ export const POST: APIRoute = async ({ request }) => {
       
       if (action === 'start_prod') {
           // Check if build is required
-          let hasBuild = false;
           try {
               if (fs.existsSync(pkgPath)) {
                   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
                   if (pkg.scripts && pkg.scripts.build) hasBuild = true;
               }
           } catch(e) {}
-          
-          if (hasBuild) {
-              command = `npm run build && npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
-          } else {
-              command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
-          }
-      } else {
-          command = `npx -y pm2 start npm --name "${appName}" -- run ${npmScript}`;
       }
+
+      args = ['-y', 'pm2', 'start', 'npm', '--name', appName, '--', 'run', npmScript];
+
     } else if (action === 'stop') {
-      command = `npx -y pm2 stop "${appName}"`;
+      args = ['-y', 'pm2', 'stop', appName];
     } else if (action === 'delete') {
-      command = `npx -y pm2 delete "${appName}"`;
+      args = ['-y', 'pm2', 'delete', appName];
     } else if (action === 'restart') {
-      command = `npx -y pm2 restart "${appName}"`;
+      args = ['-y', 'pm2', 'restart', appName];
     } else {
       return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
     }
 
-    const { stdout, stderr } = await execPromise(command, execOptions);
+    // 🛡️ Security: Use execFile to prevent command injection from user input (e.g. appName)
+    let stdout = '', stderr = '';
+
+    if (hasBuild) {
+        const buildRes = await execFileAsync('npm', ['run', 'build'], execOptions);
+        stdout += buildRes.stdout + '\n';
+        stderr += buildRes.stderr + '\n';
+    }
+
+    const res = await execFileAsync(bin, args, execOptions);
+    stdout += res.stdout;
+    stderr += res.stderr;
 
     return new Response(JSON.stringify({ status: 'ok', stdout, stderr }), {
       status: 200,
@@ -107,7 +114,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const GET: APIRoute = async () => {
   try {
-    const { stdout } = await execPromise('npx -y pm2 jlist');
+    const { stdout } = await execFileAsync('npx', ['-y', 'pm2', 'jlist']);
     const list = JSON.parse(stdout);
     return new Response(JSON.stringify(list), {
       status: 200,
