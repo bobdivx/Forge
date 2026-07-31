@@ -1,0 +1,3 @@
+## 2024-05-19 - [N+1 Data Fetching Refactor]
+**Learning:** Found a major N+1 memory bottleneck in Astro APIs where full tables (`Project`, `AgentTask`, etc.) were being fetched into memory merely to perform `.length` array counts and basic filtering. This is an anti-pattern as Drizzle ORM provides database-level aggregations and conditional queries.
+**Action:** When calculating statistics or finding totals from Astro DB (Drizzle), never fetch full records into JavaScript arrays. Always use `count()` with `.where()` clauses containing conditions like `eq`, `inArray`, or `gte` directly via `loadAstroDb()` to execute aggregations at the database level.
