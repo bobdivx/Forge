@@ -1,0 +1,3 @@
+## 2024-05-24 - [Concurrent database fetching for SSR]
+**Learning:** Sequential, independent database queries inside Astro component frontmatter SSR blocks unnecessarily block rendering and increase load times sequentially (N+1 delay).
+**Action:** Always verify if multiple `await db.select()` calls can be parallelized. Group independent fetch calls inside a single `Promise.all([db.select(), db.select()])` to ensure they fetch concurrently, improving overall load time to the slowest individual query instead of their sum.

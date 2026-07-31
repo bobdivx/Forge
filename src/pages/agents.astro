@@ -14,9 +14,15 @@ import { loadAstroDb } from '../lib/load-astro-db';
 let agentStats = { total: 0, withTasks: 0, totalTasks: 0, pendingIssues: 0 };
 try {
   const { db, AgentTask, AgentInstruction, AgentAppIssue } = await loadAstroDb();
-  const instructions = await db.select().from(AgentInstruction);
-  const tasks = await db.select().from(AgentTask);
-  const issues = await db.select().from(AgentAppIssue);
+
+  // ⚡ Bolt: Execute independent queries concurrently to eliminate N+1 sequential blocking.
+  // Impact: Reduces initial SSR data loading time to the slowest single query duration.
+  const [instructions, tasks, issues] = await Promise.all([
+    db.select().from(AgentInstruction),
+    db.select().from(AgentTask),
+    db.select().from(AgentAppIssue)
+  ]);
+
   agentStats.total = instructions.filter(i => i.enabled).length;
   agentStats.totalTasks = tasks.length;
   agentStats.pendingIssues = issues.filter(i => i.status === 'open' || i.status === 'pending').length;
