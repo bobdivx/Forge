@@ -1,13 +1,16 @@
 import type { APIRoute } from 'astro';
 import os from 'os';
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { db, Config, eq } from 'astro:db';
 
+const execAsync = promisify(exec);
+
 /** BusyBox `df` (Alpine) ne supporte pas `--output=pcent`. Lit la colonne capacité type `85%`. */
-function diskUsagePercentFromDf(targetPath: string): number | null {
+async function diskUsagePercentFromDfAsync(targetPath: string): Promise<number | null> {
   try {
-    const dfOutput = execSync(`df -P "${targetPath}" 2>/dev/null || df -P / 2>/dev/null || true`)
-      .toString();
+    const { stdout } = await execAsync(`df -P "${targetPath}" 2>/dev/null || df -P / 2>/dev/null || true`);
+    const dfOutput = stdout.toString();
     const lines = dfOutput.trim().split('\n').filter(Boolean);
     const last = lines[lines.length - 1];
     const parts = last?.trim().split(/\s+/);
@@ -54,10 +57,17 @@ export const GET: APIRoute = async () => {
     let githubDiskUsage: number | null = null;
     let unhealthyContainers: string[] = [];
     try {
-      diskUsage = diskUsagePercentFromDf('/mnt/Docker');
-      githubDiskUsage = diskUsagePercentFromDf('/mnt/GitHub');
+      // ⚡ Bolt: Fetch system data concurrently without blocking the event loop
+      // Parallelizes 3 IO-bound system calls to reduce overall request latency
+      const [diskDocker, diskGithub, unhealthyStdout] = await Promise.all([
+        diskUsagePercentFromDfAsync('/mnt/Docker'),
+        diskUsagePercentFromDfAsync('/mnt/GitHub'),
+        execAsync('docker ps --filter "health=unhealthy" --format "{{.Names}}"').catch(() => ({ stdout: '' }))
+      ]);
       
-      const unhealthy = execSync('docker ps --filter "health=unhealthy" --format "{{.Names}}"').toString();
+      diskUsage = diskDocker;
+      githubDiskUsage = diskGithub;
+      const unhealthy = unhealthyStdout.stdout.toString();
       unhealthyContainers = unhealthy.split('\n').filter(Boolean);
     } catch (e) {
       console.error('Failed to fetch system data', e);
