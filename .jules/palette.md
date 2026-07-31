@@ -1,0 +1,3 @@
+## $(date +%Y-%m-%d) - ARIA & Focus States for Swarm Action Buttons
+**Learning:** Icon-only control buttons in interactive agent cards (like start/stop swarm tasks or config gears) frequently lack clear `aria-label`s and `focus-visible` styling, hindering keyboard navigation and screen-reader accessibility for core orchestration actions. Using `aria-hidden="true"` on the internal `<svg>` alongside an `aria-label` on the parent `<button>` provides the cleanest screen reader experience.
+**Action:** Always verify that interactive icon-only control components (especially in dynamic lists like agent grids) include descriptive `aria-label` attributes (in French, to match the app's standard) and explicit `focus-visible:ring-*` styles for keyboard usability.
