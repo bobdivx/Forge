@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -12,20 +12,28 @@ export const GET: APIRoute = async ({ url }) => {
     }
 
     const containerId = url.searchParams.get('id');
-    const tail = url.searchParams.get('tail') || '100';
+    const tailStr = url.searchParams.get('tail') || '100';
 
-    if (!containerId) {
-      return new Response(JSON.stringify({ error: "ID du conteneur manquant" }), { 
+    if (!containerId || containerId.startsWith('-') || !/^[a-zA-Z0-9_-]+$/.test(containerId)) {
+      return new Response(JSON.stringify({ error: "ID du conteneur invalide ou manquant" }), {
         status: 400, 
         headers: { 'Content-Type': 'application/json' } 
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Validation stricte du tail
+    const tail = parseInt(tailStr, 10);
+    if (isNaN(tail) || tail <= 0 || tail > 10000) {
+      return new Response(JSON.stringify({ error: "Paramètre tail invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 🛡️ Sentinel: Use execFileSync with array arguments to prevent command injection
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+        const output = execFileSync('docker', ['logs', '--tail', tail.toString(), containerId], { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
         logs = output.trim().split('\n');
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
@@ -41,7 +49,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // 🛡️ Sentinel: Sanitize error response to avoid leaking internal details
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
