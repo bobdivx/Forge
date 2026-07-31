@@ -1,0 +1,3 @@
+## 2024-05-14 - Missing ARIA Labels on Icon-only Buttons
+**Learning:** Found multiple instances where icon-only buttons lacked `aria-label`s, which is problematic for screen readers. Some buttons map commands and need dynamic `aria-label` properties, while others require static ones.
+**Action:** Always ensure that any `<button>` containing only an `<svg>` or purely visual icon has a descriptive `aria-label` or `title` mapped to the action it performs (e.g., 'Fermer', 'Configurer', 'Lancer une mission', 'Arrêter'). When modifying buttons inside a map over actions, ensure the labels are dynamically appropriate.
