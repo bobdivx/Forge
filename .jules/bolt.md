@@ -1,0 +1,3 @@
+## 2024-07-01 - Optimizing sequential gateway calls in API routes
+**Learning:** In Astro API routes, waiting for database queries and external gateway payloads sequentially blocks the request handler and significantly slows down the response time. I found this anti-pattern in the dashboard-kpis route, where a slow DB fetch using Promise.all blocked the subsequent gateway payload fetch.
+**Action:** Always extract and initiate slow external network calls as un-awaited promises at the very beginning of the request handler. Use a dummy catch handler (`promise.catch(() => {})`) immediately to prevent UnhandledPromiseRejection crashes, and only `await` the result when its data is actually needed further down the handler logic.
