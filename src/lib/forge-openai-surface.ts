@@ -118,8 +118,13 @@ export async function collectZimaOSV1ModelEntries(
   let lastError: string | undefined;
   let lastRaw: unknown = null;
 
-  for (const path of V1_MODELS_PATHS) {
-    const r = await fetchZimaOSJson(email, path);
+  // ⚡ Bolt: Parallelized sequential API fetches to reduce overall network latency.
+  // Impact: Reduces load time from sum of individual latencies to max latency of a single request.
+  const results = await Promise.all(
+    V1_MODELS_PATHS.map((path) => fetchZimaOSJson(email, path))
+  );
+
+  for (const r of results) {
     lastStatus = r.status;
     lastError = r.error;
     lastRaw = r.data;
