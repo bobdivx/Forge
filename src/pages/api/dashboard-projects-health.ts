@@ -31,6 +31,10 @@ function mapSessionToRunState(raw: Record<string, unknown>): { running: boolean 
 export const GET: APIRoute = async ({ locals }) => {
   const email = locals.user?.email as string | undefined;
 
+  // Optimize: initiate slow external request early without awaiting immediately
+  const zimaOSPromise = fetchZimaOSSessionsPayload(email);
+  zimaOSPromise.catch(() => {}); // Prevent UnhandledPromiseRejection if it fails before await
+
   const payload: {
     projects: Array<{
       id: number;
@@ -69,9 +73,12 @@ export const GET: APIRoute = async ({ locals }) => {
 
   try {
     const { db, Project, AgentTask } = await loadAstroDb();
-    const projects = await db.select().from(Project).orderBy(desc(Project.updatedAt)).limit(12);
 
-    const tasksAll = await db.select().from(AgentTask).limit(500);
+    // Optimize: Fetch projects and tasks concurrently
+    const [projects, tasksAll] = await Promise.all([
+      db.select().from(Project).orderBy(desc(Project.updatedAt)).limit(12),
+      db.select().from(AgentTask).limit(500)
+    ]);
 
     const countForProject = (pid: number | null | undefined) => {
       const pend = tasksAll.filter(
@@ -150,7 +157,7 @@ export const GET: APIRoute = async ({ locals }) => {
   }
 
   try {
-    const oc = await fetchZimaOSSessionsPayload(email);
+    const oc = await zimaOSPromise;
     payload.swarm.zimaosOk = oc.ok;
     const sessions = oc.ok
       ? (normalizeZimaOSSessions(oc.data) as Record<string, unknown>[])
