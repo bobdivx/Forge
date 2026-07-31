@@ -1,0 +1,3 @@
+## 2024-06-11 - Optimize Astro API routes with early detached network promises
+**Learning:** Initiating slow external network calls as un-awaited Promises at the start of Astro API routes significantly improves performance by executing concurrently with sequential database queries. Chaining `.catch(() => {})` safely prevents `UnhandledPromiseRejection` crashes if the fetch fails before it's formally `await`ed later in the route.
+**Action:** Always scan API routes for isolated slow gateway/network calls and hoist their initialization (with a detached `catch`) to run in parallel with database access.

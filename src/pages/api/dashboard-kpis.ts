@@ -1,30 +1,35 @@
-import type { APIRoute } from 'astro';
-import { FORGE_SWARM_AGENT_COUNT } from '../../lib/agent-instruction-defaults';
-import { loadAstroDb } from '../../lib/load-astro-db';
+import type { APIRoute } from "astro";
+import { FORGE_SWARM_AGENT_COUNT } from "../../lib/agent-instruction-defaults";
+import { loadAstroDb } from "../../lib/load-astro-db";
 import {
   fetchZimaOSSessionsPayload,
   normalizeZimaOSSessions,
-} from '../../lib/forge-gateway';
+} from "../../lib/forge-gateway";
 
 function countRunningSessions(sessions: unknown[]): number {
   return sessions.filter((s) => {
-    const row = s && typeof s === 'object' ? (s as Record<string, unknown>) : {};
-    const st = String(row.status || row.state || '').toLowerCase();
+    const row =
+      s && typeof s === "object" ? (s as Record<string, unknown>) : {};
+    const st = String(row.status || row.state || "").toLowerCase();
     return (
-      st === 'running' ||
-      st === 'active' ||
-      st === 'connected' ||
-      st === 'online'
+      st === "running" ||
+      st === "active" ||
+      st === "connected" ||
+      st === "online"
     );
   }).length;
 }
 
 function isOpenQueueStatus(st: string): boolean {
   const s = String(st).toLowerCase();
-  return s === 'open' || s === 'in_progress';
+  return s === "open" || s === "in_progress";
 }
 
 export const GET: APIRoute = async () => {
+  // ⚡ Bolt: Initiate slow network call early and concurrently with DB queries
+  const zimaosPromise = fetchZimaOSSessionsPayload(undefined);
+  zimaosPromise.catch(() => {}); // prevent unhandled rejection if failed before awaited
+
   const base = {
     projectCount: 0,
     tasksTotal: 0,
@@ -42,21 +47,32 @@ export const GET: APIRoute = async () => {
   };
 
   try {
-    const { db, Project, AgentTask, Request, AgentAppIssue, AgentDependencyRequest, eq } =
-      await loadAstroDb();
+    const {
+      db,
+      Project,
+      AgentTask,
+      Request,
+      AgentAppIssue,
+      AgentDependencyRequest,
+      eq,
+    } = await loadAstroDb();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [projects, tasksAll, openRequests, issuesAll, depsAll] = await Promise.all([
-      db.select().from(Project),
-      db.select().from(AgentTask),
-      db.select().from(Request).where(eq(Request.status, 'pending')),
-      db.select().from(AgentAppIssue),
-      db.select().from(AgentDependencyRequest),
-    ]);
+    const [projects, tasksAll, openRequests, issuesAll, depsAll] =
+      await Promise.all([
+        db.select().from(Project),
+        db.select().from(AgentTask),
+        db.select().from(Request).where(eq(Request.status, "pending")),
+        db.select().from(AgentAppIssue),
+        db.select().from(AgentDependencyRequest),
+      ]);
 
     const tasksTodayCount = tasksAll.filter((t) => {
-      const d = t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt as Date);
+      const d =
+        t.createdAt instanceof Date
+          ? t.createdAt
+          : new Date(t.createdAt as Date);
       return d >= today;
     }).length;
 
@@ -64,34 +80,49 @@ export const GET: APIRoute = async () => {
     base.tasksTotal = tasksAll.length;
     base.tasksToday = tasksTodayCount;
     base.openRequests = openRequests.length;
-    base.openAppIssues = issuesAll.filter((r) => isOpenQueueStatus(String(r.status))).length;
-    base.openDependencyRequests = depsAll.filter((r) => isOpenQueueStatus(String(r.status))).length;
+    base.openAppIssues = issuesAll.filter((r) =>
+      isOpenQueueStatus(String(r.status)),
+    ).length;
+    base.openDependencyRequests = depsAll.filter((r) =>
+      isOpenQueueStatus(String(r.status)),
+    ).length;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     base.dbError = msg;
     if (import.meta.env.DEV) {
-      console.error('[dashboard-kpis] lecture base:', e);
+      console.error("[dashboard-kpis] lecture base:", e);
     }
-    return new Response(JSON.stringify(base), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(base), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   try {
-    const zimaosResult = await fetchZimaOSSessionsPayload(undefined);
+    const zimaosResult = await zimaosPromise;
     const ocSessions = zimaosResult.ok
-      ? (normalizeZimaOSSessions(zimaosResult.data) as Record<string, unknown>[])
+      ? (normalizeZimaOSSessions(zimaosResult.data) as Record<
+          string,
+          unknown
+        >[])
       : [];
     base.zimaosOk = zimaosResult.ok;
     base.zimaosSessionCount = ocSessions.length;
-    base.zimaosRunningCount = zimaosResult.ok ? countRunningSessions(ocSessions) : 0;
+    base.zimaosRunningCount = zimaosResult.ok
+      ? countRunningSessions(ocSessions)
+      : 0;
     base.zimaosVia = zimaosResult.via ?? null;
-    base.zimaosError = zimaosResult.ok ? null : zimaosResult.error ?? null;
+    base.zimaosError = zimaosResult.ok ? null : (zimaosResult.error ?? null);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    base.zimaosError = msg || 'ZimaOS : erreur inattendue';
+    base.zimaosError = msg || "ZimaOS : erreur inattendue";
     if (import.meta.env.DEV) {
-      console.error('[dashboard-kpis] ZimaOS:', e);
+      console.error("[dashboard-kpis] ZimaOS:", e);
     }
   }
 
-  return new Response(JSON.stringify(base), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(base), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 };
