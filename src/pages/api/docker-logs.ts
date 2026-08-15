@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,18 +24,29 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
-    let logs = [];
+    // Input validation to prevent argument injection
+    const safeInputRegex = /^[a-zA-Z0-9_.-]+$/;
+    if (!safeInputRegex.test(containerId) || !safeInputRegex.test(tail)) {
+      return new Response(JSON.stringify({ error: "Paramètres invalides" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    let logs: string[] = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
-        logs = output.trim().split('\n');
+        const { stdout } = await execFileAsync('docker', ['logs', '--tail', tail, containerId]);
+        logs = stdout.trim().split('\n');
     } catch (err: any) {
         // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
-        if (err.stderr) {
-            logs = err.stderr.toString().trim().split('\n');
+        let combinedOutput = "";
+        if (err.stdout) combinedOutput += err.stdout.toString();
+        if (err.stderr) combinedOutput += err.stderr.toString();
+
+        if (combinedOutput.trim()) {
+            logs = combinedOutput.trim().split('\n');
         } else {
-            throw err;
+            throw err; // Vraie erreur d'exécution
         }
     }
 
@@ -41,7 +55,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // Ne pas exposer error.message au client pour éviter la fuite d'informations
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
