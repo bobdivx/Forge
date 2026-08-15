@@ -1,0 +1,3 @@
+## 2024-05-20 - N+1 Memory Fetching in Astro DB (dashboard-kpis)
+**Learning:** `dashboard-kpis.ts` pulls FULL table contents (e.g. `db.select().from(AgentTask)`, `db.select().from(AgentAppIssue)`) into memory just to filter them by Javascript (`filter((t) => t.createdAt > ...).length`). This can lead to N+1 memory issues as datasets grow, crashing Vercel functions due to memory limits.
+**Action:** Use Drizzle ORM's `count()` aggregate functions combined with `eq()`, `or()`, and `gte()` directly in the database queries. Make sure `Date` objects are appropriately casted/formatted when used as filters to match DB date formats.

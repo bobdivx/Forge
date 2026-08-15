@@ -42,30 +42,26 @@ export const GET: APIRoute = async () => {
   };
 
   try {
-    const { db, Project, AgentTask, Request, AgentAppIssue, AgentDependencyRequest, eq } =
+    const { db, Project, AgentTask, Request, AgentAppIssue, AgentDependencyRequest, eq, or, gte, count } =
       await loadAstroDb();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [projects, tasksAll, openRequests, issuesAll, depsAll] = await Promise.all([
-      db.select().from(Project),
-      db.select().from(AgentTask),
-      db.select().from(Request).where(eq(Request.status, 'pending')),
-      db.select().from(AgentAppIssue),
-      db.select().from(AgentDependencyRequest),
+    const [projectsRes, tasksAllRes, tasksTodayRes, openRequestsRes, issuesAllRes, depsAllRes] = await Promise.all([
+      db.select({ value: count() }).from(Project),
+      db.select({ value: count() }).from(AgentTask),
+      db.select({ value: count() }).from(AgentTask).where(gte(AgentTask.createdAt, today as any)),
+      db.select({ value: count() }).from(Request).where(eq(Request.status, 'pending')),
+      db.select({ value: count() }).from(AgentAppIssue).where(or(eq(AgentAppIssue.status, 'open'), eq(AgentAppIssue.status, 'in_progress'))),
+      db.select({ value: count() }).from(AgentDependencyRequest).where(or(eq(AgentDependencyRequest.status, 'open'), eq(AgentDependencyRequest.status, 'in_progress'))),
     ]);
 
-    const tasksTodayCount = tasksAll.filter((t) => {
-      const d = t.createdAt instanceof Date ? t.createdAt : new Date(t.createdAt as Date);
-      return d >= today;
-    }).length;
-
-    base.projectCount = projects.length;
-    base.tasksTotal = tasksAll.length;
-    base.tasksToday = tasksTodayCount;
-    base.openRequests = openRequests.length;
-    base.openAppIssues = issuesAll.filter((r) => isOpenQueueStatus(String(r.status))).length;
-    base.openDependencyRequests = depsAll.filter((r) => isOpenQueueStatus(String(r.status))).length;
+    base.projectCount = projectsRes[0]?.value ?? 0;
+    base.tasksTotal = tasksAllRes[0]?.value ?? 0;
+    base.tasksToday = tasksTodayRes[0]?.value ?? 0;
+    base.openRequests = openRequestsRes[0]?.value ?? 0;
+    base.openAppIssues = issuesAllRes[0]?.value ?? 0;
+    base.openDependencyRequests = depsAllRes[0]?.value ?? 0;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     base.dbError = msg;
