@@ -1,0 +1,4 @@
+## 2024-05-18 - [CRITICAL] Command Injection via `execSync`
+**Vulnerability:** The `src/pages/api/docker-logs.ts` endpoint was vulnerable to Command Injection because it concatenated unsanitized query parameters (`id` and `tail`) directly into an `execSync` command string (`docker logs --tail ${tail} ${containerId}`).
+**Learning:** Shell commands should never be executed via `execSync` or `exec` with string interpolation of user inputs, as shell metacharacters can be injected to execute arbitrary code. Also, internal execution error stack traces should not be concatenated to the client-facing response.
+**Prevention:** Use `execFile` or `execFileAsync` (via `promisify`) with an array of arguments to bypass the shell entirely. Explicitly validate inputs using a regex (e.g. `^[a-zA-Z0-9_.-]+$`) to prevent argument/flag injection. Sanitize the catch block response to prevent leaking internal error details.
