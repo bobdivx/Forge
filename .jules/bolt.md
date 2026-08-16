@@ -1,0 +1,3 @@
+## 2023-10-27 - Dashboard Health Check Bottleneck
+**Learning:** Sequential file system access and dev server port probing inside a `for...of` loop (e.g., `resolveProjectPathFromDbProject` and `getPrimaryDevServerStatus`) over multiple projects severely degraded the `dashboard-projects-health.ts` API response time, creating a major performance bottleneck.
+**Action:** Always optimize independent sequential operations within lists/loops by mapping them to an array of Promises for concurrent execution. To preserve array ordering for the final output, iterate through the Promise array and sequentially `await` each promise instead of relying on a rigid `Promise.all`.
