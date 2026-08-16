@@ -1,0 +1,4 @@
+## 2024-05-24 - Command Injection in Docker Logs Endpoint
+**Vulnerability:** Command injection vulnerability in `src/pages/api/docker-logs.ts` due to the use of `execSync` with unsanitized user input (`containerId` and `tail` query parameters) directly concatenated into a shell command string.
+**Learning:** Even internal API endpoints intended for docker management must strictly validate inputs. `exec` or `execSync` should never be used with user-provided parameters as it allows arbitrary shell command execution. Node's `child_process` will pass the entire string to a shell which parses metacharacters like `;`, `|`, and `&&`.
+**Prevention:** Use `execFile` or `execFileSync` (or their promisified versions) with argument arrays to prevent shell parsing. Always apply strict validation (e.g., regex `^[a-zA-Z0-9_.-]+$`) to inputs to prevent argument injection and ensure arguments do not start with hyphens (`-`).
