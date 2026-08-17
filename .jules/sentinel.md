@@ -1,0 +1,4 @@
+## 2024-05-24 - Critical Command Injection in API Routes
+**Vulnerability:** Found a critical command injection vulnerability in `src/pages/api/docker-logs.ts` where unsanitized user input (`containerId` and `tail`) was directly passed to `execSync(\`docker logs --tail ${tail} ${containerId}\`)`.
+**Learning:** Shell command functions like `exec` and `execSync` evaluate entire command strings, allowing attackers to append malicious commands (e.g., using `;`, `&&`, or `|`) if inputs are not sanitized.
+**Prevention:** Always use `execFile` or `spawn` (e.g., `execFileAsync`) with an array of arguments to prevent shell evaluation, and strictly validate/sanitize all inputs (e.g., using regex `/^[a-zA-Z0-9_.-]+$/` for container IDs and `/^\d+$/` for numbers). Also, prevent exposing internal error messages to the client.
