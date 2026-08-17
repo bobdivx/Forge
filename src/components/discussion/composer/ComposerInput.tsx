@@ -1,5 +1,5 @@
-import type { SwarmWorkCommand } from '../../../lib/forge-agent-protocol';
-import { SWARM_WORK_COMMAND_LABELS } from '../../../lib/forge-agent-protocol';
+import type { SwarmWorkCommand } from "../../../lib/forge-agent-protocol";
+import { SWARM_WORK_COMMAND_LABELS } from "../../../lib/forge-agent-protocol";
 
 interface Props {
   message: string;
@@ -10,19 +10,44 @@ interface Props {
   agentId: string;
   send: () => Promise<void>;
   applySwarmCommand: (cmd: SwarmWorkCommand) => void;
-  swarmCommandMode: 'direct' | 'leader';
-  setSwarmCommandMode: (mode: 'direct' | 'leader' | ((prev: 'direct' | 'leader') => 'direct' | 'leader')) => void;
+  swarmCommandMode: "direct" | "leader";
+  setSwarmCommandMode: (
+    mode:
+      | "direct"
+      | "leader"
+      | ((prev: "direct" | "leader") => "direct" | "leader"),
+  ) => void;
 }
 
 export default function ComposerInput({
-  message, setMessage, sending, historyLoading, sessionUnavailable, agentId,
-  send, applySwarmCommand, swarmCommandMode, setSwarmCommandMode
+  message,
+  setMessage,
+  sending,
+  historyLoading,
+  sessionUnavailable,
+  agentId,
+  send,
+  applySwarmCommand,
+  swarmCommandMode,
+  setSwarmCommandMode,
 }: Props) {
   return (
-    <div class="sticky bottom-0 z-20 shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur sm:p-4" style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
+    <div
+      class="sticky bottom-0 z-20 shrink-0 border-t border-gray-200 bg-white/95 p-3 backdrop-blur sm:p-4"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+    >
       <div class="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2">
-        <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Commandes</span>
-        {(['start_work', 'pause_work', 'resume_work', 'stop_work'] as SwarmWorkCommand[]).map((cmd) => (
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+          Commandes
+        </span>
+        {(
+          [
+            "start_work",
+            "pause_work",
+            "resume_work",
+            "stop_work",
+          ] as SwarmWorkCommand[]
+        ).map((cmd) => (
           <button
             key={cmd}
             type="button"
@@ -35,8 +60,10 @@ export default function ComposerInput({
         ))}
         <button
           type="button"
-          class={`ml-auto min-h-[36px] rounded-full border px-3 py-1 text-[11px] font-medium ${swarmCommandMode === 'leader' ? 'bg-[#E9F3EB]' : 'bg-white'}`}
-          onClick={() => setSwarmCommandMode(m => m === 'leader' ? 'direct' : 'leader')}
+          class={`ml-auto min-h-[36px] rounded-full border px-3 py-1 text-[11px] font-medium ${swarmCommandMode === "leader" ? "bg-[#E9F3EB]" : "bg-white"}`}
+          onClick={() =>
+            setSwarmCommandMode((m) => (m === "leader" ? "direct" : "leader"))
+          }
           disabled={sending || historyLoading}
         >
           mode {swarmCommandMode}
@@ -50,7 +77,7 @@ export default function ComposerInput({
           onInput={(e) => setMessage((e.target as HTMLTextAreaElement).value)}
           disabled={sending || historyLoading || sessionUnavailable}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
+            if (e.key === "Enter" && !e.shiftKey && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
               void send();
             }
@@ -58,8 +85,15 @@ export default function ComposerInput({
         />
         <button
           type="button"
+          aria-label="Envoyer le message"
           onClick={() => void send()}
-          disabled={sending || historyLoading || sessionUnavailable || !message.trim() || !agentId}
+          disabled={
+            sending ||
+            historyLoading ||
+            sessionUnavailable ||
+            !message.trim() ||
+            !agentId
+          }
           class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#175B37] text-white disabled:opacity-40"
         >
           &gt;
