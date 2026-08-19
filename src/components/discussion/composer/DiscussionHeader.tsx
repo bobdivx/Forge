@@ -113,6 +113,7 @@ export default function DiscussionHeader({
         </button>
         <button
           type="button"
+          aria-label="Ouvrir le menu des options"
           class="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
           onClick={() => setHeaderMenuOpen((v: boolean) => !v)}
         >
