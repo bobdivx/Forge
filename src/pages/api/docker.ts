@@ -1,5 +1,8 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 export const GET: APIRoute = async () => {
   try {
@@ -15,9 +18,10 @@ export const GET: APIRoute = async () => {
       });
     }
 
-    const command = "docker ps --format '{{json .}}'";
-    const output = execSync(command).toString();
-    const containers = output.trim().split('\n')
+    // 🛡️ Sentinel: Use execFileAsync to prevent DoS via event loop blocking
+    // and argument arrays to prevent command injection.
+    const { stdout } = await execFileAsync('docker', ['ps', '--format', '{{json .}}']);
+    const containers = stdout.trim().split('\n')
       .filter(line => line.trim() !== '')
       .map(line => JSON.parse(line));
 
