@@ -1,0 +1,3 @@
+## 2024-08-20 - Focus Management & ARIA in Preact Modals
+**Learning:** Icon-only buttons (like modal close buttons) frequently lack `aria-label`s, and custom modal implementations often miss standard dialog attributes (`role="dialog"`, `aria-modal="true"`, `aria-labelledby`). Furthermore, Tailwind's `focus-visible` utilities are crucial for ensuring keyboard navigation is accessible without negatively impacting the mouse user experience.
+**Action:** When implementing or reviewing custom modals, always verify the presence of `role="dialog"`, appropriate `aria-labelledby` linkages, `aria-hidden` on decorative SVGs, and explicit `focus-visible` rings on all interactive elements.
