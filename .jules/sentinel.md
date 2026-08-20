@@ -1,0 +1,4 @@
+## 2024-05-30 - Prevent Event Loop Blocking and Command Injection in API Routes
+**Vulnerability:** Usage of `execSync` in API routes (e.g. `src/pages/api/docker.ts`) blocks the Node.js event loop, creating a Denial of Service (DoS) risk. Furthermore, passing unsanitized strings directly to shell execution functions exposes the application to command injection vulnerabilities.
+**Learning:** Shell execution within server endpoints must always be asynchronous to avoid blocking concurrent requests. Additionally, argument arrays with safe execution methods (`execFile` / `execFileAsync`) are strictly required over shell string interpolation (`exec` / `execSync`) to prevent injection risks.
+**Prevention:** Always use asynchronous execution like `execFileAsync` (promisified `execFile`) with explicit argument arrays when executing system commands in API routes or other server-side operations handling concurrent traffic.
