@@ -1,16 +1,16 @@
-import { execSync } from 'node:child_process';
-import { getConfig, setConfig } from './config-db';
-import { getZimaOSInfraClient } from './forge-infra-client';
+import { execFileSync } from "node:child_process";
+import { getConfig, setConfig } from "./config-db";
+import { getZimaOSInfraClient } from "./forge-infra-client";
 import {
   getZimaOSGatewayBaseUrl,
   getZimaOSToken,
   getZimaOSGatewayCandidateBases,
   probeZimaOSGatewayRepairPair,
   readZimaOSLocalConfigFile,
-} from './forge-gateway';
-import { inferZimaOSBackedPathDefaults } from './forge-path-defaults';
+} from "./forge-gateway";
+import { inferZimaOSBackedPathDefaults } from "./forge-path-defaults";
 
-export type ZimaOSAutoRepairTokenSource = 'file' | 'database' | 'env';
+export type ZimaOSAutoRepairTokenSource = "file" | "database" | "env";
 
 export type ZimaOSAutoRepairResult = {
   alreadyOk: boolean;
@@ -32,8 +32,8 @@ export type ZimaOSAutoRepairResult = {
 
 function detectZimaOSContainerName(): string | null {
   try {
-    const out = execSync('docker ps --format "{{.Names}}"', {
-      encoding: 'utf-8',
+    const out = execFileSync("docker", ["ps", "--format", "{{.Names}}"], {
+      encoding: "utf-8",
       timeout: 2500,
       windowsHide: true,
     });
@@ -41,7 +41,7 @@ function detectZimaOSContainerName(): string | null {
       .split(/\r?\n/)
       .map((s) => s.trim())
       .filter(Boolean);
-    return names.find((n) => n.toLowerCase().includes('zimaos')) ?? null;
+    return names.find((n) => n.toLowerCase().includes("zimaos")) ?? null;
   } catch {
     return null;
   }
@@ -64,12 +64,18 @@ export async function runZimaOSAutoRepair(options?: {
     forgeReposRoot: false,
   };
   let probesTried = 0;
-  let dockerRestart: ZimaOSAutoRepairResult['dockerRestart'];
+  let dockerRestart: ZimaOSAutoRepairResult["dockerRestart"];
 
-  const envUrl = process.env.ZIMAOS_GATEWAY_URL?.trim() || '';
-  const envTok = process.env.ZIMAOS_GATEWAY_TOKEN?.trim() || '';
-  if (envUrl) warnings.push('ZIMAOS_GATEWAY_URL est défini : l’URL en base ne sera pas utilisée tant que la variable existe.');
-  if (envTok) warnings.push('ZIMAOS_GATEWAY_TOKEN est défini : le jeton en base ne sera pas utilisé tant que la variable existe.');
+  const envUrl = process.env.ZIMAOS_GATEWAY_URL?.trim() || "";
+  const envTok = process.env.ZIMAOS_GATEWAY_TOKEN?.trim() || "";
+  if (envUrl)
+    warnings.push(
+      "ZIMAOS_GATEWAY_URL est défini : l’URL en base ne sera pas utilisée tant que la variable existe.",
+    );
+  if (envTok)
+    warnings.push(
+      "ZIMAOS_GATEWAY_TOKEN est défini : le jeton en base ne sera pas utilisé tant que la variable existe.",
+    );
 
   const baseCurrent = await getZimaOSGatewayBaseUrl();
   const tokenCurrent = await getZimaOSToken();
@@ -81,18 +87,21 @@ export async function runZimaOSAutoRepair(options?: {
       repaired: false,
       saved,
       warnings,
-      actions: ['La passerelle répond déjà (/health + sessions_list) avec la configuration actuelle.'],
+      actions: [
+        "La passerelle répond déjà (/health + sessions_list) avec la configuration actuelle.",
+      ],
       probesTried,
     };
   }
 
   actions.push(
-    `État initial : ${before.error || 'gateway injoignable'} (URL résolue : ${baseCurrent}).`,
+    `État initial : ${before.error || "gateway injoignable"} (URL résolue : ${baseCurrent}).`,
   );
 
   const local = await readZimaOSLocalConfigFile();
-  const dbTok = (await getConfig('zimaosToken')).trim();
-  const tokenOrder: { token: string; source: ZimaOSAutoRepairTokenSource }[] = [];
+  const dbTok = (await getConfig("zimaosToken")).trim();
+  const tokenOrder: { token: string; source: ZimaOSAutoRepairTokenSource }[] =
+    [];
   const seenTok = new Set<string>();
   const pushTok = (t: string, source: ZimaOSAutoRepairTokenSource) => {
     const k = t.trim();
@@ -100,9 +109,9 @@ export async function runZimaOSAutoRepair(options?: {
     seenTok.add(k);
     tokenOrder.push({ token: k, source });
   };
-  pushTok(local?.gatewayToken || '', 'file');
-  pushTok(dbTok, 'database');
-  pushTok(envTok, 'env');
+  pushTok(local?.gatewayToken || "", "file");
+  pushTok(dbTok, "database");
+  pushTok(envTok, "env");
 
   if (!tokenOrder.length) {
     return {
@@ -111,22 +120,31 @@ export async function runZimaOSAutoRepair(options?: {
       saved,
       warnings,
       actions,
-      error: 'Aucun jeton connu (fichier zimaos.json, base Config ou ZIMAOS_GATEWAY_TOKEN).',
+      error:
+        "Aucun jeton connu (fichier zimaos.json, base Config ou ZIMAOS_GATEWAY_TOKEN).",
       probesTried,
     };
   }
 
   const bases = await getZimaOSGatewayCandidateBases();
-  let winner: { baseUrl: string; token: string; tokenSource: ZimaOSAutoRepairTokenSource } | null = null;
+  let winner: {
+    baseUrl: string;
+    token: string;
+    tokenSource: ZimaOSAutoRepairTokenSource;
+  } | null = null;
 
   outer: for (const base of bases) {
     for (const { token, source } of tokenOrder) {
       probesTried += 1;
       const r = await probeZimaOSGatewayRepairPair(base, token);
       if (r.ok) {
-        winner = { baseUrl: base.replace(/\/$/, ''), token, tokenSource: source };
+        winner = {
+          baseUrl: base.replace(/\/$/, ""),
+          token,
+          tokenSource: source,
+        };
         actions.push(
-          `Combinaison valide : ${winner.baseUrl} (jeton : ${source === 'file' ? 'zimaos.json' : source === 'database' ? 'table Config' : 'variable d’environnement'}).`,
+          `Combinaison valide : ${winner.baseUrl} (jeton : ${source === "file" ? "zimaos.json" : source === "database" ? "table Config" : "variable d’environnement"}).`,
         );
         break outer;
       }
@@ -134,12 +152,13 @@ export async function runZimaOSAutoRepair(options?: {
   }
 
   if (!winner && options?.restartDocker) {
-    const configured = (await getConfig('zimaosContainerName')).trim();
+    const configured = (await getConfig("zimaosContainerName")).trim();
     const detected = detectZimaOSContainerName();
-    const accessMode = (await getConfig('zimaosAccessMode')).trim() || 'local_docker';
-    let remoteDetected = '';
+    const accessMode =
+      (await getConfig("zimaosAccessMode")).trim() || "local_docker";
+    let remoteDetected = "";
     let remoteNames: string[] = [];
-    if (accessMode === 'remote_ssh') {
+    if (accessMode === "remote_ssh") {
       try {
         const infra = await getZimaOSInfraClient();
         const out = infra.exec('docker ps --format "{{.Names}}"');
@@ -150,35 +169,50 @@ export async function runZimaOSAutoRepair(options?: {
         remoteDetected =
           remoteNames.find((n) => /zimaos|openclaw|gateway/i.test(n)) ||
           remoteNames[0] ||
-          '';
+          "";
       } catch {
-        remoteDetected = '';
+        remoteDetected = "";
         remoteNames = [];
       }
     }
     const configuredUsable =
       !configured ||
-      accessMode !== 'remote_ssh' ||
+      accessMode !== "remote_ssh" ||
       remoteNames.length === 0 ||
       remoteNames.includes(configured);
-    const container = (configuredUsable ? configured : '') || remoteDetected || detected || '';
+    const container =
+      (configuredUsable ? configured : "") || remoteDetected || detected || "";
     if (container) {
       try {
-        if (accessMode === 'remote_ssh') {
+        if (accessMode === "remote_ssh") {
           const infra = await getZimaOSInfraClient();
           // Reset du circuit-breaker SSH avant action de réparation.
           await infra.testConnection();
+          // Validation de sécurité pour éviter l'injection de commande/arguments
+          if (
+            !/^[a-zA-Z0-9_.-]+$/.test(container) ||
+            container.startsWith("-")
+          ) {
+            throw new Error("Nom de conteneur invalide");
+          }
           infra.exec(`docker restart ${container}`);
         } else {
-          execSync(`docker restart ${container}`, {
-            encoding: 'utf-8',
+          // Validation de sécurité pour éviter l'injection de commande/arguments
+          if (
+            !/^[a-zA-Z0-9_.-]+$/.test(container) ||
+            container.startsWith("-")
+          ) {
+            throw new Error("Nom de conteneur invalide");
+          }
+          execFileSync("docker", ["restart", container], {
+            encoding: "utf-8",
             timeout: 12_000,
             windowsHide: true,
           });
         }
         dockerRestart = { ok: true, container };
         actions.push(
-          accessMode === 'remote_ssh'
+          accessMode === "remote_ssh"
             ? `Conteneur Docker distant redémarré via SSH : ${container}.`
             : `Conteneur Docker redémarré : ${container}.`,
         );
@@ -187,7 +221,11 @@ export async function runZimaOSAutoRepair(options?: {
             probesTried += 1;
             const r2 = await probeZimaOSGatewayRepairPair(base, token);
             if (r2.ok) {
-              winner = { baseUrl: base.replace(/\/$/, ''), token, tokenSource: source };
+              winner = {
+                baseUrl: base.replace(/\/$/, ""),
+                token,
+                tokenSource: source,
+              };
               actions.push(`Après redémarrage : ${winner.baseUrl} répond.`);
               break outer2;
             }
@@ -199,8 +237,13 @@ export async function runZimaOSAutoRepair(options?: {
         actions.push(`Échec docker restart (${container}) : ${msg}`);
       }
     } else {
-      dockerRestart = { ok: false, error: 'Aucun conteneur ZimaOS détecté (nom vide).' };
-      actions.push('Redémarrage Docker demandé mais aucun nom de conteneur (réglages + docker ps).');
+      dockerRestart = {
+        ok: false,
+        error: "Aucun conteneur ZimaOS détecté (nom vide).",
+      };
+      actions.push(
+        "Redémarrage Docker demandé mais aucun nom de conteneur (réglages + docker ps).",
+      );
     }
   }
 
@@ -211,7 +254,7 @@ export async function runZimaOSAutoRepair(options?: {
       saved,
       warnings,
       actions,
-      error: 'Aucune URL + jeton testés ne répond correctement au gateway.',
+      error: "Aucune URL + jeton testés ne répond correctement au gateway.",
       probesTried,
       dockerRestart,
     };
@@ -222,38 +265,44 @@ export async function runZimaOSAutoRepair(options?: {
     partial.zimaosGatewayUrl = winner.baseUrl;
     saved.gatewayUrl = true;
   } else {
-    actions.push('URL non enregistrée en base (ZIMAOS_GATEWAY_URL actif).');
+    actions.push("URL non enregistrée en base (ZIMAOS_GATEWAY_URL actif).");
   }
   if (!envTok) {
     partial.zimaosToken = winner.token;
     saved.token = true;
   } else {
-    actions.push('Jeton non enregistré en base (ZIMAOS_GATEWAY_TOKEN actif).');
+    actions.push("Jeton non enregistré en base (ZIMAOS_GATEWAY_TOKEN actif).");
   }
 
   const inferredPaths = await inferZimaOSBackedPathDefaults();
   if (inferredPaths.dockerAppDataDir) {
     partial.dockerAppDataDir = inferredPaths.dockerAppDataDir;
     saved.dockerAppDataDir = true;
-    actions.push(`dockerAppDataDir défini depuis ZimaOS : ${partial.dockerAppDataDir}`);
+    actions.push(
+      `dockerAppDataDir défini depuis ZimaOS : ${partial.dockerAppDataDir}`,
+    );
   }
   if (inferredPaths.dockerYamlDir) {
     partial.dockerYamlDir = inferredPaths.dockerYamlDir;
     saved.dockerYamlDir = true;
-    actions.push(`dockerYamlDir défini depuis ZimaOS : ${partial.dockerYamlDir}`);
+    actions.push(
+      `dockerYamlDir défini depuis ZimaOS : ${partial.dockerYamlDir}`,
+    );
   }
   if (inferredPaths.forgeReposRoot) {
     partial.forgeReposRoot = inferredPaths.forgeReposRoot;
     saved.forgeReposRoot = true;
-    actions.push(`forgeReposRoot déduit des mounts ZimaOS : ${partial.forgeReposRoot}`);
+    actions.push(
+      `forgeReposRoot déduit des mounts ZimaOS : ${partial.forgeReposRoot}`,
+    );
   }
 
   if (Object.keys(partial).length) {
     await setConfig(partial as Parameters<typeof setConfig>[0]);
-    actions.push('Paramètres Forge (Config) mis à jour.');
+    actions.push("Paramètres Forge (Config) mis à jour.");
   }
 
-  const verifyBase = envUrl ? envUrl.replace(/\/$/, '') : winner.baseUrl;
+  const verifyBase = envUrl ? envUrl.replace(/\/$/, "") : winner.baseUrl;
   const verifyTok = envTok || winner.token;
   const after = await probeZimaOSGatewayRepairPair(verifyBase, verifyTok);
   probesTried += 1;
@@ -266,7 +315,9 @@ export async function runZimaOSAutoRepair(options?: {
       saved,
       warnings,
       actions,
-      error: after.error || 'Après sauvegarde, la sonde échoue encore (vérifiez les variables d’environnement).',
+      error:
+        after.error ||
+        "Après sauvegarde, la sonde échoue encore (vérifiez les variables d’environnement).",
       probesTried,
       dockerRestart,
     };
