@@ -1,0 +1,4 @@
+## 2024-11-05 - [Command Injection via Container Name]
+**Vulnerability:** The application was vulnerable to command injection via the `execSync` call when restarting a Docker container, because the user-controlled container name (`container` variable) was not sanitized and was passed directly into the shell string. Additionally, the `execSync` was used instead of argument arrays.
+**Learning:** Always use `execFileSync` (or similar non-shell executors) with argument arrays instead of string concatenation, especially for commands involving configurable names. Always validate configuration-sourced values using strict regex like `/^[a-zA-Z0-9_.-]+$/` before passing them to external processes to prevent argument injection.
+**Prevention:** Use strictly validated argument arrays and avoid shell usage (`execSync`) for all external process invocations.
