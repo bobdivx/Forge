@@ -28,24 +28,30 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     const entries = fs.readdirSync(githubPath, { withFileTypes: true });
-    const projects = entries
+    const applications = entries
       .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
-      .map(entry => {
+      .map((entry, index) => {
         const projectPath = path.join(githubPath, entry.name);
         let lastModified = 0;
         try {
           lastModified = fs.statSync(projectPath).mtimeMs;
         } catch (e) {}
         
+        const statuses = ['healthy', 'warning', 'error', 'stopped'];
+        const randomStatus = statuses[index % statuses.length];
+        
         return {
+          id: entry.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
           name: entry.name,
           path: projectPath,
+          status: randomStatus,
+          url: `https://${entry.name.toLowerCase()}.example.com`,
           lastModified
         };
       })
       .sort((a, b) => b.lastModified - a.lastModified);
 
-    return new Response(JSON.stringify(projects), { 
+    return new Response(JSON.stringify({ applications }), { 
       status: 200, 
       headers: { 'Content-Type': 'application/json' } 
     });

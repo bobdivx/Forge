@@ -36,4 +36,82 @@
   .shadow-neon-card { box-shadow: none; }
   .shadow-neon-card-lg { box-shadow: none; }
   .forge-glass-panel { background: white; }
+
+  /* Styles pour les nouvelles pages */
+  .dashboard-content {
+    padding: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .card {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    background: #175B37;
+    color: white;
+    border-color: #175B37;
+  }
+
+  .btn-primary:hover {
+    background: #0B2717;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: #374151;
+    border-color: #D1D5DB;
+  }
+
+  .btn-ghost:hover {
+    background: #F3F4F6;
+  }
+
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .loading {
+    display: inline-block;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .loading-spinner {
+    border: 2px solid #E5E7EB;
+    border-top-color: #175B37;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
 }
