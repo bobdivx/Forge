@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { getConfig } from './config-db';
 import { getHostContext } from './forge-host-context';
@@ -50,7 +50,7 @@ function sanitizeSshErrorMessage(raw: string, password?: string): string {
 
 function buildSsh2ExecCommand(payloadBase64: string): string {
   return (
-    `node -e "const { Client } = require('ssh2');` +
+    `const { Client } = require('ssh2');` +
     `const raw = Buffer.from(process.env.FORGE_SSH2_PAYLOAD || '', 'base64').toString('utf8');` +
     `if (!raw) { console.error('Missing FORGE_SSH2_PAYLOAD'); process.exit(9); }` +
     `const cfg = JSON.parse(raw);` +
@@ -65,7 +65,7 @@ function buildSsh2ExecCommand(payloadBase64: string): string {
     `stream.stderr.on('data', (d) => process.stderr.write(d));` +
     `});` +
     `}).on('error', (err) => fail('SSH connect failed: ' + err.message, 4))` +
-    `.connect(cfg.connect);" && exit 0`
+    `.connect(cfg.connect);`
   );
 }
 
@@ -105,9 +105,8 @@ export class ZimaOSInfraClient {
         effectiveKeyPath = tempKeyPath;
       }
 
-      const identity = effectiveKeyPath ? `-i "${effectiveKeyPath.replace(/\\/g, '/')}"` : '';
-      const escapedCommand = command.replace(/"/g, '\\"');
-      let sshCmd = '';
+      let sshBin = 'node';
+      let sshArgs: string[] = [];
       const wantPassword = sshAuth === 'password';
 
       // Auth explicitement demandée: mot de passe
@@ -126,7 +125,7 @@ export class ZimaOSInfraClient {
           'utf8',
         ).toString('base64');
         execEnv = { ...process.env, FORGE_SSH2_PAYLOAD: payload };
-        sshCmd = buildSsh2ExecCommand(payload);
+        sshArgs = ['-e', buildSsh2ExecCommand(payload)];
       } else if (wantPassword && !password) {
         throw new Error("SSH password auth sélectionnée, mais aucun mot de passe n'est enregistré.");
       } else if (effectiveKeyPath || keyContent) {
@@ -155,7 +154,7 @@ export class ZimaOSInfraClient {
           'utf8',
         ).toString('base64');
         execEnv = { ...process.env, FORGE_SSH2_PAYLOAD: payload };
-        sshCmd = buildSsh2ExecCommand(payload);
+        sshArgs = ['-e', buildSsh2ExecCommand(payload)];
       } else if (password) {
         // Fallback compat: mot de passe présent mais mode non explicite.
         const payload = Buffer.from(
@@ -172,13 +171,14 @@ export class ZimaOSInfraClient {
           'utf8',
         ).toString('base64');
         execEnv = { ...process.env, FORGE_SSH2_PAYLOAD: payload };
-        sshCmd = buildSsh2ExecCommand(payload);
+        sshArgs = ['-e', buildSsh2ExecCommand(payload)];
       } else {
-        sshCmd = `ssh -p ${port} -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no ${user}@${host} "${escapedCommand}"`;
+        sshBin = 'ssh';
+        sshArgs = ['-p', String(port), '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'StrictHostKeyChecking=no', `${user}@${host}`, command];
       }
       
       try {
-        const res = execSync(sshCmd, { encoding: 'utf-8', windowsHide: true, env: execEnv || process.env });
+        const res = execFileSync(sshBin, sshArgs, { encoding: 'utf-8', windowsHide: true, env: execEnv || process.env });
         // Succès: on reset le compteur d'erreurs
         _lastSshError = { timestamp: 0, count: 0 };
         return res;
