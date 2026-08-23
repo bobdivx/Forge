@@ -1,0 +1,4 @@
+## 2024-05-23 - Command injection vulnerabilities in forge-tools.ts
+**Vulnerability:** Several tools in `src/lib/forge-tools.ts` executed shell commands using unsanitized or insufficiently sanitized user input via `execSync` wrapper `safeExec(cmd)`, leading to potential command and argument injection.
+**Learning:** Shell commands constructed by concatenating user input are always susceptible to injection attacks when executed in a shell (`sh -c`). Even wrapping commands or slightly sanitizing variables can be bypassed.
+**Prevention:** Always use execution functions that take argument arrays directly (like `execFileSync` or `execFile`) and pass the program and its arguments separately, bypassing the shell. If shell execution is strictly required (e.g. pipes), aggressively validate the inputs (e.g., regex `^[a-zA-Z0-9_.-]+$`) and restrict execution scope.
