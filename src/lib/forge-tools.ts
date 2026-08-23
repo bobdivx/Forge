@@ -4,7 +4,7 @@
  * Réimplémenté from scratch pour Ageton (Astro/Node.js).
  * SERVEUR UNIQUEMENT — utilise child_process et fs.
  */
-import { execFileSync, execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -54,9 +54,9 @@ export interface ForgeTool<
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function safeExec(cmd: string, cwd: string): { stdout: string; ok: boolean } {
+function safeExec(file: string, args: string[], cwd: string): { stdout: string; ok: boolean } {
   try {
-    const stdout = execSync(cmd, {
+    const stdout = execFileSync(file, args, {
       cwd,
       timeout: 15_000,
       encoding: 'utf8',
@@ -108,7 +108,7 @@ const gitStatus: ForgeTool<{ project: string }, string> = {
           durationMs: 0,
           toolName: 'git_status',
         };
-      const { stdout, ok } = safeExec('git status', dir);
+      const { stdout, ok } = safeExec('git', ['status'], dir);
       return { ok, output: stdout, toolName: 'git_status', durationMs: 0 };
     }),
 };
@@ -137,10 +137,7 @@ const gitLog: ForgeTool<{ project: string; limit?: number }, string> = {
           toolName: 'git_log',
         };
       const n = Math.min(Number(limit) || 10, 50);
-      const { stdout, ok } = safeExec(
-        `git log --oneline --decorate -${n}`,
-        dir,
-      );
+      const { stdout, ok } = safeExec('git', ['log', '--oneline', '--decorate', `-${n}`], dir);
       return { ok, output: stdout, toolName: 'git_log', durationMs: 0 };
     }),
 };
@@ -168,10 +165,10 @@ const gitDiff: ForgeTool<{ project: string; staged?: boolean }, string> = {
           durationMs: 0,
           toolName: 'git_diff',
         };
-      const cmd = staged
-        ? 'git diff --staged --name-status'
-        : 'git diff --name-status';
-      const { stdout, ok } = safeExec(cmd, dir);
+      const args = staged
+        ? ['diff', '--staged', '--name-status']
+        : ['diff', '--name-status'];
+      const { stdout, ok } = safeExec('git', args, dir);
       return {
         ok,
         output: stdout || '(aucune modification)',
@@ -199,7 +196,7 @@ const gitBranch: ForgeTool<{ project: string }, string> = {
           durationMs: 0,
           toolName: 'git_branch',
         };
-      const { stdout, ok } = safeExec('git branch -a', dir);
+      const { stdout, ok } = safeExec('git', ['branch', '-a'], dir);
       return { ok, output: stdout, toolName: 'git_branch', durationMs: 0 };
     }),
 };
@@ -349,7 +346,7 @@ const fileTree: ForgeTool<{ project: string; depth?: number }, string> = {
         };
       const d = Math.min(Number(depth) || 2, 4);
       const { stdout, ok } = safeExec(
-        `find . -maxdepth ${d} -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.next/*' | sort | head -80`,
+        'sh', ['-c', `find . -maxdepth ${d} -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.next/*' | sort | head -80`],
         dir,
       );
       return { ok, output: stdout, toolName: 'file_tree', durationMs: 0 };
@@ -366,7 +363,7 @@ const dockerPs: ForgeTool<Record<string, never>, string> = {
   execute: (_input, _ctx) =>
     run('docker_ps', () => {
       const { stdout, ok } = safeExec(
-        'docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.Image}}"',
+        'docker', ['ps', '--format', 'table {{.Names}}\t{{.Status}}\t{{.Image}}'],
         '/tmp',
       );
       return {
@@ -410,7 +407,7 @@ const dockerLogs: ForgeTool<
         };
       const n = Math.min(Number(lines) || 50, 200);
       const { stdout, ok } = safeExec(
-        `docker logs --tail ${n} ${safe} 2>&1`,
+        'sh', ['-c', `docker logs --tail ${n} ${safe} 2>&1`],
         '/tmp',
       );
       return { ok, output: stdout, toolName: 'docker_logs', durationMs: 0 };
@@ -638,7 +635,7 @@ const githubCommit: ForgeTool<
           toolName: 'github_commit',
         };
       }
-      const gitStatusBefore = safeExec('git status --porcelain', dir);
+      const gitStatusBefore = safeExec('git', ['status', '--porcelain'], dir);
       if (!gitStatusBefore.ok) {
         return {
           ok: false,
@@ -822,7 +819,7 @@ const systemExec: ForgeTool<{ project?: string; command: string }, string> = {
         if (d) dir = d;
       }
 
-      const { stdout, ok } = safeExec(command, dir);
+      const { stdout, ok } = safeExec('sh', ['-c', command], dir);
       return { ok, output: stdout, toolName: 'system_exec', durationMs: 0 };
     }),
 };
