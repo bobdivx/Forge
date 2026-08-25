@@ -1,0 +1,4 @@
+## 2024-05-20 - Command Injection & Info Disclosure in API Routes
+**Vulnerability:** Command injection via unsanitized URL parameters (`containerId`, `tail`) passed to `execSync` with shell execution enabled. Information disclosure via returning raw `err.stderr`, `err.stdout` and `error.message` on error.
+**Learning:** System commands (like `docker logs` and `tail`) executed via child_process can expose absolute paths and internal system structures in their standard error streams when they fail. Even with simple parameters, lack of validation and shell=true execution presents a high risk.
+**Prevention:** Always use `execFile` or `execFileSync` with arguments arrays instead of string commands. Validate all user inputs against strict allowlists (e.g., regex `^[a-zA-Z0-9_.-]+$`), ensure they do not start with hyphens to prevent argument injection, and always return generic error messages to the client without exposing internal stack traces or command outputs.
