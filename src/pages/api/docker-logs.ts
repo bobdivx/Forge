@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 export const GET: APIRoute = async ({ url }) => {
   try {
@@ -21,19 +21,30 @@ export const GET: APIRoute = async ({ url }) => {
       });
     }
 
-    // Commande Docker pour récupérer les logs
-    const command = `docker logs --tail ${tail} ${containerId}`;
+    // 🔒 Security: Validate containerId strictly to prevent argument injection
+    if (!/^[a-zA-Z0-9_.-]+$/.test(containerId) || containerId.startsWith('-')) {
+      return new Response(JSON.stringify({ error: "ID du conteneur invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 🔒 Security: Validate tail parameter strictly
+    if (!/^\d+$/.test(tail) && tail !== 'all') {
+       return new Response(JSON.stringify({ error: "Paramètre tail invalide" }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     let logs = [];
     try {
-        const output = execSync(command, { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+        // 🔒 Security: Use execFileSync with argument array instead of execSync with shell parsing
+        const output = execFileSync('docker', ['logs', '--tail', tail, containerId], { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
         logs = output.trim().split('\n');
     } catch (err: any) {
-        // Certains logs sortent sur stderr, checkons stderr si stdout est vide ou si erreur
-        if (err.stderr) {
-            logs = err.stderr.toString().trim().split('\n');
-        } else {
-            throw err;
-        }
+        // 🔒 Security: Do NOT leak err.stderr or raw errors
+        throw new Error('Docker logs exec failed');
     }
 
     return new Response(JSON.stringify({ logs }), { 
@@ -41,7 +52,8 @@ export const GET: APIRoute = async ({ url }) => {
       headers: { 'Content-Type': 'application/json' } 
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: "Logs indisponibles: " + error.message }), { 
+    // 🔒 Security: Return a purely generic error message to avoid information disclosure
+    return new Response(JSON.stringify({ error: "Logs indisponibles" }), {
       status: 500, 
       headers: { 'Content-Type': 'application/json' } 
     });
