@@ -76,6 +76,7 @@ const userName = userEmail.split('@')[0];
             </svg>
             <input
               type="text"
+              aria-label="Rechercher dans l'application"
               placeholder="Rechercher…"
               class="bg-transparent border-none focus:outline-none text-sm w-full text-gray-600 placeholder-gray-400"
             />
@@ -97,12 +98,12 @@ const userName = userEmail.split('@')[0];
 
         <!-- Right: icons + user -->
         <div class="flex items-center gap-2 shrink-0">
-          <button class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+          <button aria-label="Messages" class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
             <svg class="w-4.5 h-4.5 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
             </svg>
           </button>
-          <button class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
+          <button aria-label="Notifications" class="h-11 w-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors">
             <NotificationBellIcon class="w-5 h-5" />
           </button>
           <!-- Avatar + nom -->
