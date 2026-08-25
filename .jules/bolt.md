@@ -1,0 +1,3 @@
+## 2024-08-25 - N+1 Memory Fetch Bottleneck in Astro DB/Drizzle
+**Learning:** In Astro API routes using Drizzle ORM, fetching full tables via `db.select().from(Table)` just to compute `.length` and perform in-memory filtering (e.g. `filter(t => t.createdAt >= today)`) creates a severe memory bottleneck as the dataset grows.
+**Action:** Always use Drizzle's `count()` aggregation (e.g., `db.select({ value: count() })`) combined with database-level filtering functions like `gte()` or `inArray()` directly inside `where()` clauses. Ensure proper `import` or destructuring of these functions from `loadAstroDb()` wrapper.
